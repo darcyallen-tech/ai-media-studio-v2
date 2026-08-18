@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import {
   consumeLibraryDrag,
+  itemMediaKind,
   peekLibraryDrag,
   slotAccepts,
   slotNeedLabel,
@@ -30,6 +31,8 @@ type Props = {
   hasRunwareKey: boolean;
   onOpenSettings?: () => void;
   onAddSource: () => void;
+  onAttachSource?: (item: LibraryItem) => void;
+  preparing?: boolean;
 };
 
 export function formatClock(seconds: number): string {
@@ -57,6 +60,8 @@ export default function FrameEdit({
   hasRunwareKey,
   onOpenSettings,
   onAddSource,
+  onAttachSource,
+  preparing,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [current, setCurrent] = useState(0);
@@ -64,6 +69,7 @@ export default function FrameEdit({
   const [playing, setPlaying] = useState(false);
   const [pinning, setPinning] = useState(false);
   const [jumps, setJumps] = useState<{ t: number; url: string }[]>([]);
+  const [hover, setHover] = useState<"ok" | "bad" | null>(null);
 
   const src = source?.url || "";
 
@@ -160,7 +166,32 @@ export default function FrameEdit({
   }
 
   const outOfRange =
-    duration > 0 && (duration + 0.05 < ALEPH_MIN_S || duration > ALEPH_MAX_S + 0.25);
+    duration > 0 && duration + 0.05 < ALEPH_MIN_S;
+  const willTrim = duration > ALEPH_MAX_S + 0.25;
+
+  function allowVideoDrop(event: DragEvent) {
+    if (!peekLibraryDrag() && !hasLibraryPayload(event.dataTransfer)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    const item = peekLibraryDrag();
+    const ok = item ? slotAccepts("video", item) : true;
+    event.dataTransfer.dropEffect = ok ? "copy" : "none";
+    return true;
+  }
+
+  function onVideoDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setHover(null);
+    const item = consumeLibraryDrag() || peekLibraryDrag();
+    if (!item) return;
+    if (!slotAccepts("video", item)) {
+      toast(slotNeedLabel("video"), true);
+      return;
+    }
+    onAddSource();
+    onAttachSource?.(item);
+  }
 
   return (
     <div className="frame-edit">
@@ -183,9 +214,39 @@ export default function FrameEdit({
         </p>
       ) : null}
 
-      {source?.kind === "video" && src ? (
+      {preparing ? (
+        <p className="hint">Preparing clip for Aleph…</p>
+      ) : null}
+
+      {itemMediaKind(source) === "video" && src ? (
         <>
-          <div className="frame-preview">
+          <div
+            className={
+              hover === "ok"
+                ? "frame-preview drop-hot"
+                : hover === "bad"
+                  ? "frame-preview drop-bad"
+                  : "frame-preview"
+            }
+            data-drop-slot="source"
+            data-drop-accept="video"
+            onDragEnter={(e) => {
+              if (!allowVideoDrop(e)) return;
+              const item = peekLibraryDrag();
+              setHover(item && !slotAccepts("video", item) ? "bad" : "ok");
+            }}
+            onDragOver={(e) => {
+              if (!allowVideoDrop(e)) return;
+              const item = peekLibraryDrag();
+              setHover(item && !slotAccepts("video", item) ? "bad" : "ok");
+            }}
+            onDragLeave={(e) => {
+              const next = e.relatedTarget as globalThis.Node | null;
+              if (next && e.currentTarget.contains(next)) return;
+              setHover(null);
+            }}
+            onDrop={onVideoDrop}
+          >
             <video
               ref={videoRef}
               src={src}
@@ -229,18 +290,50 @@ export default function FrameEdit({
           <JumpThumbs src={src} duration={duration} onJump={seekTo} thumbs={jumps} setThumbs={setJumps} />
           {outOfRange ? (
             <p className="hint warn">
-              Aleph needs a {ALEPH_MIN_S}–{ALEPH_MAX_S}s clip (yours is{" "}
-              {duration.toFixed(1)}s). Trim or export a proxy.
+              Aleph needs at least {ALEPH_MIN_S}s (yours is {duration.toFixed(1)}s).
+            </p>
+          ) : willTrim ? (
+            <p className="hint">
+              Clip is {duration.toFixed(1)}s — Aleph will use the first {ALEPH_MAX_S}s.
             </p>
           ) : (
             <p className="hint">
               Output length follows the source ({ALEPH_MIN_S}–{ALEPH_MAX_S}s). Up to{" "}
-              {ALEPH_MAX_PINS} pins.
+              {ALEPH_MAX_PINS} pins. Oversize clips are auto-prepared.
             </p>
           )}
         </>
       ) : (
-        <div className="source-empty nodrag" role="button" tabIndex={0} onClick={onAddSource}>
+        <div
+          className={
+            hover === "ok"
+              ? "source-empty nodrag drop-hot"
+              : hover === "bad"
+                ? "source-empty nodrag drop-bad"
+                : "source-empty nodrag"
+          }
+          role="button"
+          tabIndex={0}
+          data-drop-slot="source"
+          data-drop-accept="video"
+          onClick={onAddSource}
+          onDragEnter={(e) => {
+            if (!allowVideoDrop(e)) return;
+            const item = peekLibraryDrag();
+            setHover(item && !slotAccepts("video", item) ? "bad" : "ok");
+          }}
+          onDragOver={(e) => {
+            if (!allowVideoDrop(e)) return;
+            const item = peekLibraryDrag();
+            setHover(item && !slotAccepts("video", item) ? "bad" : "ok");
+          }}
+          onDragLeave={(e) => {
+            const next = e.relatedTarget as globalThis.Node | null;
+            if (next && e.currentTarget.contains(next)) return;
+            setHover(null);
+          }}
+          onDrop={onVideoDrop}
+        >
           Attach a Source video (Library drag, video only)
         </div>
       )}

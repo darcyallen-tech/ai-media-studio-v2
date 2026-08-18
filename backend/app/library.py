@@ -47,7 +47,7 @@ LIBRARY_DIR = PROJECT_ROOT / "data" / "library"
 THUMBS_DIR = LIBRARY_DIR / "thumbs"
 GENERATED_INDEX = LIBRARY_DIR / "generated.json"
 
-SKIP_DIR_NAMES = {"_smoke", "__pycache__", "thumbs"}
+SKIP_DIR_NAMES = {"_smoke", "__pycache__", "thumbs", "_aleph_proxies"}
 
 # External stills/clips named in handoff JSON but living outside the inbox.
 _RESOLVE_EXT: dict[str, Path] = {}

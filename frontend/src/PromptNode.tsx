@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import FrameEdit, {
   ALEPH_MAX_PINS,
-  ALEPH_MAX_S,
   ALEPH_MIN_S,
   type FramePin,
 } from "./FrameEdit";
+import { itemMediaKind } from "./libraryDrag";
 import {
   durationOptions,
   formatDurationToken,
@@ -70,6 +70,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"idle" | "preparing" | "generating">("idle");
   const [pins, setPins] = useState<FramePin[]>([]);
   const [clipDuration, setClipDuration] = useState(0);
   const [hasRunwareKey, setHasRunwareKey] = useState(true);
@@ -99,12 +100,16 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   if (plan.last && !data.last?.path) missing.push("Last Frame");
   if (plan.source && !plan.sourceOptional && !data.source?.path) {
     missing.push(plan.source === "video" ? "Source video" : "Source still");
-  } else if (plan.source === "video" && data.source && data.source.kind !== "video") {
+  } else if (
+    plan.source === "video" &&
+    data.source &&
+    itemMediaKind(data.source) !== "video"
+  ) {
     missing.push("Source video (clip, not a still)");
   } else if (
     plan.source === "image" &&
     data.source &&
-    data.source.kind === "video"
+    itemMediaKind(data.source) === "video"
   ) {
     missing.push("Source still (not a clip)");
   }
@@ -118,12 +123,8 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   if (isFrame && pins.length > ALEPH_MAX_PINS) {
     missing.push(`Too many pins (${pins.length} / ${ALEPH_MAX_PINS})`);
   }
-  if (
-    isFrame &&
-    clipDuration > 0 &&
-    (clipDuration + 0.05 < ALEPH_MIN_S || clipDuration > ALEPH_MAX_S + 0.25)
-  ) {
-    missing.push(`Source must be ${ALEPH_MIN_S}–${ALEPH_MAX_S}s`);
+  if (isFrame && clipDuration > 0 && clipDuration + 0.05 < ALEPH_MIN_S) {
+    missing.push(`Source must be at least ${ALEPH_MIN_S}s`);
   }
 
   const canGenerate =
@@ -133,7 +134,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     missing.length === 0 &&
     (!promptRequired || prompt.trim().length > 0) &&
     (!isFrame || hasRunwareKey);
-  const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading;
+  const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading && phase === "idle";
 
   useEffect(() => {
     setModality(MODALITIES[mode][0]?.id ?? "");
@@ -269,6 +270,32 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         scenes,
         isFrame ? pins : undefined,
       );
+      if (isFrame && slots.source_video) {
+        setPhase("preparing");
+        const prepRes = await fetch("/prepare-aleph", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_path: slots.source_video }),
+        });
+        const prep = (await prepRes.json()) as {
+          ok?: boolean;
+          path?: string;
+          error?: string;
+          detail?: string;
+          status?: string;
+        };
+        if (!prepRes.ok || !prep.ok || !prep.path) {
+          setError(
+            prep.error ||
+              prep.status ||
+              (typeof prep.detail === "string" ? prep.detail : null) ||
+              "Could not prepare this clip for Aleph.",
+          );
+          return;
+        }
+        slots.source_video = prep.path;
+      }
+      setPhase("generating");
       const res = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -308,6 +335,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
       setError(err instanceof Error ? err.message : "Generate request failed.");
     } finally {
       setLoading(false);
+      setPhase("idle");
     }
   }
 
@@ -362,7 +390,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
               role="tab"
               aria-selected={mode === item.id}
               className={mode === item.id ? "pill mode on" : "pill mode"}
-              onClick={() => setMode(item.id)}
+              onClick={() => {
+                const next = item.id;
+                setMode(next);
+                data.onModalityChange(next, MODALITIES[next][0]?.id ?? "", null);
+              }}
             >
               {item.label}
             </button>
@@ -427,6 +459,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
             hasRunwareKey={hasRunwareKey}
             onOpenSettings={data.onOpenSettings}
             onAddSource={data.onAddSource}
+            onAttachSource={(item) => {
+              data.onAddSource();
+              data.onAttachSource?.(item);
+            }}
+            preparing={phase === "preparing"}
           />
         ) : null}
 
@@ -556,7 +593,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
             disabled={!canGenerate}
             onClick={onGenerate}
           >
-            {loading ? "Generating…" : "Generate"}
+            {phase === "preparing"
+              ? "Preparing clip for Aleph…"
+              : loading
+                ? "Generating…"
+                : "Generate"}
           </button>
         </div>
         <p className="estimate">{estimate}</p>

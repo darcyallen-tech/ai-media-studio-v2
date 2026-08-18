@@ -122,6 +122,18 @@
   border: 1px solid #c5d0dc;
 }
 
+.frame-preview.drop-hot,
+.source-empty.drop-hot {
+  outline: 2px solid #6fdc12;
+  box-shadow: 0 0 0 2px #8fe83a;
+}
+
+.frame-preview.drop-bad,
+.source-empty.drop-bad {
+  outline: 2px solid #d44;
+  box-shadow: 0 0 0 2px #f08a8a;
+}
+
 .frame-scrub {
   width: 100%;
   accent-color: #4cae08;

@@ -49,6 +49,7 @@ from app.aleph_service import (  # noqa: E402
     keyframes_from_payload,
     run_aleph_keyframe_edit,
 )
+from app.video_prep import prepare_aleph_source  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
 from app.enhance import enhance_prompt_text  # noqa: E402
 from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
@@ -137,6 +138,10 @@ class SlotsIn(BaseModel):
 class ExtractFrameIn(BaseModel):
     video_path: str
     seconds: float = 0.0
+
+
+class PrepareAlephIn(BaseModel):
+    video_path: str
 
 
 class ParamsIn(BaseModel):
@@ -664,6 +669,33 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "estimate": estimate_create_cost(state) if not result.ok else cost,
         },
     )
+
+
+@app.post("/prepare-aleph")
+def prepare_aleph_endpoint(body: PrepareAlephIn) -> dict[str, Any]:
+    """Downscale / trim / re-encode a Library video so Aleph will accept it."""
+    src = Path(body.video_path)
+    if not src.is_file():
+        raise HTTPException(status_code=404, detail="Source video not found.")
+    if not is_allowed_path(src):
+        raise HTTPException(status_code=400, detail="Video is outside the Library.")
+    prep = prepare_aleph_source(str(src), output_dir=OUTPUT_DIR)
+    if not prep.ok or not prep.path:
+        return {
+            "ok": False,
+            "error": prep.status or "Could not prepare this clip for Aleph.",
+            "status": prep.status,
+        }
+    return {
+        "ok": True,
+        "path": prep.path,
+        "used_proxy": prep.used_proxy,
+        "status": prep.status,
+        "duration_s": prep.duration_s,
+        "width": prep.width,
+        "height": prep.height,
+        "notes": list(prep.notes or []),
+    }
 
 
 @app.post("/extract-frame")

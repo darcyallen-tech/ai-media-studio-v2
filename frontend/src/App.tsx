@@ -25,6 +25,7 @@ import ToolNode from "./ToolNode";
 import { isAudioPath, isVideoPath } from "./media";
 import {
   consumeLibraryDrag,
+  itemMediaKind,
   peekLibraryDrag,
   slotAccepts,
   slotNeedLabel,
@@ -41,6 +42,7 @@ import {
   inputPlan,
   maxRefImages,
   parseLibraryPayload,
+  sourceAcceptFor,
   type GenerateResponse,
   type GraphInputs,
   type LibraryItem,
@@ -140,6 +142,7 @@ const initialNodes: StudioNode[] = [
       onModalityChange: () => undefined,
       onOpenSettings: () => undefined,
       onOpenLibrary: () => undefined,
+      onAttachSource: () => undefined,
       source: null,
       first: null,
       last: null,
@@ -160,8 +163,10 @@ function StudioCanvas() {
   const [scenes, setScenes] = useState<RefSlotState[]>([]);
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
+  const [studioMode, setStudioMode] = useState<Mode>("image");
   const [plan, setPlan] = useState<GraphInputs>({});
   const [maxRefs, setMaxRefs] = useState(0);
+  const sourceAccept = sourceAcceptFor(studioMode, plan);
   const [toolSources, setToolSources] = useState<Record<string, LibraryItem>>(
     {},
   );
@@ -397,10 +402,10 @@ function StudioCanvas() {
   );
 
   const addSourceNode = useCallback(() => {
-    const accept = plan.source ?? "any";
+    const accept = sourceAccept;
     const title = accept === "video" ? "Source Video" : "Source";
     ensureSlot(SOURCE_ID, title, accept, 36);
-  }, [ensureSlot, plan.source]);
+  }, [ensureSlot, sourceAccept]);
 
   const addFirstNode = useCallback(() => {
     ensureSlot(FIRST_ID, "First Frame", "image", -10);
@@ -412,6 +417,7 @@ function StudioCanvas() {
 
   const onModalityChange = useCallback(
     (mode: Mode, modality: string, model?: ModelRow | null) => {
+      setStudioMode(mode);
       setPlan(inputPlan(modality, model, mode));
       setMaxRefs(maxRefImages(model, modality));
     },
@@ -563,7 +569,7 @@ function StudioCanvas() {
         return true;
       }
       const accept: SlotAccept =
-        slot === "source" ? (plan.source ?? "image") : "image";
+        slot === "source" ? sourceAccept : "image";
       if (!slotAccepts(accept, item)) {
         toast(slotNeedLabel(accept), true);
         return false;
@@ -595,12 +601,18 @@ function StudioCanvas() {
       maxRefs,
       plan.source,
       scenes,
+      sourceAccept,
       sourceItem,
     ],
   );
 
   const attachMedia = useCallback(
     (item: LibraryItem) => {
+      if (studioMode === "frame") {
+        addSourceNode();
+        tryAttachSlot("source", item);
+        return;
+      }
       if (plan.first || plan.last) {
         if (!firstItem) {
           tryAttachSlot("first", item);
@@ -636,12 +648,14 @@ function StudioCanvas() {
       }
     },
     [
+      addSourceNode,
       characters,
       firstItem,
       lastItem,
       plan,
       scenes,
       sourceItem,
+      studioMode,
       tryAttachSlot,
     ],
   );
@@ -674,15 +688,16 @@ function StudioCanvas() {
   );
 
   useEffect(() => {
-    if (plan.source === "image" && sourceItem?.kind === "video") {
+    const kind = itemMediaKind(sourceItem);
+    if (sourceAccept === "image" && kind === "video") {
       setSourceItem(null);
     }
-    if (plan.source === "video" && sourceItem && sourceItem.kind !== "video") {
+    if (sourceAccept === "video" && sourceItem && kind !== "video") {
       setSourceItem(null);
     }
-    if (firstItem?.kind === "video") setFirstItem(null);
-    if (lastItem?.kind === "video") setLastItem(null);
-  }, [plan.source, sourceItem, firstItem, lastItem]);
+    if (itemMediaKind(firstItem) === "video") setFirstItem(null);
+    if (itemMediaKind(lastItem) === "video") setLastItem(null);
+  }, [sourceAccept, sourceItem, firstItem, lastItem]);
 
   useEffect(() => {
     setNodes((current) =>
@@ -701,6 +716,7 @@ function StudioCanvas() {
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
+              onAttachSource: (item) => tryAttachSlot(SOURCE_ID, item),
               source: sourceItem,
               first: firstItem,
               last: lastItem,
@@ -715,12 +731,12 @@ function StudioCanvas() {
             ...n,
             type: "source",
             data: {
-              title: plan.source === "video" ? "Source Video" : "Source",
-              accept: plan.source ?? "any",
+              title: sourceAccept === "video" ? "Source Video" : "Source",
+              accept: sourceAccept,
               item: sourceItem,
               onClear: () => setSourceItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
-              onAttach: (item) => setSourceItem(item),
+              onAttach: (item) => tryAttachSlot(SOURCE_ID, item),
               onOsFiles: (files) => {
                 void importOsFiles(files)
                   .then((items) => {
@@ -918,6 +934,7 @@ function StudioCanvas() {
     onModalityChange,
     pickCatalog,
     plan.source,
+    sourceAccept,
     sceneCatalog,
     scenes,
     setNodes,

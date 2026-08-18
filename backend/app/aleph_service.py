@@ -15,6 +15,7 @@ from app.errors import friendly_error
 from app.history import append_history
 from app.library import UPLOADS_DIR, _item, ensure_library_dirs, is_allowed_path
 from app.media import extract_frame_at, is_video_path
+from app.video_prep import prepare_aleph_source
 from app.naming import job_media_dir, make_output_stem, timestamp_now, unique_path
 from app.pricing import format_cost_label, format_render_metrics, probe_video_duration
 from app.runware_client import (
@@ -213,6 +214,11 @@ def run_aleph_keyframe_edit(
     if not is_video_path(path):
         return AlephResult(ok=False, status="Source must be a video clip, not a still.")
 
+    prep = prepare_aleph_source(str(path), output_dir=output_dir)
+    if not prep.ok or not prep.path:
+        return AlephResult(ok=False, status=prep.status or "Could not prepare this clip for Aleph.")
+    path = Path(prep.path)
+
     text = (prompt or "").strip()
     if not text:
         return AlephResult(
@@ -225,7 +231,7 @@ def run_aleph_keyframe_edit(
     if len(text) > ALEPH_MAX_PROMPT_CHARS:
         text = text[: ALEPH_MAX_PROMPT_CHARS - 1].rstrip() + "…"
 
-    dur = probe_video_duration(path)
+    dur = prep.duration_s if prep.duration_s is not None else probe_video_duration(path)
     if dur is not None:
         if dur + 0.05 < ALEPH_MIN_DURATION_S:
             return AlephResult(
@@ -240,8 +246,8 @@ def run_aleph_keyframe_edit(
             return AlephResult(
                 ok=False,
                 status=(
-                    f"Aleph max is {ALEPH_MAX_DURATION_S:.0f}s (yours is {dur:.1f}s). "
-                    "Trim/export a 2–30s proxy and retry."
+                    f"Aleph max is {ALEPH_MAX_DURATION_S:.0f}s after prep (yours is {dur:.1f}s). "
+                    "Export a 2–30s 1080p proxy and retry."
                 ),
                 cost_label=format_aleph_cost(ALEPH_MAX_DURATION_S),
             )

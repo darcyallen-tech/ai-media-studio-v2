@@ -123,6 +123,7 @@ export type PromptNodeData = {
   ) => void;
   onOpenSettings?: () => void;
   onOpenLibrary?: () => void;
+  onAttachSource?: (item: LibraryItem) => void;
   source: LibraryItem | null;
   first: LibraryItem | null;
   last: LibraryItem | null;
@@ -226,6 +227,15 @@ export function hasLibraryPayload(dt: DataTransfer): boolean {
     types.includes("application/json") ||
     types.includes("text/plain")
   );
+}
+
+export function sourceAcceptFor(
+  mode: Mode | undefined,
+  plan: GraphInputs,
+): SlotAccept {
+  if (mode === "frame") return "video";
+  if (plan.source) return plan.source;
+  return "any";
 }
 
 export function inputPlan(

@@ -1,4 +1,5 @@
-import type { LibraryItem, SlotAccept } from "./types";
+import { isAudioPath, isVideoPath } from "./media";
+import type { LibraryItem, MediaKind, SlotAccept } from "./types";
 
 let current: LibraryItem | null = null;
 let clearTimer: number | null = null;
@@ -34,8 +35,20 @@ export function consumeLibraryDrag(): LibraryItem | null {
   return item;
 }
 
+export function itemMediaKind(item: LibraryItem | null | undefined): MediaKind | "" {
+  if (!item) return "";
+  const sample = item.path || item.url || item.name || "";
+  if (isVideoPath(sample)) return "video";
+  if (isAudioPath(sample)) return "audio";
+  const declared = (item.kind || "").toLowerCase();
+  if (declared === "video" || declared === "image" || declared === "audio") {
+    return declared;
+  }
+  return "";
+}
+
 export function slotAccepts(accept: SlotAccept, item: LibraryItem): boolean {
-  const kind = (item.kind || "").toLowerCase();
+  const kind = itemMediaKind(item);
   if (accept === "any") return kind === "image" || kind === "video";
   if (accept === "image") return kind === "image";
   if (accept === "video") return kind === "video";
