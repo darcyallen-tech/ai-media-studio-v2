@@ -832,6 +832,24 @@
   width: 300px;
 }
 
+.shot-node {
+  width: 320px;
+}
+
+.shot-node .prompt {
+  min-height: 64px;
+}
+
+.shot-node.drop-hot {
+  border-color: #6fdc12;
+  box-shadow: 0 0 0 2px #8fe83a, 0 10px 28px rgba(60, 80, 110, 0.14);
+}
+
+.shot-node.drop-bad {
+  border-color: #d44;
+  box-shadow: 0 0 0 2px #f08a8a, 0 10px 28px rgba(60, 80, 110, 0.14);
+}
+
 .hub-node .prompt {
   min-height: 64px;
 }

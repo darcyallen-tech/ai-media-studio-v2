@@ -562,6 +562,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               >
                 Add Hub
               </button>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={data.onAddShot}
+              >
+                Add Shot
+              </button>
             </div>
           </>
         ) : null}
@@ -815,7 +822,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         </div>
         <p className="estimate">{estimate}</p>
 
-        {!isFrame && (plan.characters || plan.scenes) ? (
+        {!isStoryboard && !isFrame && (plan.characters || plan.scenes) ? (
           <div className="source-row">
             {plan.characters ? (
               <button

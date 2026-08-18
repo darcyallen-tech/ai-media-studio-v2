@@ -134,6 +134,7 @@ export type PromptNodeData = {
   onAddScene: () => void;
   onAddProp?: () => void;
   onAddHub?: () => void;
+  onAddShot?: () => void;
   onModalityChange: (
     mode: Mode,
     modality: string,
@@ -284,8 +285,58 @@ export type HubNodeData = {
   title: string;
   notes: string;
   assets: HubAsset[];
+  sequenceLine: string;
   onTitle: (value: string) => void;
   onNotes: (value: string) => void;
+  onClose?: () => void;
+};
+
+export const CAMERA_MOVES = [
+  "Static",
+  "Push in",
+  "Pull out",
+  "Orbit",
+  "Crane up",
+  "Crane down",
+  "Pan L",
+  "Pan R",
+  "Tilt",
+  "Handheld",
+] as const;
+
+export const CAMERA_SPEEDS = ["Slow", "Medium", "Fast"] as const;
+export const CAMERA_EASES = ["Linear", "Ease in", "Ease out", "Ease in-out"] as const;
+
+export type ShotState = {
+  id: string;
+  order: number;
+  label: string;
+  action: string;
+  move: string;
+  speed: string;
+  ease: string;
+  framing: string;
+  still: LibraryItem | null;
+  duration: string;
+};
+
+export type ShotNodeData = {
+  order: number;
+  label: string;
+  action: string;
+  move: string;
+  speed: string;
+  ease: string;
+  framing: string;
+  still: LibraryItem | null;
+  duration: string;
+  hubLinked: boolean;
+  hubTitle: string;
+  sequenceLine: string;
+  onPatch: (patch: Partial<ShotState>) => void;
+  onAttachStill: (item: LibraryItem) => void;
+  onClearStill: () => void;
+  onOpenLibrary: () => void;
   onClose?: () => void;
 };
 

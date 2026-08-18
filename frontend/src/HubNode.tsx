@@ -73,8 +73,15 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
       </div>
       <div className="node-body nodrag">
         <p className="hint">
-          Characters, scenes, and props collect here. Shots later.
+          Characters, scenes, and props collect here. Shots read this Hub.
         </p>
+        {data.sequenceLine ? (
+          <p className="hint">
+            Sequence: {data.sequenceLine}
+          </p>
+        ) : (
+          <p className="hint">No shots yet — Add Shot from the toolbar.</p>
+        )}
         <label className="builder-field">
           <span className="field-label">Sequence title</span>
           <input
@@ -136,6 +143,7 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
           </p>
         ) : null}
       </div>
+      <Handle type="source" position={Position.Right} className="node-handle" />
     </div>
   );
 }

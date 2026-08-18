@@ -20,6 +20,7 @@ import SettingsPanel from "./SettingsPanel";
 import DirectorNode from "./DirectorNode";
 import HubNode from "./HubNode";
 import PromptBuilderNode from "./PromptBuilderNode";
+import ShotNode from "./ShotNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
 import ResultNode from "./ResultNode";
@@ -65,6 +66,8 @@ import {
   type RefNodeData,
   type RefSlotState,
   type ResultNodeData,
+  type ShotNodeData,
+  type ShotState,
   type SlotAccept,
   type SourceNodeData,
   type ToolKind,
@@ -84,6 +87,7 @@ type StudioNode =
   | Node<RefNodeData, "scene">
   | Node<RefNodeData, "prop">
   | Node<HubNodeData, "hub">
+  | Node<ShotNodeData, "shot">
   | Node<ToolNodeData, "upscale">
   | Node<ToolNodeData, "denoise">
   | Node<ToolNodeData, "restore">
@@ -104,6 +108,7 @@ const nodeTypes: NodeTypes = {
   scene: RefNode,
   prop: RefNode,
   hub: HubNode,
+  shot: ShotNode,
   upscale: ToolNode,
   denoise: ToolNode,
   restore: ToolNode,
@@ -155,6 +160,26 @@ function isPinEditId(id: string) {
   return id.startsWith("pin-edit");
 }
 
+function renumberShots(rows: ShotState[]): ShotState[] {
+  return rows.map((row, index) => {
+    const order = index + 1;
+    const auto = /^shot\s+\d+$/i.test((row.label || "").trim());
+    return {
+      ...row,
+      order,
+      label: auto || !row.label.trim() ? `Shot ${order}` : row.label,
+    };
+  });
+}
+
+function sequenceLine(rows: ShotState[]): string {
+  if (!rows.length) return "";
+  return [...rows]
+    .sort((a, b) => a.order - b.order)
+    .map((row) => row.label || `Shot ${row.order}`)
+    .join(" → ");
+}
+
 type PinEditSession = {
   pinId: string;
   timestamp_s: number;
@@ -202,6 +227,7 @@ function StudioCanvas() {
   const [hubTitle, setHubTitle] = useState("");
   const [hubNotes, setHubNotes] = useState("");
   const [hubIds, setHubIds] = useState<string[]>([]);
+  const [shots, setShots] = useState<ShotState[]>([]);
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [studioMode, setStudioMode] = useState<Mode>("image");
@@ -316,6 +342,9 @@ function StudioCanvas() {
         setHubIds([]);
       }
       setHubIds((cur) => cur.filter((row) => row !== id));
+      if (id.startsWith("shot-")) {
+        setShots((cur) => renumberShots(cur.filter((s) => s.id !== id)));
+      }
       if (TOOL_TYPES.includes(id.split("-")[0] as ToolKind)) {
         setToolSources((cur) => {
           const next = { ...cur };
@@ -1042,6 +1071,7 @@ function StudioCanvas() {
           title: hubTitle,
           notes: hubNotes,
           assets: [],
+          sequenceLine: "",
           onTitle: setHubTitle,
           onNotes: setHubNotes,
           onClose: () => closeNode(HUB_ID),
@@ -1090,6 +1120,116 @@ function StudioCanvas() {
     [addHub, connectAssetToHub],
   );
 
+  const layoutShotEdges = useCallback(
+    (rows: ShotState[]) => {
+      const ordered = [...rows].sort((a, b) => a.order - b.order);
+      setEdges((current) => {
+        let next = current.filter(
+          (e) =>
+            !(e.source === HUB_ID && String(e.target).startsWith("shot-")) &&
+            !(
+              String(e.source).startsWith("shot-") &&
+              String(e.target).startsWith("shot-")
+            ),
+        );
+        if (!ordered.length) return next;
+        const first = ordered[0];
+        const hasHub = getNodes().some((n) => n.id === HUB_ID);
+        if (hasHub && !next.some((e) => e.id === `e-hub-${first.id}`)) {
+          next = addEdge(
+            {
+              id: `e-hub-${first.id}`,
+              source: HUB_ID,
+              target: first.id,
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            next,
+          );
+        }
+        for (let i = 0; i < ordered.length - 1; i += 1) {
+          const src = ordered[i].id;
+          const tgt = ordered[i + 1].id;
+          const edgeId = `e-${src}-${tgt}`;
+          if (next.some((e) => e.id === edgeId)) continue;
+          next = addEdge(
+            {
+              id: edgeId,
+              source: src,
+              target: tgt,
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            next,
+          );
+        }
+        return next;
+      });
+    },
+    [getNodes, setEdges],
+  );
+
+  const addShot = useCallback(() => {
+    if (!getNodes().some((n) => n.id === HUB_ID)) {
+      toast("Add a Hub first — shots read the Asset Hub.", true);
+      return;
+    }
+    const id = `shot-${Date.now().toString(36)}`;
+    setShots((cur) => {
+      const order = cur.length + 1;
+      return [
+        ...cur,
+        {
+          id,
+          order,
+          label: `Shot ${order}`,
+          action: "",
+          move: "Push in",
+          speed: "Slow",
+          ease: "Ease in-out",
+          framing: "",
+          still: null,
+          duration: "",
+        },
+      ];
+    });
+    setNodes((current) => {
+      if (current.some((n) => n.id === id)) return current;
+      const hub = current.find((n) => n.id === HUB_ID);
+      const siblings = current.filter((n) => n.type === "shot");
+      const y = siblings.length
+        ? Math.max(...siblings.map((n) => n.position.y)) + 280
+        : (hub?.position.y ?? PROMPT_POS.y);
+      const node: StudioNode = {
+        id,
+        type: "shot",
+        position: {
+          x: (hub?.position.x ?? PROMPT_POS.x) + 360,
+          y,
+        },
+        dragHandle: ".node-header",
+        data: {
+          order: siblings.length + 1,
+          label: `Shot ${siblings.length + 1}`,
+          action: "",
+          move: "Push in",
+          speed: "Slow",
+          ease: "Ease in-out",
+          framing: "",
+          still: null,
+          duration: "",
+          hubLinked: true,
+          hubTitle: hubTitle,
+          sequenceLine: "",
+          onPatch: () => undefined,
+          onAttachStill: () => undefined,
+          onClearStill: () => undefined,
+          onOpenLibrary: () => setLibraryOpen(true),
+          onClose: () => closeNode(id),
+        },
+      };
+      return [...current, node];
+    });
+  }, [closeNode, getNodes, hubTitle, setNodes]);
+
   useEffect(() => {
     if (!plan.characters && !plan.scenes) {
       setCharacters([]);
@@ -1127,6 +1267,16 @@ function StudioCanvas() {
 
   const tryAttachSlot = useCallback(
     (slot: string, item: LibraryItem) => {
+      if (slot.startsWith("shot-")) {
+        if (!slotAccepts("image", item)) {
+          toast(slotNeedLabel("image"), true);
+          return false;
+        }
+        setShots((cur) =>
+          cur.map((s) => (s.id === slot ? { ...s, still: item } : s)),
+        );
+        return true;
+      }
       if (
         slot.startsWith("char-") ||
         slot.startsWith("scene-") ||
@@ -1335,18 +1485,28 @@ function StudioCanvas() {
     }
     setProps([]);
     setHubIds([]);
+    setShots([]);
     setNodes((current) =>
-      current.filter((n) => n.type !== "prop" && n.id !== HUB_ID),
+      current.filter(
+        (n) => n.type !== "prop" && n.type !== "shot" && n.id !== HUB_ID,
+      ),
     );
     setEdges((current) =>
       current.filter(
         (e) =>
           !String(e.source).startsWith("prop-") &&
+          !String(e.source).startsWith("shot-") &&
+          !String(e.target).startsWith("shot-") &&
           e.source !== HUB_ID &&
           e.target !== HUB_ID,
       ),
     );
   }, [closePinEdit, setEdges, setNodes, studioMode]);
+
+  useEffect(() => {
+    if (studioMode !== "storyboard") return;
+    layoutShotEdges(shots);
+  }, [layoutShotEdges, shots, studioMode]);
 
   useEffect(() => {
     if (pinEdit && !framePins.some((p) => p.id === pinEdit.pinId)) {
@@ -1382,6 +1542,7 @@ function StudioCanvas() {
               onAddScene: addSceneNode,
               onAddProp: addPropNode,
               onAddHub: addHub,
+              onAddShot: addShot,
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
@@ -1467,6 +1628,7 @@ function StudioCanvas() {
               title: hubTitle,
               notes: hubNotes,
               assets,
+              sequenceLine: sequenceLine(shots),
               onTitle: setHubTitle,
               onNotes: setHubNotes,
               onClose: () => closeNode(HUB_ID),
@@ -1759,6 +1921,45 @@ function StudioCanvas() {
             },
           };
         }
+        if (n.type === "shot") {
+          const row = shots.find((s) => s.id === n.id);
+          if (!row) return n;
+          const hubLinked = Boolean(
+            current.some((node) => node.id === HUB_ID),
+          );
+          return {
+            ...n,
+            type: "shot",
+            data: {
+              order: row.order,
+              label: row.label,
+              action: row.action,
+              move: row.move,
+              speed: row.speed,
+              ease: row.ease,
+              framing: row.framing,
+              still: row.still,
+              duration: row.duration,
+              hubLinked,
+              hubTitle: hubTitle || "Asset Hub",
+              sequenceLine: sequenceLine(shots),
+              onPatch: (patch) =>
+                setShots((cur) =>
+                  cur.map((s) => (s.id === n.id ? { ...s, ...patch } : s)),
+                ),
+              onAttachStill: (item) =>
+                setShots((cur) =>
+                  cur.map((s) => (s.id === n.id ? { ...s, still: item } : s)),
+                ),
+              onClearStill: () =>
+                setShots((cur) =>
+                  cur.map((s) => (s.id === n.id ? { ...s, still: null } : s)),
+                ),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onClose: () => closeNode(n.id),
+            },
+          };
+        }
         return n;
       }),
     );
@@ -1769,6 +1970,7 @@ function StudioCanvas() {
     addDirector,
     addHub,
     addPropNode,
+    addShot,
     addPromptBuilder,
     applyBuilderPrompt,
     applyDirectorPrompt,
@@ -1797,6 +1999,7 @@ function StudioCanvas() {
     props,
     sceneCatalog,
     scenes,
+    shots,
     setNodes,
     sourceItem,
     spawnPinEdit,
@@ -1941,7 +2144,7 @@ function StudioCanvas() {
       const hit = getNodes().find((n) => {
         if (
           !n.type ||
-          !["source", "first", "last", "character", "scene", "prop"].includes(n.type)
+          !["source", "first", "last", "character", "scene", "prop", "shot"].includes(n.type)
         )
           return false;
         const w = n.measured?.width ?? 240;
@@ -1961,7 +2164,8 @@ function StudioCanvas() {
         hit.id === LAST_ID ||
         hit.id.startsWith("char-") ||
         hit.id.startsWith("scene-") ||
-        hit.id.startsWith("prop-")
+        hit.id.startsWith("prop-") ||
+        hit.id.startsWith("shot-")
       ) {
         tryAttachSlot(hit.id, item);
       }
@@ -1984,6 +2188,8 @@ function StudioCanvas() {
         (src.startsWith("char-") && tgt === HUB_ID) ||
         (src.startsWith("scene-") && tgt === HUB_ID) ||
         (src.startsWith("prop-") && tgt === HUB_ID) ||
+        (src === HUB_ID && tgt.startsWith("shot-")) ||
+        (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
         (src === BUILDER_ID && tgt === "prompt") ||
         (src === DIRECTOR_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
@@ -2075,6 +2281,8 @@ function StudioCanvas() {
             (src.startsWith("char-") && tgt === HUB_ID) ||
             (src.startsWith("scene-") && tgt === HUB_ID) ||
             (src.startsWith("prop-") && tgt === HUB_ID) ||
+            (src === HUB_ID && tgt.startsWith("shot-")) ||
+            (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
             (src === BUILDER_ID && tgt === "prompt") ||
             (src === DIRECTOR_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||
