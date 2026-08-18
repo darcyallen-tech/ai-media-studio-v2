@@ -308,6 +308,8 @@ export const CAMERA_MOVES = [
   "Pan R",
   "Tilt",
   "Handheld",
+  "Dolly zoom",
+  "Roll",
 ] as const;
 
 export const CAMERA_SPEEDS = ["Slow", "Medium", "Fast"] as const;

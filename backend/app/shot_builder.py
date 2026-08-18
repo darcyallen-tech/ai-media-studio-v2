@@ -7,9 +7,11 @@ from typing import Any
 BEATS = [
     "Establish",
     "Entrance",
+    "Exit",
     "Dialogue",
     "Action",
     "Reaction",
+    "Insert / Detail",
     "Hold",
 ]
 
@@ -60,6 +62,16 @@ CAMERA_PRESETS: dict[str, tuple[str, str, str]] = {
     "Orbit": ("Orbit", "Medium", "Ease in-out"),
     "Crane reveal": ("Crane up", "Slow", "Ease in-out"),
     "Handheld energy": ("Handheld", "Medium", "Linear"),
+    "Dolly zoom": ("Dolly zoom", "Slow", "Ease in-out"),
+    "Roll": ("Roll", "Medium", "Linear"),
+}
+
+LENS_NOTES: dict[str, str] = {
+    "Wide (~24–35)": "Lens: wide (~24–35mm)",
+    "Normal (~50)": "Lens: normal (~50mm)",
+    "Tight (~85)": "Lens: tight (~85mm)",
+    "Extreme tight": "Lens: extreme tight",
+    "Default": "",
 }
 
 BEAT_HELPERS: dict[str, str] = {
@@ -155,6 +167,20 @@ def list_shot_builder_fields(who_choices: list[str] | None = None) -> dict[str, 
     }
 
 
+def _parse_dialogue(raw: str) -> list[tuple[str, str]]:
+    """'Evil Man=YOU WILL PAY|Alice=' → attributed lines (empty line = present only)."""
+    out: list[tuple[str, str]] = []
+    for chunk in (raw or "").split("|"):
+        if "=" not in chunk:
+            continue
+        name, line = chunk.split("=", 1)
+        name = name.strip()
+        if not name:
+            continue
+        out.append((name, line.strip()))
+    return out
+
+
 def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
     vals = {str(k): ("" if v is None else str(v)).strip() for k, v in (fields or {}).items()}
     beat = vals.get("beat") or "Establish"
@@ -172,6 +198,8 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
     custom = vals.get("action_line") or ""
     preset_action = (vals.get("action_preset") or "").strip()
     sequence = _split_names(vals.get("sequence") or "")
+    dialogue = _parse_dialogue(vals.get("dialogue") or "")
+    react_to = (vals.get("react_to") or "").strip()
     who_s = _join_names(people)
     prop_s = _join_names(props)
     body = _compose_body(
@@ -181,8 +209,11 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
         prop_s,
         where,
         where_to,
+        people=people,
         preset_action=preset_action,
         sequence=sequence,
+        dialogue=dialogue,
+        react_to=react_to,
     )
     action = f"[{beat} · {emotion}] {body}".strip()
     if not action.endswith("."):
@@ -193,7 +224,18 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
         move, speed, ease = CAMERA_PRESETS[camera]
     else:
         move, speed, ease = "Push in", "Slow", "Ease in-out"
-    framing = (vals.get("framing") or "").strip()
+    frame_bits: list[str] = []
+    lens = LENS_NOTES.get((vals.get("lens") or "").strip(), "")
+    if lens:
+        frame_bits.append(lens)
+    degrees = (vals.get("degrees") or "").strip()
+    if degrees:
+        rot = (vals.get("rotation") or "clockwise").strip() or "clockwise"
+        frame_bits.append(f"{degrees}° {rot}")
+    extra = (vals.get("framing") or "").strip()
+    if extra:
+        frame_bits.append(extra)
+    framing = ". ".join(frame_bits)
     return {
         "action": action,
         "move": move,
@@ -245,6 +287,26 @@ def _place_only(where: str, where_to: str) -> str:
     return ""
 
 
+def _compose_dialogue(
+    present: list[str],
+    dialogue: list[tuple[str, str]],
+    where: str,
+) -> str:
+    spoken = [(n, line) for n, line in dialogue if line]
+    parts: list[str] = []
+    for name, line in spoken:
+        quote = line.strip().strip('"')
+        parts.append(f'{name}: "{quote}"')
+    silent = [n for n in present if n not in {s[0] for s in spoken}]
+    if silent:
+        extra = _join_names(silent)
+        verb = "is" if len(silent) == 1 else "are"
+        parts.append(f"{extra} {verb} in frame.")
+    if where:
+        parts.append(f"Location: {where}.")
+    return " ".join(parts).strip() or "They talk."
+
+
 def _compose_body(
     beat: str,
     custom: str,
@@ -253,9 +315,68 @@ def _compose_body(
     where: str,
     where_to: str,
     *,
+    people: list[str] | None = None,
     preset_action: str = "",
     sequence: list[str] | None = None,
+    dialogue: list[tuple[str, str]] | None = None,
+    react_to: str = "",
 ) -> str:
+    lines = dialogue or []
+    if beat == "Dialogue" or (beat == "Action" and any(line for _, line in lines)):
+        return _compose_dialogue(people or [], lines, where)
+
+    if beat == "Establish":
+        if where and where_to:
+            return f"Wide look from {where} into {where_to} so we know both spaces"
+        if where:
+            return f"Wide look at {where} so we know where we are"
+        if who:
+            return f"Wide look establishing {who}"
+        return "Wide look at the space so we know where we are"
+
+    if beat == "Entrance":
+        if who and where_to:
+            extra = f" from {where}" if where else ""
+            return f"{who} enters {where_to}{extra}"
+        if who and where:
+            return f"{who} enters {where}"
+        if who:
+            return f"{who} enters the frame"
+        return "Someone enters the frame"
+
+    if beat == "Exit":
+        if who and where_to:
+            extra = f" from {where}" if where else ""
+            return f"{who} exits toward {where_to}{extra}"
+        if who and where:
+            return f"{who} exits {where}"
+        if who:
+            return f"{who} exits the frame"
+        return "Someone exits the frame"
+
+    if beat == "Reaction":
+        target = react_to or prop
+        if who and target:
+            return f"{who} reacts to {target}"
+        if who:
+            return f"{who} reacts"
+        return "A reaction beat"
+
+    if beat in ("Insert / Detail", "Insert", "Detail"):
+        focus = prop or react_to
+        if focus and where:
+            return f"Insert detail on {focus} in {where}"
+        if focus:
+            return f"Insert detail on {focus}"
+        return "Insert detail"
+
+    if beat == "Hold":
+        if who:
+            return f"Hold on {who}"
+        if where:
+            return f"Hold on {where}"
+        return "Hold on the frame"
+
     steps = [_third_person(s) for s in (sequence or []) if s]
     if steps:
         seq = steps[0]

@@ -180,7 +180,9 @@ const RESULT_ID = "result";
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
 const HUB_ID = "asset-hub";
-const SHOT_BUILDER_ID = "shot-builder";
+function spbId(shotId: string) {
+  return `spb-${shotId}`;
+}
 const PIN_EDIT_SOURCE = "pin-edit-source";
 const PIN_EDIT_PROMPT = "pin-edit-prompt";
 const PIN_EDIT_RESULT = "pin-edit-result";
@@ -457,9 +459,11 @@ function StudioCanvas() {
       if (id.startsWith("shot-")) {
         setShots((cur) => renumberShots(cur.filter((s) => s.id !== id)));
         setActiveShotId((cur) => (cur === id ? null : cur));
-      }
-      if (id === SHOT_BUILDER_ID) {
-        /* builder only */
+        const builderId = spbId(id);
+        setNodes((current) => current.filter((n) => n.id !== builderId));
+        setEdges((current) =>
+          current.filter((e) => e.source !== builderId && e.target !== builderId),
+        );
       }
       if (TOOL_TYPES.includes(id.split("-")[0] as ToolKind)) {
         setToolSources((cur) => {
@@ -1384,24 +1388,27 @@ function StudioCanvas() {
 
   const addShotBuilder = useCallback(
     (shotId?: string) => {
+      const ordered = [...shots].sort((a, b) => a.order - b.order);
+      const live = getNodes();
       const target =
         shotId ||
-        activeShotId ||
-        [...shots].sort((a, b) => a.order - b.order).at(-1)?.id;
+        ordered.find((s) => !live.some((n) => n.id === spbId(s.id)))?.id ||
+        ordered.at(-1)?.id;
       if (!target) {
         toast("Add a Shot first.", true);
         return;
       }
+      const builderId = spbId(target);
       const shot = shots.find((s) => s.id === target);
       setActiveShotId(target);
       const who = assetNames(characters, hubIds);
       setNodes((current) => {
+        if (current.some((n) => n.id === builderId)) return current;
         const parent = current.find((n) => n.id === target);
-        const existing = current.find((n) => n.id === SHOT_BUILDER_ID);
         const node: StudioNode = {
-          id: SHOT_BUILDER_ID,
+          id: builderId,
           type: "shot-builder",
-          position: existing?.position ?? {
+          position: {
             x: Math.max(-180, (parent?.position.x ?? PROMPT_POS.x) - 360),
             y: parent?.position.y ?? PROMPT_POS.y,
           },
@@ -1413,27 +1420,23 @@ function StudioCanvas() {
             characters: who,
             scenes: assetNames(scenes, hubIds),
             props: assetNames(props, hubIds),
-            onClose: () => closeNode(SHOT_BUILDER_ID),
+            onClose: () => closeNode(builderId),
             onApply: () => undefined,
           },
         };
-        if (existing) {
-          return current.map((n) => (n.id === SHOT_BUILDER_ID ? node : n));
-        }
         return [...current, node];
       });
       setEdges((current) => {
-        const next = current.filter(
-          (e) => e.source !== SHOT_BUILDER_ID && e.target !== SHOT_BUILDER_ID,
-        );
+        const edgeId = `e-${builderId}-${target}`;
+        if (current.some((e) => e.id === edgeId)) return current;
         return addEdge(
           {
-            id: `e-shot-builder-${target}`,
-            source: SHOT_BUILDER_ID,
+            id: edgeId,
+            source: builderId,
             target,
             style: { stroke: "#8aa4c2", strokeWidth: 2 },
           },
-          next,
+          current,
         );
       });
     },
@@ -1441,6 +1444,7 @@ function StudioCanvas() {
       activeShotId,
       characters,
       closeNode,
+      getNodes,
       hubIds,
       props,
       scenes,
@@ -1464,17 +1468,13 @@ function StudioCanvas() {
       setShots((cur) =>
         cur.map((s) => {
           if (s.id !== shotId) return s;
-          const existing = (s.action || "").trim();
-          const nextAction = existing
-            ? `${existing}\n${patch.action}`
-            : patch.action;
           return {
             ...s,
-            action: nextAction,
+            action: patch.action,
             move: patch.move || s.move,
             speed: patch.speed || s.speed,
             ease: patch.ease || s.ease,
-            framing: patch.framing || s.framing,
+            framing: patch.framing,
           };
         }),
       );
@@ -2241,8 +2241,10 @@ function StudioCanvas() {
             },
           };
         }
-        if (n.id === SHOT_BUILDER_ID) {
-          const targetId = activeShotId || shots[shots.length - 1]?.id || "";
+        if (n.type === "shot-builder") {
+          const targetId =
+            ("shotId" in n.data && n.data.shotId) ||
+            n.id.replace(/^spb-/, "");
           const shot = shots.find((s) => s.id === targetId);
           const who = assetNames(characters, hubIds);
           return {
@@ -2255,7 +2257,7 @@ function StudioCanvas() {
               characters: who,
               scenes: assetNames(scenes, hubIds),
               props: assetNames(props, hubIds),
-              onClose: () => closeNode(SHOT_BUILDER_ID),
+              onClose: () => closeNode(n.id),
               onApply: (patch) => {
                 if (targetId) applyShotBuilder(targetId, patch);
               },
@@ -2497,7 +2499,7 @@ function StudioCanvas() {
         (src === HUB_ID && tgt === "prompt") ||
         (src.startsWith("shot-") && tgt === "prompt") ||
         (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
-        (src === SHOT_BUILDER_ID && tgt.startsWith("shot-")) ||
+        (src.startsWith("spb-") && tgt.startsWith("shot-")) ||
         (src === BUILDER_ID && tgt === "prompt") ||
         (src === DIRECTOR_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
@@ -2618,7 +2620,7 @@ function StudioCanvas() {
             (src === HUB_ID && tgt === "prompt") ||
             (src.startsWith("shot-") && tgt === "prompt") ||
             (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
-            (src === SHOT_BUILDER_ID && tgt.startsWith("shot-")) ||
+            (src.startsWith("spb-") && tgt.startsWith("shot-")) ||
             (src === BUILDER_ID && tgt === "prompt") ||
             (src === DIRECTOR_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||

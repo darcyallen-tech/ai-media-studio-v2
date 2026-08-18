@@ -8,9 +8,11 @@ export type ShotBuilderFlowNode = Node<ShotBuilderNodeData, "shot-builder">;
 const BEATS = [
   "Establish",
   "Entrance",
+  "Exit",
   "Dialogue",
   "Action",
   "Reaction",
+  "Insert / Detail",
   "Hold",
 ];
 const EMOTIONS = [
@@ -70,6 +72,15 @@ const CAMERAS = [
   "Orbit",
   "Crane reveal",
   "Handheld energy",
+  "Dolly zoom",
+  "Roll",
+];
+const LENSES = [
+  "Default",
+  "Wide (~24–35)",
+  "Normal (~50)",
+  "Tight (~85)",
+  "Extreme tight",
 ];
 
 export default function ShotBuilderNode({
@@ -82,6 +93,9 @@ export default function ShotBuilderNode({
   const [emotion, setEmotion] = useState("Calm");
   const [emotionCustom, setEmotionCustom] = useState("");
   const [camera, setCamera] = useState("Push in");
+  const [lens, setLens] = useState("Default");
+  const [degrees, setDegrees] = useState("");
+  const [rotation, setRotation] = useState("clockwise");
   const [who, setWho] = useState<string[]>([]);
   const [where, setWhere] = useState("");
   const [whereTo, setWhereTo] = useState("");
@@ -89,19 +103,34 @@ export default function ShotBuilderNode({
   const [actionPreset, setActionPreset] = useState("walks into");
   const [actionLine, setActionLine] = useState("");
   const [steps, setSteps] = useState<[string, string, string]>(["", "", ""]);
+  const [lines, setLines] = useState<Record<string, string>>({});
+  const [reactTo, setReactTo] = useState("");
   const [framing, setFraming] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
+  const showWho = beat !== "Hold";
+  const whoOptional = beat === "Establish" || beat === "Insert / Detail";
+  const showFromTo =
+    beat === "Entrance" || beat === "Exit" || beat === "Establish";
+  const showDialogue = beat === "Dialogue";
+  const showAction = beat === "Action";
+  const showReaction = beat === "Reaction";
+  const showProps =
+    beat === "Action" ||
+    beat === "Insert / Detail" ||
+    beat === "Reaction";
+  const showCamera = true;
+
   const preview = useMemo(() => {
-    const names = who.join(" and ");
-    const stuff = pickedProps.join(" and ");
-    if (names && stuff && where) {
-      return `${names} picks up ${stuff} in ${where}`;
+    if (beat === "Dialogue") {
+      const spoken = who.filter((n) => (lines[n] || "").trim());
+      return spoken.length
+        ? spoken.map((n) => `${n}: “${lines[n].trim()}”`).join(" · ")
+        : "";
     }
-    if (where && whereTo) return `from ${where} into ${whereTo}`;
     return "";
-  }, [pickedProps, where, whereTo, who]);
+  }, [beat, lines, who]);
 
   function toggle(list: string[], value: string) {
     return list.includes(value)
@@ -114,6 +143,9 @@ export default function ShotBuilderNode({
     setApplying(true);
     setError(null);
     try {
+      const dialogue = who
+        .map((name) => `${name}=${lines[name] || ""}`)
+        .join("|");
       const res = await fetch("/shot-builder/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,6 +154,9 @@ export default function ShotBuilderNode({
             beat,
             emotion,
             camera,
+            lens,
+            degrees,
+            rotation,
             who: who.join("|"),
             where,
             where_to: whereTo,
@@ -131,6 +166,8 @@ export default function ShotBuilderNode({
             sequence: steps.filter(Boolean).join("|"),
             emotion_custom: emotionCustom,
             framing,
+            dialogue,
+            react_to: reactTo,
           },
         }),
       });
@@ -156,7 +193,7 @@ export default function ShotBuilderNode({
         move: body.move || "Push in",
         speed: body.speed || "Slow",
         ease: body.ease || "Ease in-out",
-        framing: body.framing || framing,
+        framing: body.framing || "",
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Apply failed.");
@@ -167,14 +204,14 @@ export default function ShotBuilderNode({
 
   return (
     <div className="studio-node shot-builder-node">
+      <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">
-        <span>Shot Prompt Builder</span>
+        <span>SPB · {data.shotLabel || "Shot"}</span>
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag">
         <p className="hint">
-          Fills {data.shotLabel || "this shot"} — existing action text is kept
-          and the new beat is appended.
+          Wired only to this shot. Apply replaces the Shot action.
         </p>
         <label className="builder-field">
           <span className="field-label">Beat type</span>
@@ -190,80 +227,142 @@ export default function ShotBuilderNode({
             ))}
           </select>
         </label>
-        <span className="field-label">Who</span>
-        {characters.length ? (
-          <div className="chip-row">
-            {characters.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={
-                  who.includes(name) ? "pill modality on" : "pill modality"
-                }
-                onClick={() => setWho((cur) => toggle(cur, name))}
-              >
-                {name}
-              </button>
+
+        {showWho ? (
+          <>
+            <span className="field-label">
+              Who{whoOptional ? " (optional)" : ""}
+            </span>
+            {characters.length ? (
+              <div className="chip-row">
+                {characters.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={
+                      who.includes(name) ? "pill modality on" : "pill modality"
+                    }
+                    onClick={() => setWho((cur) => toggle(cur, name))}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="hint">Add Hub characters to pick subjects.</p>
+            )}
+          </>
+        ) : null}
+
+        {showDialogue && who.length ? (
+          <>
+            <span className="field-label">
+              Lines (only speakers you type for — others stay in frame)
+            </span>
+            {who.map((name) => (
+              <label key={name} className="builder-field">
+                <span className="field-label">{name}</span>
+                <input
+                  className="model nodrag"
+                  type="text"
+                  placeholder={`${name}: leave blank if silent`}
+                  value={lines[name] || ""}
+                  onChange={(e) =>
+                    setLines((cur) => ({ ...cur, [name]: e.target.value }))
+                  }
+                />
+              </label>
             ))}
-          </div>
-        ) : (
-          <p className="hint">Add Hub characters to pick subjects.</p>
-        )}
-        <span className="field-label">Where</span>
-        {scenes.length ? (
-          <div className="chip-row">
-            {scenes.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={where === name ? "pill modality on" : "pill modality"}
-                onClick={() => setWhere((cur) => (cur === name ? "" : name))}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="hint">Add a Hub scene to set location.</p>
-        )}
-        <span className="field-label">Into (optional second location)</span>
-        {scenes.length ? (
-          <div className="chip-row">
-            {scenes.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={
-                  whereTo === name ? "pill modality on" : "pill modality"
-                }
-                onClick={() => setWhereTo((cur) => (cur === name ? "" : name))}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="hint">Pick a second scene for a move between rooms.</p>
-        )}
-        <span className="field-label">With prop</span>
-        {props.length ? (
-          <div className="chip-row">
-            {props.map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={
-                  pickedProps.includes(name) ? "pill modality on" : "pill modality"
-                }
-                onClick={() => setPickedProps((cur) => toggle(cur, name))}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="hint">Add Hub props to mention them by name.</p>
-        )}
+          </>
+        ) : null}
+
+        {showFromTo || beat === "Action" || beat === "Insert / Detail" ? (
+          <>
+            <span className="field-label">
+              {beat === "Entrance" || beat === "Exit" ? "From" : "Where"}
+            </span>
+            {scenes.length ? (
+              <div className="chip-row">
+                {scenes.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={where === name ? "pill modality on" : "pill modality"}
+                    onClick={() => setWhere((cur) => (cur === name ? "" : name))}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="hint">Add a Hub scene to set location.</p>
+            )}
+          </>
+        ) : null}
+
+        {showFromTo ? (
+          <>
+            <span className="field-label">
+              {beat === "Exit" ? "Toward" : "Into"}
+            </span>
+            {scenes.length ? (
+              <div className="chip-row">
+                {scenes.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={
+                      whereTo === name ? "pill modality on" : "pill modality"
+                    }
+                    onClick={() => setWhereTo((cur) => (cur === name ? "" : name))}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
+        {showProps ? (
+          <>
+            <span className="field-label">With prop</span>
+            {props.length ? (
+              <div className="chip-row">
+                {props.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className={
+                      pickedProps.includes(name)
+                        ? "pill modality on"
+                        : "pill modality"
+                    }
+                    onClick={() => setPickedProps((cur) => toggle(cur, name))}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="hint">Add Hub props to mention them by name.</p>
+            )}
+          </>
+        ) : null}
+
+        {showReaction ? (
+          <label className="builder-field">
+            <span className="field-label">Reacts to</span>
+            <input
+              className="model nodrag"
+              type="text"
+              placeholder="optional — a person, prop, or event"
+              value={reactTo}
+              onChange={(e) => setReactTo(e.target.value)}
+            />
+          </label>
+        ) : null}
+
         <label className="builder-field">
           <span className="field-label">Emotion / mood</span>
           <select
@@ -284,75 +383,124 @@ export default function ShotBuilderNode({
             <input
               className="model nodrag"
               type="text"
-              placeholder="e.g. bittersweet, wired"
               value={emotionCustom}
               onChange={(e) => setEmotionCustom(e.target.value)}
             />
           </label>
         ) : null}
-        <label className="builder-field">
-          <span className="field-label">Action</span>
-          <select
-            className="model nodrag"
-            value={actionPreset}
-            onChange={(e) => setActionPreset(e.target.value)}
-          >
-            {ACTIONS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="field-label">Sequence (optional, 2–3 steps)</span>
-        <div className="params">
-          {([0, 1, 2] as const).map((i) => (
-            <label key={i} className="param">
-              <span>Step {i + 1}</span>
+
+        {showAction ? (
+          <>
+            <label className="builder-field">
+              <span className="field-label">Action</span>
               <select
                 className="model nodrag"
-                value={steps[i]}
-                onChange={(e) =>
-                  setSteps((cur) => {
-                    const next: [string, string, string] = [...cur];
-                    next[i] = e.target.value;
-                    return next;
-                  })
-                }
+                value={actionPreset}
+                onChange={(e) => setActionPreset(e.target.value)}
               >
-                {STEP_CHOICES.map((item) => (
-                  <option key={item || `none-${i}`} value={item}>
-                    {item || "—"}
+                {ACTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
                   </option>
                 ))}
               </select>
             </label>
-          ))}
-        </div>
-        <label className="builder-field">
-          <span className="field-label">Camera preset</span>
-          <select
-            className="model nodrag"
-            value={camera}
-            onChange={(e) => setCamera(e.target.value)}
-          >
-            {CAMERAS.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="builder-field">
-          <span className="field-label">Action (1 line, optional)</span>
-          <input
-            className="model nodrag"
-            type="text"
-            placeholder="Leave blank to use the Action preset"
-            value={actionLine}
-            onChange={(e) => setActionLine(e.target.value)}
-          />
-        </label>
+            <span className="field-label">Sequence (optional, 2–3 steps)</span>
+            <div className="params">
+              {([0, 1, 2] as const).map((i) => (
+                <label key={i} className="param">
+                  <span>Step {i + 1}</span>
+                  <select
+                    className="model nodrag"
+                    value={steps[i]}
+                    onChange={(e) =>
+                      setSteps((cur) => {
+                        const next: [string, string, string] = [...cur];
+                        next[i] = e.target.value;
+                        return next;
+                      })
+                    }
+                  >
+                    {STEP_CHOICES.map((item) => (
+                      <option key={item || `none-${i}`} value={item}>
+                        {item || "—"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <label className="builder-field">
+              <span className="field-label">Custom action line</span>
+              <input
+                className="model nodrag"
+                type="text"
+                placeholder="Overrides the Action preset"
+                value={actionLine}
+                onChange={(e) => setActionLine(e.target.value)}
+              />
+            </label>
+          </>
+        ) : null}
+
+        {showCamera ? (
+          <>
+            <label className="builder-field">
+              <span className="field-label">Move</span>
+              <select
+                className="model nodrag"
+                value={camera}
+                onChange={(e) => setCamera(e.target.value)}
+              >
+                {CAMERAS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="builder-field">
+              <span className="field-label">Lens feel</span>
+              <select
+                className="model nodrag"
+                value={lens}
+                onChange={(e) => setLens(e.target.value)}
+              >
+                {LENSES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {camera === "Orbit" || camera === "Roll" || camera === "Dolly zoom" ? (
+              <div className="params">
+                <label className="param">
+                  <span>Degrees</span>
+                  <input
+                    className="model nodrag"
+                    type="text"
+                    placeholder="30"
+                    value={degrees}
+                    onChange={(e) => setDegrees(e.target.value)}
+                  />
+                </label>
+                <label className="param">
+                  <span>Rotation</span>
+                  <select
+                    className="model nodrag"
+                    value={rotation}
+                    onChange={(e) => setRotation(e.target.value)}
+                  >
+                    <option value="clockwise">clockwise</option>
+                    <option value="counter-clockwise">counter-clockwise</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+
         <label className="builder-field">
           <span className="field-label">Framing notes (optional)</span>
           <input
