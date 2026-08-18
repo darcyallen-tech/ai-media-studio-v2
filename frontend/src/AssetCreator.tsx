@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "./toast";
-import type { AssetRole, ModelRow, StudioAsset } from "./types";
+import {
+  CORE_SLOTS,
+  EXTRA_SLOTS,
+  SLOT_LABEL,
+  useSheetEstimate,
+  useSheetModels,
+} from "./sheetUi";
+import type { AssetRole, StudioAsset } from "./types";
 
 type Props = {
   kind: AssetRole;
@@ -11,17 +18,8 @@ type Props = {
 type CharTab = "base" | "costume";
 type AngleStatus = "idle" | "run" | "ok" | "err";
 
-const CORE = ["front", "side", "closeup"] as const;
-const EXTRA = ["back", "threequarter_front", "threequarter_back", "top"] as const;
-const SLOT_LABEL: Record<string, string> = {
-  front: "Front",
-  side: "Side",
-  closeup: "Close-up",
-  back: "Back",
-  threequarter_front: "¾ front",
-  threequarter_back: "¾ back",
-  top: "Top",
-};
+const CORE = CORE_SLOTS;
+const EXTRA = EXTRA_SLOTS;
 
 const AGES = ["20s", "30s", "40s", "50s", "60+"];
 const BUILDS = ["slim", "average", "athletic", "heavy"];
@@ -45,11 +43,6 @@ const WARDROBE_M =
 const WARDROBE_F =
   "minimal form-fit neutral tank and fitted trousers, simple shoes, no logos, no accessories";
 
-function sheetModel(row: ModelRow) {
-  const blob = `${row.id} ${row.label}`.toLowerCase();
-  return blob.includes("flux") || blob.includes("seedream") || blob.includes("nano");
-}
-
 async function readJson<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
@@ -65,34 +58,6 @@ export default function AssetCreator({ kind, onClose, onSaved }: Props) {
   if (kind === "scene") return <SceneBuilder onClose={onClose} onSaved={onSaved} />;
   if (kind === "prop") return <PropBuilder onClose={onClose} onSaved={onSaved} />;
   return <CharacterBuilder onClose={onClose} onSaved={onSaved} />;
-}
-
-function useSheetModels() {
-  const [t2i, setT2i] = useState<ModelRow[]>([]);
-  const [r2i, setR2i] = useState<ModelRow[]>([]);
-  const [t2iId, setT2iId] = useState("");
-  const [r2iId, setR2iId] = useState("");
-  useEffect(() => {
-    const ac = new AbortController();
-    fetch("/models?mode=image&modality=t2i", { signal: ac.signal })
-      .then((res) => (res.ok ? res.json() : { models: [] }))
-      .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const rows = (body.models ?? []).filter(sheetModel);
-        setT2i(rows);
-        setT2iId((cur) => cur || body.default_id || rows[0]?.id || "");
-      })
-      .catch(() => undefined);
-    fetch("/models?mode=image&modality=r2i", { signal: ac.signal })
-      .then((res) => (res.ok ? res.json() : { models: [] }))
-      .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const rows = (body.models ?? []).filter(sheetModel);
-        setR2i(rows);
-        setR2iId((cur) => cur || body.default_id || rows[0]?.id || "");
-      })
-      .catch(() => undefined);
-    return () => ac.abort();
-  }, []);
-  return { t2i, r2i, t2iId, r2iId, setT2iId, setR2iId };
 }
 
 function CharacterBuilder({
@@ -127,9 +92,14 @@ function CharacterBuilder({
   const [costumeRef, setCostumeRef] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const models = useSheetModels();
-
   const lockedWardrobe = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const slots = useMemo(() => [...CORE, ...extras], [extras]);
+  const estimate = useSheetEstimate(
+    tab === "costume" ? "costume" : "character",
+    models.t2iId,
+    models.r2iId,
+    tab === "base" ? slots : [...CORE],
+  );
 
   useEffect(() => {
     fetch("/assets?kind=character")
@@ -571,6 +541,7 @@ function CharacterBuilder({
             status={status}
             thumbs={thumbs}
           />
+          <p className="estimate">{estimate}</p>
 
           <div className="prompt-actions">
             <button
@@ -649,6 +620,8 @@ function SceneBuilder({
   const [status, setStatus] = useState<Record<string, AngleStatus>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const models = useSheetModels();
+  const sceneSlots = sheet ? ["front", "side"] : ["front"];
+  const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, sceneSlots);
 
   async function generate() {
     const label = name.trim();
@@ -811,6 +784,7 @@ function SceneBuilder({
             </select>
           </label>
           <AngleProgress slots={sheet ? ["front", "side"] : ["front"]} status={status} thumbs={thumbs} />
+          <p className="estimate">{estimate}</p>
           <div className="prompt-actions">
             <button
               type="button"
@@ -851,6 +825,7 @@ function PropBuilder({
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const models = useSheetModels();
+  const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"]);
 
   async function saveUpload() {
     const label = name.trim();
@@ -1034,6 +1009,7 @@ function PropBuilder({
             </select>
           </label>
           <AngleProgress slots={["front"]} status={status} thumbs={thumbs} />
+          <p className="estimate">{estimate}</p>
           <div className="prompt-actions">
             <button
               type="button"

@@ -365,6 +365,95 @@ def _pick_result_still(result: Any) -> str:
     return ""
 
 
+def compose_angle_prompt(
+    *,
+    kind: str,
+    slot: str,
+    fields: dict[str, Any] | None,
+    name: str = "",
+    is_costume: bool = False,
+    wardrobe: str = "",
+    extra: str = "",
+) -> str:
+    key = (slot or "front").strip().lower()
+    merged = {**(fields or {}), "name": name or (fields or {}).get("name") or ""}
+    if kind == "scene":
+        return scene_prompt(merged, detail=key != "front")
+    if kind == "prop":
+        return prop_prompt(merged)
+    if is_costume:
+        return costume_prompt(key, wardrobe or _nv((fields or {}).get("wardrobe")), extra)
+    if key == "front":
+        return character_front_prompt(fields, extra)
+    return character_angle_prompt(key, fields, extra)
+
+
+def _usd_from_label(label: str) -> float:
+    import re
+
+    match = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", label or "")
+    return float(match.group(1)) if match else 0.0
+
+
+def estimate_sheet_cost(
+    *,
+    kind: str = "character",
+    t2i_model_id: str = "",
+    r2i_model_id: str = "",
+    slots: list[str] | None = None,
+) -> dict[str, Any]:
+    """Sum catalog estimates for the selected models × still count."""
+    from app.create import estimate_create_cost
+    from app.create_catalog import default_model_for
+    from app.create_state import CreateState
+
+    want = (kind or "character").strip().lower()
+    planned = [s for s in (slots or list(CORE_SLOTS)) if s]
+    if not planned:
+        planned = ["front"]
+    angles: list[dict[str, Any]] = []
+    total = 0.0
+    for i, slot in enumerate(planned):
+        first = i == 0 or slot == "front"
+        if want == "costume":
+            modality = "r2i"
+            mid = (r2i_model_id or t2i_model_id).strip()
+        elif first:
+            modality = "t2i"
+            mid = (t2i_model_id or "").strip()
+        elif want == "character":
+            modality = "r2i"
+            mid = (r2i_model_id or t2i_model_id).strip()
+        else:
+            modality = "i2i"
+            mid = (r2i_model_id or t2i_model_id).strip()
+        if not mid:
+            fallback = default_model_for("image", modality)
+            mid = fallback.id if fallback else ""
+        if not mid:
+            label = "Est. cost: —"
+            usd = 0.0
+        else:
+            label = estimate_create_cost(
+                CreateState(mode="image", modality=modality, model_id=mid, prompt="sheet")
+            )
+            usd = _usd_from_label(label)
+        total += usd
+        angles.append(
+            {
+                "slot": slot,
+                "modality": modality,
+                "model_id": mid,
+                "cost": label,
+                "usd": usd,
+            }
+        )
+    n = len(planned)
+    unit = "1 still" if n == 1 else f"{n} stills"
+    cost = f"Est. cost: ${total:.2f} · {unit}" if total else "Est. cost: —"
+    return {"ok": True, "cost": cost, "usd": total, "count": n, "angles": angles}
+
+
 def generate_angle(
     *,
     asset_id: str,
@@ -373,6 +462,8 @@ def generate_angle(
     extra: str = "",
     costume_ref: str = "",
     wardrobe: str = "",
+    prompt: str = "",
+    source_still: str = "",
 ) -> dict[str, Any]:
     from app.config import OUTPUT_DIR
     from app.create import generate
@@ -392,21 +483,25 @@ def generate_angle(
     outfit = _nv(wardrobe) or _nv(fields.get("wardrobe"))
 
     refs: list[str] = []
+    prior = _nv(source_still)
+    if prior and Path(prior).is_file():
+        refs.append(prior)
     cref = _nv(costume_ref)
-    if cref and Path(cref).is_file():
+    if cref and Path(cref).is_file() and cref not in refs:
         refs.append(cref)
-    refs.extend(_identity_refs(row, parent))
+    for path in _identity_refs(row, parent):
+        if path not in refs:
+            refs.append(path)
 
-    if kind == "scene":
-        prompt = scene_prompt({**fields, "name": row.get("name")}, detail=key != "front")
-    elif kind == "prop":
-        prompt = prop_prompt({**fields, "name": row.get("name")})
-    elif is_costume:
-        prompt = costume_prompt(key, outfit, extra)
-    elif key == "front" and not refs:
-        prompt = character_front_prompt(fields, extra)
-    else:
-        prompt = character_angle_prompt(key, fields, extra)
+    text = _nv(prompt) or compose_angle_prompt(
+        kind=kind,
+        slot=key,
+        fields=fields,
+        name=str(row.get("name") or ""),
+        is_costume=is_costume,
+        wardrobe=outfit,
+        extra=extra,
+    )
 
     modality = "t2i"
     if refs:
@@ -426,7 +521,7 @@ def generate_angle(
         mode="image",
         modality=modality,  # type: ignore[arg-type]
         model_id=mid,
-        prompt=prompt,
+        prompt=text,
         slots=CreateSlots(start_still=start, ref_images=extras),
         params=CreateParams(),
         surface="studio",
@@ -450,5 +545,5 @@ def generate_angle(
     pub["angle"] = key
     pub["modality"] = modality
     pub["model_used"] = mid
-    pub["prompt"] = prompt
+    pub["prompt"] = text
     return pub

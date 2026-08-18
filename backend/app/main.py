@@ -53,7 +53,12 @@ from app.assets import (  # noqa: E402
     resolve_asset_still,
     sheet_model_ok,
 )
-from app.sheet import builder_fields, generate_angle  # noqa: E402
+from app.sheet import (  # noqa: E402
+    builder_fields,
+    compose_angle_prompt,
+    estimate_sheet_cost,
+    generate_angle,
+)
 from app.aleph_service import (  # noqa: E402
     estimate_frame_label,
     extract_pin_still,
@@ -1121,6 +1126,25 @@ class AssetSheetAngleIn(BaseModel):
     extra: str = ""
     costume_ref: str = ""
     wardrobe: str = ""
+    prompt: str = ""
+    source_still: str = ""
+
+
+class AssetSheetEstimateIn(BaseModel):
+    kind: str = "character"
+    t2i_model_id: str = ""
+    r2i_model_id: str = ""
+    slots: list[str] = Field(default_factory=list)
+
+
+class AssetSheetPromptIn(BaseModel):
+    kind: str = "character"
+    slot: str = "front"
+    name: str = ""
+    fields: dict[str, Any] = Field(default_factory=dict)
+    is_costume: bool = False
+    wardrobe: str = ""
+    extra: str = ""
 
 
 @app.get("/assets/builder/{kind}")
@@ -1153,12 +1177,38 @@ def assets_sheet_angle(body: AssetSheetAngleIn) -> dict[str, Any]:
             extra=body.extra,
             costume_ref=body.costume_ref,
             wardrobe=body.wardrobe,
+            prompt=body.prompt,
+            source_still=body.source_still,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "item": row}
+
+
+@app.post("/assets/sheet/estimate")
+def assets_sheet_estimate(body: AssetSheetEstimateIn) -> dict[str, Any]:
+    return estimate_sheet_cost(
+        kind=body.kind,
+        t2i_model_id=body.t2i_model_id,
+        r2i_model_id=body.r2i_model_id,
+        slots=list(body.slots or []),
+    )
+
+
+@app.post("/assets/sheet/prompt")
+def assets_sheet_prompt(body: AssetSheetPromptIn) -> dict[str, Any]:
+    text = compose_angle_prompt(
+        kind=body.kind,
+        slot=body.slot,
+        fields=dict(body.fields or {}),
+        name=body.name,
+        is_costume=body.is_costume,
+        wardrobe=body.wardrobe,
+        extra=body.extra,
+    )
+    return {"ok": True, "prompt": text}
 
 
 @app.get("/assets")
