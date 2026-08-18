@@ -4,15 +4,15 @@ Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
 
 **V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
 
-Scaffold only: catalog + `generate()` ported from V1, frontend shell. Prompt → Generate end-to-end is the next phase.
+Phase 1: Prompt → Generate → Result in the browser (image T2I smoke). No node canvas yet.
 
 ## Layout
 
 ```
 ai-media-studio-v2/
   backend/app/     FastAPI + create_state / catalog / generate (V1 logic, imports adapted)
-  frontend/        Vite + React shell
-  outputs/         generated media
+  frontend/        Vite + React (mode, modality, model, prompt, result)
+  outputs/         generated media (served at /outputs/...)
 ```
 
 ## Prerequisites
@@ -20,21 +20,52 @@ ai-media-studio-v2/
 - Python 3.11+ (3.14 works)
 - Node.js 20+ (for the frontend)
 
+## Keys
+
+Copy `.env.example` → `.env` at the **repo root** (`ai-media-studio-v2/.env`).
+
+Easiest if you already run V1: copy keys from `../ai-media-studio/.env` into this `.env`.
+
+| Env | Used for |
+|-----|----------|
+| `FAL_KEY` | Almost all generation (image / video / audio on fal) |
+| `XAI_KEY` or `XAI_API_KEY` | Optional Grok enhance / text |
+| `RUNWARE_KEY` or `RUNWARE_API_KEY` | Optional Aleph / Runware only |
+
+Never commit real keys. `.env` is gitignored.
+
 ## Backend
 
 ```powershell
 cd C:\Users\Darcy\ai-media-studio-v2\backend
 python -m pip install -r requirements.txt
-copy ..\.env.example ..\.env
-# edit ..\.env — FAL_KEY, XAI_KEY, RUNWARE_KEY (no real secrets in git)
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-- Health: <http://127.0.0.1:8000/health>
-- Models: <http://127.0.0.1:8000/models?mode=image&modality=t2i>
-- Generate: `POST /generate` with a CreateState JSON body (prompt, mode, modality, model_id, slots, params)
-
 Run uvicorn with cwd = `backend` so `app` imports resolve.
+
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/health` | App + whether keys are loaded (not the values) |
+| GET | `/models?mode=image\|video\|audio&modality=t2i` | Catalog for the dropdown |
+| GET | `/estimate?mode=&modality=&model_id=` | Cost only |
+| POST | `/estimate` | Same CreateState JSON as generate |
+| POST | `/generate` | `{ ok, result_paths[], cost, duration_sec, error? }` |
+| GET | `/outputs/...` | Generated files |
+
+`POST /generate` body (CreateState-compatible):
+
+```json
+{
+  "mode": "image",
+  "modality": "t2i",
+  "model_id": "vision:flux 2 pro t2i",
+  "prompt": "a red chair in a sunlit loft",
+  "params": { "aspect": "16:9" }
+}
+```
+
+Audio: models list works; generate returns a Phase 7 no-op error.
 
 ## Frontend
 
@@ -44,18 +75,10 @@ npm install
 npm run dev
 ```
 
-Opens the V2 shell: mode pills (Image | Video | Audio), prompt box, Generate **disabled**. No node canvas yet.
+Open <http://127.0.0.1:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/outputs` to the backend.
 
-## Keys
-
-| Env | Used for |
-|-----|----------|
-| `FAL_KEY` | Almost all generation (image / video / audio on fal) |
-| `XAI_KEY` or `XAI_API_KEY` | Optional Grok enhance / text |
-| `RUNWARE_KEY` or `RUNWARE_API_KEY` | Optional Aleph / Runware only |
-
-Copy `.env.example` → `.env`. Never commit real keys.
+Smoke: Image → T2I → Flux 2 Pro (catalog default) → short prompt → Generate. Image, cost, and time should appear.
 
 ## V1
 
-Production desktop (Flet) stays at `C:\Users\Darcy\ai-media-studio`. V2 copies create/catalog/generate logic only — no Flet UI.
+Production desktop (Flet) stays at `C:\Users\Darcy\ai-media-studio`. V2 does not modify it.

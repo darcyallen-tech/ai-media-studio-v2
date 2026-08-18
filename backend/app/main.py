@@ -1,12 +1,13 @@
 """
 FastAPI entry for AI Media Studio V2.
 
-MVP: catalog + generate ported from V1 (no Flet UI).
+Phase 1: Prompt → Generate → Result (catalog + generate ported from V1).
 """
 
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # Load repo-root .env (never commit real keys)
@@ -27,17 +29,20 @@ from app.audio_registry import (  # noqa: E402
     VIDEO_SFX_MODELS,
     VOICE_CLONE_MODELS,
     VOICEOVER_MODELS,
+    format_audio_cost,
 )
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
-from app.create_catalog import list_models_for_ui  # noqa: E402
+from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
 from app.secrets_store import apply_secrets_to_env  # noqa: E402
 
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 
-app = FastAPI(title=APP_TITLE, version="2.0.0-scaffold")
+APP_VERSION = "2.0.0-phase1"
+
+app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -59,6 +64,8 @@ _AUDIO_REGISTRIES = {
     "voiceover": VOICEOVER_MODELS,
     "voice_clone": VOICE_CLONE_MODELS,
 }
+
+_AUDIO_NOOP = "Audio generate is not wired yet (Phase 7)."
 
 
 class SlotsIn(BaseModel):
@@ -87,7 +94,7 @@ class ParamsIn(BaseModel):
 
 
 class CreateStateIn(BaseModel):
-    """JSON body for POST /generate — maps 1:1 onto V1 CreateState."""
+    """JSON body for POST /generate and POST /estimate — maps onto V1 CreateState."""
 
     mode: str = "image"
     modality: str = "t2i"
@@ -158,6 +165,43 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+def _public_paths(paths: list[str]) -> list[str]:
+    """Turn local output paths into /outputs/... URLs the web UI can load."""
+    root = OUTPUT_DIR.resolve()
+    out: list[str] = []
+    for raw in paths:
+        if not raw:
+            continue
+        text = str(raw).strip()
+        if text.startswith("/outputs/") or text.startswith("http://") or text.startswith("https://"):
+            out.append(text)
+            continue
+        try:
+            rel = Path(text).resolve().relative_to(root)
+        except (OSError, ValueError):
+            continue
+        out.append("/outputs/" + rel.as_posix())
+    return out
+
+
+def _collect_result_paths(result: CreateResult) -> list[str]:
+    seen: list[str] = []
+    for raw in list(result.paths) + list(result.image_paths) + (
+        [result.video_path] if result.video_path else []
+    ):
+        if raw and raw not in seen:
+            seen.append(raw)
+    return _public_paths(seen)
+
+
+def _error_message(result: CreateResult) -> str | None:
+    if result.ok:
+        return None
+    if result.errors:
+        return str(result.errors[0])
+    return (result.status or "Generate failed.").strip() or "Generate failed."
+
+
 def _audio_models(modality: str | None) -> list[dict[str, Any]]:
     want = (modality or "").strip().lower() or None
     rows: list[dict[str, Any]] = []
@@ -177,6 +221,7 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     "endpoint": spec.endpoint,
                     "notes": spec.notes,
                     "cost_estimate_usd": spec.cost_estimate_usd,
+                    "cost": format_audio_cost(spec),
                     "backend": "audio",
                     "source_key": spec.key,
                 }
@@ -184,12 +229,43 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
     return rows
 
 
+def _audio_estimate(model_id: str, modality: str | None) -> str:
+    raw = (model_id or "").strip()
+    if raw.startswith("audio:"):
+        raw = raw[6:]
+    for spec in _audio_models(modality):
+        if spec["id"] == f"audio:{raw}" or spec["source_key"] == raw or spec["label"] == raw:
+            return str(spec.get("cost") or f"Est. cost: ${spec['cost_estimate_usd']}")
+    return "Est. cost: —"
+
+
+def _payload(
+    *,
+    ok: bool,
+    result_paths: list[str],
+    cost: str,
+    duration_sec: float,
+    error: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "ok": ok,
+        "result_paths": result_paths,
+        "cost": cost,
+        "duration_sec": round(float(duration_sec), 3),
+        "error": error,
+    }
+    if extra:
+        body.update(extra)
+    return body
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
         "ok": True,
         "app": APP_TITLE,
-        "version": "2.0.0-scaffold",
+        "version": APP_VERSION,
         "output_dir": str(OUTPUT_DIR),
         "keys": {
             "fal": bool(os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY")),
@@ -212,53 +288,105 @@ def list_models_endpoint(
     want_mode = (mode or "").strip().lower() or None
     if want_mode == "audio":
         models = _audio_models(modality)
-        return {"mode": "audio", "modality": modality, "models": models}
+        default_id = models[0]["id"] if models else None
+        return {
+            "mode": "audio",
+            "modality": modality,
+            "default_id": default_id,
+            "models": models,
+        }
     if want_mode and want_mode not in ("image", "video"):
         raise HTTPException(
             status_code=400,
             detail="mode must be image, video, or audio",
         )
     entries = list_models_for_ui(want_mode, modality)
+    default = default_model_for(want_mode, modality)
     return {
         "mode": want_mode,
         "modality": modality,
+        "default_id": default.id if default else (entries[0].id if entries else None),
         "models": [_jsonable(e) for e in entries],
     }
+
+
+@app.get("/estimate")
+def estimate_get(
+    mode: str = Query(default="image"),
+    modality: str = Query(default="t2i"),
+    model_id: str = Query(default=""),
+    duration: str | None = Query(default=None),
+    aspect: str | None = Query(default=None),
+    resolution: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Cost-only estimate from catalog helpers (query form)."""
+    body = CreateStateIn(
+        mode=mode,
+        modality=modality,
+        model_id=model_id,
+        params=ParamsIn(duration=duration, aspect=aspect, resolution=resolution),
+    )
+    return _estimate_payload(body)
+
+
+@app.post("/estimate")
+def estimate_post(body: CreateStateIn) -> dict[str, Any]:
+    """Cost-only estimate — same CreateState body as POST /generate."""
+    return _estimate_payload(body)
+
+
+def _estimate_payload(body: CreateStateIn) -> dict[str, Any]:
+    if (body.mode or "").strip().lower() == "audio":
+        cost = _audio_estimate(body.model_id, body.modality)
+        return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
+    state = _state_from_body(body)
+    cost = estimate_create_cost(state)
+    return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
 
 
 @app.post("/generate")
 def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
     """
-    Run V1 ``generate(CreateState)`` and return paths + cost.
-
-    Audio mode is catalog-only in this scaffold (next phase).
+    Run V1 ``generate(CreateState)`` and return result_paths + cost + duration.
     """
     if (body.mode or "").strip().lower() == "audio":
-        raise HTTPException(
-            status_code=400,
-            detail="Audio generate is not wired in the V2 scaffold yet.",
+        return _payload(
+            ok=False,
+            result_paths=[],
+            cost=_audio_estimate(body.model_id, body.modality),
+            duration_sec=0,
+            error=_AUDIO_NOOP,
         )
     state = _state_from_body(body)
+    t0 = time.perf_counter()
     result: CreateResult = generate(state)
-    return {
-        "ok": result.ok,
-        "status": result.status,
-        "errors": list(result.errors),
-        "paths": list(result.paths),
-        "image_paths": list(result.image_paths),
-        "video_path": result.video_path,
-        "job_kind": result.job_kind,
-        "model": result.model,
-        "model_key": result.model_key,
-        "endpoint": result.endpoint,
-        "cost": result.cost_estimate or result.cost_label,
-        "cost_estimate": result.cost_estimate,
-        "cost_label": result.cost_label,
-        "notes": list(result.notes),
-        "metrics_line": result.metrics_line,
-        "is_draft": result.is_draft,
-        "draft_cache_url": result.draft_cache_url,
-        "render_seconds": result.render_seconds,
-        "timestamp": result.timestamp,
-        "estimate": estimate_create_cost(state),
-    }
+    elapsed = time.perf_counter() - t0
+    duration = result.render_seconds if result.render_seconds is not None else elapsed
+    cost = result.cost_estimate or result.cost_label or result.metrics_line or ""
+    return _payload(
+        ok=result.ok,
+        result_paths=_collect_result_paths(result),
+        cost=cost,
+        duration_sec=duration,
+        error=_error_message(result),
+        extra={
+            "status": result.status,
+            "errors": list(result.errors),
+            "image_paths": list(result.image_paths),
+            "video_path": result.video_path,
+            "job_kind": result.job_kind,
+            "model": result.model,
+            "model_key": result.model_key,
+            "endpoint": result.endpoint,
+            "notes": list(result.notes),
+            "metrics_line": result.metrics_line,
+            "estimate": estimate_create_cost(state) if not result.ok else cost,
+        },
+    )
+
+
+app.mount(
+    "/outputs",
+    StaticFiles(directory=str(OUTPUT_DIR), check_dir=False),
+    name="outputs",
+)

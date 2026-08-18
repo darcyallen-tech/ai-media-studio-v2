@@ -9,6 +9,8 @@ export default defineConfig({
       "/health": "http://127.0.0.1:8000",
       "/models": "http://127.0.0.1:8000",
       "/generate": "http://127.0.0.1:8000",
+      "/estimate": "http://127.0.0.1:8000",
+      "/outputs": "http://127.0.0.1:8000",
     },
   },
 });
