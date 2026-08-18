@@ -406,6 +406,24 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           onChange={(e) => setPrompt(e.target.value)}
         />
 
+        <div className="prompt-actions">
+          <button
+            type="button"
+            className="ghost nodrag enhance"
+            disabled={!canEnhance}
+            onClick={onEnhance}
+          >
+            {enhancing ? "Enhancing…" : "Enhance"}
+          </button>
+          <button
+            type="button"
+            className="generate nodrag"
+            disabled={!canGenerate}
+            onClick={onGenerate}
+          >
+            {loading ? "Generating…" : "Generate"}
+          </button>
+        </div>
         <p className="estimate">{estimate}</p>
 
         {plan.source ? (
@@ -448,25 +466,6 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         {mode === "audio" ? (
           <p className="hint">Audio generate is Phase 7 — models list only.</p>
         ) : null}
-
-        <div className="prompt-actions">
-          <button
-            type="button"
-            className="ghost nodrag"
-            disabled={!canEnhance}
-            onClick={onEnhance}
-          >
-            {enhancing ? "Enhancing…" : "Enhance"}
-          </button>
-          <button
-            type="button"
-            className="generate nodrag"
-            disabled={!canGenerate}
-            onClick={onGenerate}
-          >
-            {loading ? "Generating…" : "Generate"}
-          </button>
-        </div>
 
         {error ? (
           <p className="hint warn" role="alert">
