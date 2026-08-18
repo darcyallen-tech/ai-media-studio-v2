@@ -13,7 +13,56 @@ const BEATS = [
   "Reaction",
   "Hold",
 ];
-const EMOTIONS = ["Calm", "Tense", "Joyful", "Somber", "Urgent", "Mysterious"];
+const EMOTIONS = [
+  "Calm",
+  "Tense",
+  "Joyful",
+  "Somber",
+  "Urgent",
+  "Mysterious",
+  "Confident",
+  "Fearful",
+  "Angry",
+  "Playful",
+  "Determined",
+  "Exhausted",
+  "Romantic",
+  "Neutral",
+  "Custom",
+];
+const ACTIONS = [
+  "walks into",
+  "enters",
+  "exits",
+  "turns to",
+  "picks up",
+  "throws",
+  "sits",
+  "stands",
+  "runs",
+  "fights",
+  "flies",
+  "lands",
+  "looks at",
+  "reacts",
+  "freezes",
+  "custom",
+];
+const STEP_CHOICES = [
+  "",
+  "crouch",
+  "jump",
+  "fly",
+  "run",
+  "land",
+  "turn",
+  "grab",
+  "throw",
+  "sit",
+  "stand",
+  "look",
+  "freeze",
+];
 const CAMERAS = [
   "Static hold",
   "Push in",
@@ -31,12 +80,16 @@ export default function ShotBuilderNode({
   const props = data.props ?? [];
   const [beat, setBeat] = useState("Establish");
   const [emotion, setEmotion] = useState("Calm");
+  const [emotionCustom, setEmotionCustom] = useState("");
   const [camera, setCamera] = useState("Push in");
   const [who, setWho] = useState<string[]>([]);
   const [where, setWhere] = useState("");
   const [whereTo, setWhereTo] = useState("");
   const [pickedProps, setPickedProps] = useState<string[]>([]);
+  const [actionPreset, setActionPreset] = useState("walks into");
   const [actionLine, setActionLine] = useState("");
+  const [steps, setSteps] = useState<[string, string, string]>(["", "", ""]);
+  const [framing, setFraming] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
@@ -73,7 +126,11 @@ export default function ShotBuilderNode({
             where,
             where_to: whereTo,
             props: pickedProps.join("|"),
+            action_preset: actionPreset,
             action_line: actionLine,
+            sequence: steps.filter(Boolean).join("|"),
+            emotion_custom: emotionCustom,
+            framing,
           },
         }),
       });
@@ -99,7 +156,7 @@ export default function ShotBuilderNode({
         move: body.move || "Push in",
         speed: body.speed || "Slow",
         ease: body.ease || "Ease in-out",
-        framing: body.framing || "",
+        framing: body.framing || framing,
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Apply failed.");
@@ -208,7 +265,7 @@ export default function ShotBuilderNode({
           <p className="hint">Add Hub props to mention them by name.</p>
         )}
         <label className="builder-field">
-          <span className="field-label">Emotion</span>
+          <span className="field-label">Emotion / mood</span>
           <select
             className="model nodrag"
             value={emotion}
@@ -221,6 +278,57 @@ export default function ShotBuilderNode({
             ))}
           </select>
         </label>
+        {emotion === "Custom" ? (
+          <label className="builder-field">
+            <span className="field-label">Custom mood</span>
+            <input
+              className="model nodrag"
+              type="text"
+              placeholder="e.g. bittersweet, wired"
+              value={emotionCustom}
+              onChange={(e) => setEmotionCustom(e.target.value)}
+            />
+          </label>
+        ) : null}
+        <label className="builder-field">
+          <span className="field-label">Action</span>
+          <select
+            className="model nodrag"
+            value={actionPreset}
+            onChange={(e) => setActionPreset(e.target.value)}
+          >
+            {ACTIONS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="field-label">Sequence (optional, 2–3 steps)</span>
+        <div className="params">
+          {([0, 1, 2] as const).map((i) => (
+            <label key={i} className="param">
+              <span>Step {i + 1}</span>
+              <select
+                className="model nodrag"
+                value={steps[i]}
+                onChange={(e) =>
+                  setSteps((cur) => {
+                    const next: [string, string, string] = [...cur];
+                    next[i] = e.target.value;
+                    return next;
+                  })
+                }
+              >
+                {STEP_CHOICES.map((item) => (
+                  <option key={item || `none-${i}`} value={item}>
+                    {item || "—"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
         <label className="builder-field">
           <span className="field-label">Camera preset</span>
           <select
@@ -240,9 +348,19 @@ export default function ShotBuilderNode({
           <input
             className="model nodrag"
             type="text"
-            placeholder="Leave blank to use the beat helper"
+            placeholder="Leave blank to use the Action preset"
             value={actionLine}
             onChange={(e) => setActionLine(e.target.value)}
+          />
+        </label>
+        <label className="builder-field">
+          <span className="field-label">Framing notes (optional)</span>
+          <input
+            className="model nodrag"
+            type="text"
+            placeholder="e.g. start medium, end close"
+            value={framing}
+            onChange={(e) => setFraming(e.target.value)}
           />
         </label>
         {preview ? <p className="hint">{preview}</p> : null}

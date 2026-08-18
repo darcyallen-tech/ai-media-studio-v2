@@ -277,6 +277,104 @@ export default function SettingsPanel({
       </section>
 
       <section className="settings-sec">
+        <h3>Preferences</h3>
+        <p className="field-label">Theme</p>
+        <div className="pills" role="tablist" aria-label="Theme">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={theme === "day"}
+            className={theme === "day" ? "pill mode on" : "pill mode"}
+            onClick={() => onTheme("day")}
+          >
+            Day
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={theme === "night"}
+            className={theme === "night" ? "pill mode on" : "pill mode"}
+            onClick={() => onTheme("night")}
+          >
+            Night
+          </button>
+        </div>
+        <p className="field-label">Grid snap</p>
+        <p className="hint">Fine matches the canvas dots. Off is free placement.</p>
+        <div className="pills" role="tablist" aria-label="Grid snap">
+          {(
+            [
+              ["off", "Off"],
+              ["fine", "Fine"],
+              ["medium", "Medium"],
+              ["coarse", "Coarse"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={gridSnap === id}
+              className={gridSnap === id ? "pill modality on" : "pill modality"}
+              onClick={() => onGridSnap(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="field-label">Connection style</p>
+        <div className="pills" role="tablist" aria-label="Connection style">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={edgeStyle === "curved"}
+            className={edgeStyle === "curved" ? "pill modality on" : "pill modality"}
+            onClick={() => onEdgeStyle("curved")}
+          >
+            Curved
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={edgeStyle === "straight"}
+            className={
+              edgeStyle === "straight" ? "pill modality on" : "pill modality"
+            }
+            onClick={() => onEdgeStyle("straight")}
+          >
+            Straight
+          </button>
+        </div>
+        <label className="settings-field">
+          <span>Auto-delete after (days)</span>
+          <input
+            className="model"
+            type="number"
+            min={0}
+            step={1}
+            disabled={retentionNever}
+            value={retentionNever ? 0 : retention}
+            onChange={(e) => setRetention(Math.max(0, Number(e.target.value) || 0))}
+          />
+        </label>
+        <label className="param check">
+          <input
+            type="checkbox"
+            checked={retentionNever}
+            onChange={(e) => setRetentionNever(e.target.checked)}
+          />
+          Never
+        </label>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => void saveRetention()}
+        >
+          Save retention
+        </button>
+      </section>
+
+      <section className="settings-sec">
         <h3>Balances</h3>
         <BalanceLine name="fal" row={balances.fal} />
         <BalanceLine name="xAI" row={balances.xai} />
@@ -348,103 +446,6 @@ export default function SettingsPanel({
           value={paths?.resolve_outbox}
           onOpen={() => void openPath("resolve_outbox")}
         />
-      </section>
-
-      <section className="settings-sec">
-        <h3>Preferences</h3>
-        <p className="hint">Theme is colors only. Retention applies to unpinned Uploads and Generated.</p>
-        <div className="pills" role="tablist" aria-label="Theme">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={theme === "day"}
-            className={theme === "day" ? "pill mode on" : "pill mode"}
-            onClick={() => onTheme("day")}
-          >
-            Day
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={theme === "night"}
-            className={theme === "night" ? "pill mode on" : "pill mode"}
-            onClick={() => onTheme("night")}
-          >
-            Night
-          </button>
-        </div>
-        <p className="hint">Grid snap</p>
-        <div className="pills" role="tablist" aria-label="Grid snap">
-          {(
-            [
-              ["off", "Off"],
-              ["fine", "Fine"],
-              ["medium", "Medium"],
-              ["coarse", "Coarse"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={gridSnap === id}
-              className={gridSnap === id ? "pill modality on" : "pill modality"}
-              onClick={() => onGridSnap(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="hint">Connection style</p>
-        <div className="pills" role="tablist" aria-label="Connection style">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={edgeStyle === "curved"}
-            className={edgeStyle === "curved" ? "pill modality on" : "pill modality"}
-            onClick={() => onEdgeStyle("curved")}
-          >
-            Curved
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={edgeStyle === "straight"}
-            className={
-              edgeStyle === "straight" ? "pill modality on" : "pill modality"
-            }
-            onClick={() => onEdgeStyle("straight")}
-          >
-            Straight
-          </button>
-        </div>
-        <label className="settings-field">
-          <span>Auto-delete after (days)</span>
-          <input
-            className="model"
-            type="number"
-            min={0}
-            step={1}
-            disabled={retentionNever}
-            value={retentionNever ? 0 : retention}
-            onChange={(e) => setRetention(Math.max(0, Number(e.target.value) || 0))}
-          />
-        </label>
-        <label className="param check">
-          <input
-            type="checkbox"
-            checked={retentionNever}
-            onChange={(e) => setRetentionNever(e.target.checked)}
-          />
-          Never
-        </label>
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => void saveRetention()}
-        >
-          Save retention
-        </button>
       </section>
     </aside>
   );

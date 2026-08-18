@@ -16,7 +16,7 @@ export const SNAP_STEPS: Record<Exclude<GridSnap, "off">, number> = {
 export function normalizeSnap(value: unknown): GridSnap {
   const v = String(value || "").trim().toLowerCase();
   if (v === "off" || v === "fine" || v === "medium" || v === "coarse") return v;
-  return "medium";
+  return "fine";
 }
 
 export function normalizeEdgeStyle(value: unknown): EdgeStyle {
@@ -27,7 +27,7 @@ export function readStoredSnap(): GridSnap {
   try {
     return normalizeSnap(localStorage.getItem(SNAP_KEY));
   } catch {
-    return "medium";
+    return "fine";
   }
 }
 
