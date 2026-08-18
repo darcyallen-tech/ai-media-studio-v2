@@ -98,6 +98,23 @@ TTS_VOICES = ELEVENLABS_VOICES
 
 # --- Music ---
 MUSIC_MODELS: dict[str, AudioSpec] = {
+    "minimax music 3": AudioSpec(
+        key="minimax music 3",
+        label="MiniMax Music 3",
+        category="music",
+        endpoint="minimax/music-3",
+        cost_estimate_usd=0.12,
+        notes=(
+            "MiniMax Music 3 — full songs up to 5 min. Prompt = style/arrangement; "
+            "lyrics sent as [instrumental] when Instrumental is on. $0.002/s."
+        ),
+        supports_duration=True,
+        duration_min_s=15.0,
+        duration_max_s=300.0,
+        duration_default_s=60.0,
+        cost_per_second=0.002,
+        extra_defaults={},
+    ),
     "minimax music 2.6": AudioSpec(
         key="minimax music 2.6",
         label="MiniMax Music 2.6",
@@ -542,14 +559,25 @@ def build_music_args(
                     args["negative_prompt"] = ", ".join(kept)
                 else:
                     args.pop("negative_prompt", None)
-    elif "minimax-music" in spec.endpoint:
+    elif "minimax-music" in spec.endpoint or spec.endpoint.startswith("minimax/music"):
         args["prompt"] = prompt
-        args["is_instrumental"] = bool(instrumental)
-        if not instrumental:
-            args["lyrics_optimizer"] = True
+        if "music-3" in spec.endpoint:
+            dur = duration_s if duration_s is not None else spec.duration_default_s
+            if dur is not None:
+                args["duration"] = float(
+                    max(spec.duration_min_s, min(spec.duration_max_s, float(dur)))
+                )
+            if instrumental:
+                args["lyrics"] = "[instrumental]"
+            else:
+                args["lyrics"] = prompt
         else:
-            args["lyrics_optimizer"] = False
-            args["lyrics"] = ""
+            args["is_instrumental"] = bool(instrumental)
+            if not instrumental:
+                args["lyrics_optimizer"] = True
+            else:
+                args["lyrics_optimizer"] = False
+                args["lyrics"] = ""
     elif "stable-audio" in spec.endpoint:
         args["prompt"] = prompt
         if duration_s is not None:

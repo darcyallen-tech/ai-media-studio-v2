@@ -29,6 +29,7 @@ MODEL_OPTIONS: list[str] = [""] + [
     "flux kontext pro",
     "grok imagine edit",
     "grok imagine quality edit",
+    "grok imagine 2.0 edit",
     "nano banana",
     # video edit
     "kling o3 standard edit",

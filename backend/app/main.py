@@ -30,6 +30,11 @@ from app.audio_service import (  # noqa: E402
     generate_audio,
     ui_audio_registries,
 )
+from app.tools_service import (  # noqa: E402
+    estimate_tool_label,
+    generate_tool,
+    list_tools,
+)
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.character_scene import (  # noqa: E402
     list_characters,
@@ -62,7 +67,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase7"
+APP_VERSION = "2.0.0-phase8"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -122,6 +127,17 @@ class ResolveSendIn(BaseModel):
     job_name: str | None = None
     model: str | None = None
     cost: str | None = None
+
+
+class ToolRunIn(BaseModel):
+    category: str
+    model_id: str
+    source_path: str
+    kind: str = "image"
+    factor: str | None = None
+    strength: float | None = None
+    prompt: str | None = None
+    duration_s: float | None = None
 
 
 class EnhanceIn(BaseModel):
@@ -508,6 +524,77 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "notes": list(result.notes),
             "metrics_line": result.metrics_line,
             "estimate": estimate_create_cost(state) if not result.ok else cost,
+        },
+    )
+
+
+@app.get("/tools")
+def tools_list(
+    category: str = Query(..., description="upscale | denoise | restore | deblur | interpolate"),
+    kind: str = Query(default="image", description="image | video"),
+) -> dict[str, Any]:
+    cat = (category or "").strip().lower()
+    if cat not in ("upscale", "denoise", "restore", "deblur", "interpolate"):
+        raise HTTPException(status_code=400, detail="Unknown tool category.")
+    media = (kind or "image").strip().lower()
+    if media not in ("image", "video"):
+        raise HTTPException(status_code=400, detail="kind must be image or video")
+    rows = list_tools(cat, media)
+    return {
+        "ok": True,
+        "category": cat,
+        "kind": media,
+        "default_id": rows[0]["id"] if rows else None,
+        "models": rows,
+    }
+
+
+@app.post("/tools")
+def tools_run(body: ToolRunIn) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    result = generate_tool(
+        category=body.category,
+        model_id=body.model_id,
+        source_path=body.source_path,
+        kind=body.kind,
+        factor=body.factor,
+        strength=body.strength,
+        prompt=body.prompt,
+        duration_s=body.duration_s,
+        output_dir=OUTPUT_DIR,
+    )
+    elapsed = time.perf_counter() - t0
+    duration = result.render_seconds if result.render_seconds is not None else elapsed
+    cost = result.cost_label or estimate_tool_label(
+        category=body.category,
+        model_id=body.model_id,
+        kind=body.kind,
+        factor=body.factor,
+        duration_s=body.duration_s,
+    )
+    local_paths = [result.path] if result.path else []
+    if result.ok and local_paths:
+        record_generated(
+            local_paths,
+            cost=cost,
+            duration_sec=duration,
+            model=result.model or result.model_key,
+        )
+    return _payload(
+        ok=result.ok,
+        result_paths=_public_paths(local_paths),
+        cost=cost,
+        duration_sec=duration,
+        error=None if result.ok else (result.status or "Tool failed."),
+        extra={
+            "status": result.status,
+            "local_paths": local_paths,
+            "job_kind": result.job_kind,
+            "model": result.model,
+            "model_key": result.model_key,
+            "endpoint": result.endpoint,
+            "notes": list(result.notes),
+            "metrics_line": result.metrics_line,
         },
     )
 

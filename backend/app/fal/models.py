@@ -751,6 +751,45 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Est. ~$0.06/image @1k, ~$0.08 @2k (includes one input). Up to 3 refs."
         ),
     ),
+    "grok imagine 2.0 edit": ImageEditModelSpec(
+        key="grok imagine 2.0 edit",
+        label="Image · Grok Imagine 2.0 Edit",
+        endpoint="xai/grok-imagine-image/v2.0/edit",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=3,
+        max_num_images=3,
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=(
+            "auto",
+            "2:1",
+            "20:9",
+            "19.5:9",
+            "16:9",
+            "4:3",
+            "3:2",
+            "1:1",
+            "2:3",
+            "3:4",
+            "9:16",
+            "9:19.5",
+            "9:20",
+            "1:2",
+        ),
+        default_aspect_ratio="auto",
+        resolution_param="resolution",
+        allowed_resolutions=("1k", "2k"),
+        default_resolution="1k",
+        max_resolution="2k",
+        default_output_format="jpeg",
+        cost_per_image=0.07,
+        resolution_cost_mult={"1K": 1.0, "2K": 1.14, "1k": 1.0, "2k": 1.14},
+        extra_defaults={"quality": "medium"},
+        notes=(
+            "xAI Grok Imagine Image 2.0 edit. Quality low/medium · 1k/2k. "
+            "Est. $0.04–0.08 + $0.01 per input. Up to 3 refs."
+        ),
+    ),
     # Kept for history / aliases only (not in primary dropdown)
     "nano banana": ImageEditModelSpec(
         key="nano banana",
@@ -1630,6 +1669,11 @@ _ALIASES: dict[str, str] = {
     "grok imagine pro edit": "grok imagine quality edit",
     "image · grok imagine quality edit": "grok imagine quality edit",
     "xai/grok-imagine-image/quality/edit": "grok imagine quality edit",
+    "grok imagine 2.0 edit": "grok imagine 2.0 edit",
+    "grok imagine 2.0": "grok imagine 2.0 edit",
+    "grok imagine image 2.0": "grok imagine 2.0 edit",
+    "image · grok imagine 2.0 edit": "grok imagine 2.0 edit",
+    "xai/grok-imagine-image/v2.0/edit": "grok imagine 2.0 edit",
     "grok imagine edit video": "grok imagine edit video",
     "grok imagine video edit": "grok imagine edit video",
     "grok edit video": "grok imagine edit video",
@@ -1759,6 +1803,7 @@ def model_dropdown_choices() -> list[str]:
         "flux kontext pro",
         "grok imagine edit",
         "grok imagine quality edit",
+        "grok imagine 2.0 edit",
     ):
         if key in IMAGE_EDIT_MODELS:
             labels.append(IMAGE_EDIT_MODELS[key].label)

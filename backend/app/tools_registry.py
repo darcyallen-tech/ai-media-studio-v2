@@ -271,6 +271,42 @@ VIDEO_INTERPOLATE_MODELS: dict[str, ToolSpec] = {
     ),
 }
 
+# Video deblur — Topaz enhance at 1× (no dedicated deblur endpoint)
+VIDEO_DEBLUR_MODELS: dict[str, ToolSpec] = {
+    "topaz artemis hq deblur": ToolSpec(
+        key="topaz artemis hq deblur",
+        label="Topaz · Artemis HQ (deblur)",
+        category="deblur",
+        endpoint="fal-ai/topaz/upscale/video",
+        cost_estimate_usd=0.20,
+        notes="Topaz Artemis HQ at 1× — sharpen/deblur compressed or soft clips.",
+        extra_defaults={"model": "Artemis HQ", "upscale_factor": 1.0},
+        cost_per_second=0.02,
+    ),
+    "topaz proteus deblur": ToolSpec(
+        key="topaz proteus deblur",
+        label="Topaz · Proteus (deblur)",
+        category="deblur",
+        endpoint="fal-ai/topaz/upscale/video",
+        cost_estimate_usd=0.20,
+        notes="Topaz Proteus at 1× — general sharpen for listing clips.",
+        extra_defaults={"model": "Proteus", "upscale_factor": 1.0},
+        cost_per_second=0.02,
+    ),
+}
+
+IMAGE_DEBLUR_MODELS: dict[str, ToolSpec] = {
+    "nafnet deblur": ToolSpec(
+        key="nafnet deblur",
+        label="NAFNet Deblur",
+        category="deblur",
+        endpoint="fal-ai/nafnet/deblur",
+        cost_estimate_usd=0.025,
+        notes="Whole-frame defocus/motion deblur. ~$0.0225/MP.",
+        extra_defaults={},
+    ),
+}
+
 # Slow-mo factor UI labels → RIFE/FILM num_frames (frames inserted between source frames)
 INTERPOLATE_FACTOR_CHOICES: list[str] = [
     "2× (e.g. 30 → 60 fps)",

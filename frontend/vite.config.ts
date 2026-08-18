@@ -16,6 +16,7 @@ export default defineConfig({
       "/enhance": "http://127.0.0.1:8000",
       "/characters": "http://127.0.0.1:8000",
       "/scenes": "http://127.0.0.1:8000",
+      "/tools": "http://127.0.0.1:8000",
     },
   },
 });

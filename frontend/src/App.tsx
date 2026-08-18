@@ -19,6 +19,8 @@ import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
+import ToolNode from "./ToolNode";
+import { isAudioPath, isVideoPath } from "./media";
 import {
   consumeLibraryDrag,
   peekLibraryDrag,
@@ -44,6 +46,8 @@ import {
   type ResultNodeData,
   type SlotAccept,
   type SourceNodeData,
+  type ToolKind,
+  type ToolNodeData,
 } from "./types";
 import "./App.css";
 
@@ -54,7 +58,14 @@ type StudioNode =
   | Node<SourceNodeData, "first">
   | Node<SourceNodeData, "last">
   | Node<RefNodeData, "character">
-  | Node<RefNodeData, "scene">;
+  | Node<RefNodeData, "scene">
+  | Node<ToolNodeData, "upscale">
+  | Node<ToolNodeData, "denoise">
+  | Node<ToolNodeData, "restore">
+  | Node<ToolNodeData, "deblur">
+  | Node<ToolNodeData, "interpolate">;
+
+const TOOL_TYPES = ["upscale", "denoise", "restore", "deblur", "interpolate"] as const;
 
 const nodeTypes: NodeTypes = {
   prompt: PromptNode,
@@ -64,7 +75,34 @@ const nodeTypes: NodeTypes = {
   last: SourceNode,
   character: RefNode,
   scene: RefNode,
+  upscale: ToolNode,
+  denoise: ToolNode,
+  restore: ToolNode,
+  deblur: ToolNode,
+  interpolate: ToolNode,
 };
+
+function itemFromResult(result: GenerateResponse): LibraryItem | null {
+  const local = result.local_paths?.[0] || "";
+  const url = result.result_paths?.[0] || "";
+  if (!local && !url) return null;
+  const sample = url || local;
+  const kind = isVideoPath(sample)
+    ? "video"
+    : isAudioPath(sample)
+      ? "audio"
+      : "image";
+  const name = (local || url).split(/[\\/]/).pop() || "result";
+  return {
+    id: `gen:${local || url}`,
+    name,
+    source: "generated",
+    kind,
+    path: local,
+    url,
+    thumb_url: kind === "image" ? url : null,
+  };
+}
 
 const WORLD: [[number, number], [number, number]] = [
   [-200, -200],
@@ -114,6 +152,9 @@ function StudioCanvas() {
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [plan, setPlan] = useState<GraphInputs>({});
   const [maxRefs, setMaxRefs] = useState(0);
+  const [toolSources, setToolSources] = useState<Record<string, LibraryItem>>(
+    {},
+  );
   const [toastMsg, setToastMsg] = useState<{ text: string; error: boolean } | null>(
     null,
   );
@@ -147,6 +188,13 @@ function StudioCanvas() {
       if (id.startsWith("scene-")) {
         setScenes((cur) => cur.filter((r) => r.id !== id));
       }
+      if (TOOL_TYPES.includes(id.split("-")[0] as ToolKind)) {
+        setToolSources((cur) => {
+          const next = { ...cur };
+          delete next[id];
+          return next;
+        });
+      }
       setNodes((current) => current.filter((n) => n.id !== id));
       setEdges((current) =>
         current.filter((e) => e.source !== id && e.target !== id),
@@ -169,7 +217,11 @@ function StudioCanvas() {
           type: "result",
           position,
           dragHandle: ".node-header",
-          data: { result, onClose: () => closeNode(RESULT_ID) },
+          data: {
+            result,
+            onClose: () => closeNode(RESULT_ID),
+            onTool: () => undefined,
+          },
         };
         if (existing) {
           return current.map((n) => (n.id === RESULT_ID ? next : n));
@@ -188,6 +240,100 @@ function StudioCanvas() {
           current,
         );
       });
+    },
+    [closeNode, setEdges, setNodes],
+  );
+
+  const spawnResultNear = useCallback(
+    (fromId: string, result: GenerateResponse) => {
+      const resultId = `result-${Date.now().toString(36)}`;
+      setNodes((current) => {
+        const parent = current.find((n) => n.id === fromId);
+        const node: StudioNode = {
+          id: resultId,
+          type: "result",
+          position: {
+            x: (parent?.position.x ?? PROMPT_POS.x) + 360,
+            y: parent?.position.y ?? PROMPT_POS.y,
+          },
+          dragHandle: ".node-header",
+          data: {
+            result,
+            onClose: () => closeNode(resultId),
+            onTool: () => undefined,
+          },
+        };
+        return [...current, node];
+      });
+      setEdges((current) =>
+        addEdge(
+          {
+            id: `e-${fromId}-${resultId}`,
+            source: fromId,
+            target: resultId,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        ),
+      );
+    },
+    [closeNode, setEdges, setNodes],
+  );
+
+  const spawnTool = useCallback(
+    (parentId: string, kind: ToolKind, result: GenerateResponse) => {
+      const item = itemFromResult(result);
+      if (!item || !item.path) {
+        toast("This result has no local file to send to a tool.", true);
+        return;
+      }
+      if (item.kind === "audio") {
+        toast("Tools are for image or video results.", true);
+        return;
+      }
+      const id = `${kind}-${Date.now().toString(36)}`;
+      const titles: Record<ToolKind, string> = {
+        upscale: "Upscale",
+        denoise: "Denoise",
+        restore: "Restore",
+        deblur: "Deblur",
+        interpolate: "Interpolate",
+      };
+      setToolSources((cur) => ({ ...cur, [id]: item }));
+      setNodes((current) => {
+        const parent = current.find((n) => n.id === parentId);
+        const node: StudioNode = {
+          id,
+          type: kind,
+          position: {
+            x: (parent?.position.x ?? PROMPT_POS.x) + 360,
+            y: (parent?.position.y ?? PROMPT_POS.y) + 40,
+          },
+          dragHandle: ".node-header",
+          data: {
+            kind,
+            title: titles[kind],
+            source: item,
+            mediaKind: item.kind === "video" ? "video" : "image",
+            onClose: () => closeNode(id),
+            onGenerated: () => undefined,
+            onReplace: () => undefined,
+            onOpenLibrary: () => setLibraryOpen(true),
+          },
+        };
+        return [...current, node];
+      });
+      setEdges((current) =>
+        addEdge(
+          {
+            id: `e-${parentId}-${id}`,
+            source: parentId,
+            target: id,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        ),
+      );
     },
     [closeNode, setEdges, setNodes],
   );
@@ -595,7 +741,7 @@ function StudioCanvas() {
             },
           };
         }
-        if (n.id === RESULT_ID) {
+        if (n.type === "result") {
           const result = "result" in n.data ? n.data.result : undefined;
           if (!result) return n;
           return {
@@ -603,7 +749,37 @@ function StudioCanvas() {
             type: "result",
             data: {
               result,
-              onClose: () => closeNode(RESULT_ID),
+              onClose: () => closeNode(n.id),
+              onTool: (kind) => spawnTool(n.id, kind, result),
+            },
+          };
+        }
+        if (TOOL_TYPES.includes(n.type as ToolKind)) {
+          const kind = n.type as ToolKind;
+          const source = toolSources[n.id];
+          if (!source) return n;
+          return {
+            ...n,
+            type: kind,
+            data: {
+              kind,
+              title:
+                kind === "upscale"
+                  ? "Upscale"
+                  : kind === "denoise"
+                    ? "Denoise"
+                    : kind === "restore"
+                      ? "Restore"
+                      : kind === "deblur"
+                        ? "Deblur"
+                        : "Interpolate",
+              source,
+              mediaKind: source.kind === "video" ? "video" : "image",
+              onClose: () => closeNode(n.id),
+              onGenerated: (res) => spawnResultNear(n.id, res),
+              onReplace: (item) =>
+                setToolSources((cur) => ({ ...cur, [n.id]: item })),
+              onOpenLibrary: () => setLibraryOpen(true),
             },
           };
         }
@@ -694,6 +870,9 @@ function StudioCanvas() {
     setNodes,
     sourceItem,
     spawnResult,
+    spawnResultNear,
+    spawnTool,
+    toolSources,
     tryAttachSlot,
   ]);
 
@@ -780,13 +959,18 @@ function StudioCanvas() {
   const onConnect = useCallback(
     (connection: Connection) => {
       const src = connection.source || "";
+      const tgt = connection.target || "";
       const ok =
-        (src === SOURCE_ID && connection.target === "prompt") ||
-        (src === FIRST_ID && connection.target === "prompt") ||
-        (src === LAST_ID && connection.target === "prompt") ||
-        (src.startsWith("char-") && connection.target === "prompt") ||
-        (src.startsWith("scene-") && connection.target === "prompt") ||
-        (src === "prompt" && connection.target === RESULT_ID);
+        (src === SOURCE_ID && tgt === "prompt") ||
+        (src === FIRST_ID && tgt === "prompt") ||
+        (src === LAST_ID && tgt === "prompt") ||
+        (src.startsWith("char-") && tgt === "prompt") ||
+        (src.startsWith("scene-") && tgt === "prompt") ||
+        (src === "prompt" && tgt.startsWith("result")) ||
+        (src.startsWith("result") &&
+          TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
+        (TOOL_TYPES.some((t) => src.startsWith(`${t}-`)) &&
+          tgt.startsWith("result"));
       if (!ok) return;
       setEdges((eds) =>
         addEdge(
@@ -836,13 +1020,18 @@ function StudioCanvas() {
         nodesConnectable
         isValidConnection={(c) => {
           const src = c.source || "";
+          const tgt = c.target || "";
           return (
-            (src === SOURCE_ID && c.target === "prompt") ||
-            (src === FIRST_ID && c.target === "prompt") ||
-            (src === LAST_ID && c.target === "prompt") ||
-            (src.startsWith("char-") && c.target === "prompt") ||
-            (src.startsWith("scene-") && c.target === "prompt") ||
-            (src === "prompt" && c.target === RESULT_ID)
+            (src === SOURCE_ID && tgt === "prompt") ||
+            (src === FIRST_ID && tgt === "prompt") ||
+            (src === LAST_ID && tgt === "prompt") ||
+            (src.startsWith("char-") && tgt === "prompt") ||
+            (src.startsWith("scene-") && tgt === "prompt") ||
+            (src === "prompt" && tgt.startsWith("result")) ||
+            (src.startsWith("result") &&
+              TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
+            (TOOL_TYPES.some((t) => src.startsWith(`${t}-`)) &&
+              tgt.startsWith("result"))
           );
         }}
         nodesDraggable

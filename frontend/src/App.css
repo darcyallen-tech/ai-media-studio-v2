@@ -176,6 +176,16 @@
   cursor: not-allowed;
 }
 
+.result-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-node {
+  width: 260px;
+}
+
 .result-actions {
   display: flex;
   flex-wrap: wrap;

@@ -2,7 +2,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { sendToResolve } from "./toast";
-import type { ResultNodeData } from "./types";
+import type { ResultNodeData, ToolKind } from "./types";
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
@@ -11,6 +11,24 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const paths = result.result_paths ?? [];
   const local = result.local_paths ?? [];
   const copyPath = local[0] || "";
+  const sample = paths[0] || copyPath;
+  const isVid = Boolean(sample && isVideoPath(sample));
+  const isAud = Boolean(sample && isAudioPath(sample));
+  const tools: { id: ToolKind; label: string }[] = isAud
+    ? []
+    : isVid
+      ? [
+          { id: "upscale", label: "Upscale" },
+          { id: "denoise", label: "Denoise" },
+          { id: "restore", label: "Restore" },
+          { id: "deblur", label: "Deblur" },
+          { id: "interpolate", label: "Interpolate" },
+        ]
+      : [
+          { id: "upscale", label: "Upscale" },
+          { id: "restore", label: "Restore" },
+          { id: "deblur", label: "Deblur" },
+        ];
 
   async function copyLocal() {
     if (!copyPath) return;
@@ -56,6 +74,20 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             <p className="hint">No media paths returned.</p>
           ) : null}
         </div>
+        {tools.length && data.onTool ? (
+          <div className="result-tools">
+            {tools.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="ghost nodrag"
+                onClick={() => data.onTool?.(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="result-actions">
           <button type="button" className="ghost nodrag" disabled={!copyPath} onClick={showInFolder}>
             Show in folder

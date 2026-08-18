@@ -470,6 +470,41 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
             "output_format": "jpeg",
         },
     ),
+    "grok imagine 2.0 t2i": VisionModelSpec(
+        key="grok imagine 2.0 t2i",
+        label="Grok Imagine Image 2.0 (T2I)",
+        mode="text_to_image",
+        endpoint="xai/grok-imagine-image/v2.0/text-to-image",
+        cost_estimate_usd=0.06,
+        notes=(
+            "xAI Grok Imagine Image 2.0 T2I. Quality low/medium · 1k/2k. "
+            "Est. $0.04 low 1K · $0.06 medium 1K or low 2K · $0.08 medium 2K."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:2",
+            "1:1",
+            "2:3",
+            "3:4",
+            "2:1",
+            "1:2",
+        ),
+        default_aspect="16:9",
+        resolution_choices=("1k", "2k"),
+        default_resolution="1k",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=4,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "jpeg",
+            "quality": "medium",
+        },
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -830,6 +865,76 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=False,
         extra_defaults={"generate_audio": True},
     ),
+    "ltx 2.5 pro t2v": VisionModelSpec(
+        key="ltx 2.5 pro t2v",
+        label="LTX 2.5 Pro · Text→Video",
+        mode="text_to_video",
+        endpoint="lightricks/ltx-2.5/text-to-video/pro",
+        cost_estimate_usd=1.36,
+        cost_per_second=0.17,
+        cost_per_second_by_resolution={"720p": 0.12, "1080p": 0.17},
+        notes=(
+            "Lightricks LTX 2.5 Pro T2V — quality pass with native audio. "
+            "6/8/10s or auto · 720p/1080p. Est. ~$0.12/s @720p · ~$0.17/s @1080p."
+        ),
+        duration_choices=("auto", "6", "8", "10"),
+        default_duration="6",
+        aspect_choices=("16:9", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("720p", "1080p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        extra_defaults={"generate_audio": True},
+    ),
+    "ltx 2.5 fast t2v": VisionModelSpec(
+        key="ltx 2.5 fast t2v",
+        label="LTX 2.5 Fast · Text→Video",
+        mode="text_to_video",
+        endpoint="lightricks/ltx-2.5/text-to-video/fast",
+        cost_estimate_usd=0.78,
+        cost_per_second=0.13,
+        cost_per_second_by_resolution={
+            "720p": 0.09,
+            "1080p": 0.13,
+            "1440p": 0.19,
+            "2160p": 0.30,
+        },
+        notes=(
+            "Lightricks LTX 2.5 Fast T2V — iteration + 4K. "
+            "6–20s or auto. Est. $0.09/s @720p · $0.13/s @1080p · $0.19/s @1440p · $0.30/s @4K."
+        ),
+        duration_choices=("auto", "6", "8", "10", "12", "14", "16", "18", "20"),
+        default_duration="6",
+        aspect_choices=("16:9", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("720p", "1080p", "1440p", "2160p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        extra_defaults={"generate_audio": True},
+    ),
+    "mirage avatar x t2v": VisionModelSpec(
+        key="mirage avatar x t2v",
+        label="Mirage Avatar X · Text→Video",
+        mode="text_to_video",
+        endpoint="mirage-api/avatar-x/text-to-video",
+        cost_estimate_usd=1.20,
+        cost_per_second=0.30,
+        notes=(
+            "Mirage Avatar X talking-head from a script (prompt = spoken script, 50–1500 chars). "
+            "Stock avatar Jasmine. Est. ~$0.30/s."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(),
+        default_aspect="",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        extra_defaults={"avatar": "Jasmine"},
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -1016,6 +1121,59 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
         native_stereo_audio=True,
         image_field="image_url",
     ),
+    "ltx 2.5 pro i2v": VisionModelSpec(
+        key="ltx 2.5 pro i2v",
+        label="LTX 2.5 Pro · Image→Video",
+        mode="image_to_video",
+        endpoint="lightricks/ltx-2.5/image-to-video/pro",
+        cost_estimate_usd=1.02,
+        cost_per_second=0.17,
+        cost_per_second_by_resolution={"720p": 0.12, "1080p": 0.17},
+        notes=(
+            "Lightricks LTX 2.5 Pro I2V — animate a still with native audio. "
+            "6/8/10s or auto · 720p/1080p. Optional last frame. Est. ~$0.17/s @1080p."
+        ),
+        duration_choices=("auto", "6", "8", "10"),
+        default_duration="6",
+        aspect_choices=("auto", "16:9", "9:16"),
+        default_aspect="auto",
+        resolution_choices=("720p", "1080p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        supports_end_frame=True,
+        extra_defaults={"generate_audio": True},
+        image_field="image_url",
+    ),
+    "ltx 2.5 fast i2v": VisionModelSpec(
+        key="ltx 2.5 fast i2v",
+        label="LTX 2.5 Fast · Image→Video",
+        mode="image_to_video",
+        endpoint="lightricks/ltx-2.5/image-to-video/fast",
+        cost_estimate_usd=0.78,
+        cost_per_second=0.13,
+        cost_per_second_by_resolution={
+            "720p": 0.09,
+            "1080p": 0.13,
+            "1440p": 0.19,
+            "2160p": 0.30,
+        },
+        notes=(
+            "Lightricks LTX 2.5 Fast I2V — 6–20s · up to 4K. Optional last frame. "
+            "Est. $0.09–0.30/s by resolution."
+        ),
+        duration_choices=("auto", "6", "8", "10", "12", "14", "16", "18", "20"),
+        default_duration="6",
+        aspect_choices=("auto", "16:9", "9:16"),
+        default_aspect="auto",
+        resolution_choices=("720p", "1080p", "1440p", "2160p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        supports_end_frame=True,
+        extra_defaults={"generate_audio": True},
+        image_field="image_url",
+    ),
     "flux 3 i2v": VisionModelSpec(
         key="flux 3 i2v",
         label="FLUX 3 · Image→Video",
@@ -1167,6 +1325,30 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         native_stereo_audio=True,
         prompt_citation_style="plain",
+    ),
+    "mirage avatar x r2v": VisionModelSpec(
+        key="mirage avatar x r2v",
+        label="Mirage Avatar X · Reference→Video",
+        mode="reference_to_video",
+        endpoint="mirage-api/avatar-x/reference-to-video",
+        cost_estimate_usd=1.20,
+        cost_per_second=0.30,
+        notes=(
+            "Mirage Avatar X identity lock. Needs a voice/audio ref (and optional "
+            "talking-head video). Est. $0.30/s."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(),
+        default_aspect="",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=1,
+        max_ref_videos=1,
+        max_ref_audios=1,
+        extra_defaults={},
     ),
     "grok imagine 1.5 reference": VisionModelSpec(
         key="grok imagine 1.5 reference",
@@ -2001,6 +2183,11 @@ def build_vision_arguments(
             else "Enter a motion / shot prompt."
         )
     args["prompt"] = text
+    if "avatar-x" in spec.endpoint.lower():
+        args["script"] = text
+        args.pop("prompt", None)
+        if len(text) < 50:
+            raise ValueError("Mirage Avatar X script needs at least 50 characters.")
 
     # --- Text → Image (no media uploads) ---
     if spec.mode == "text_to_image":
@@ -2013,7 +2200,16 @@ def build_vision_arguments(
         api_max = max(1, int(spec.max_num_images or 1))
         args["num_images"] = min(n, api_max)
 
-        if "nano-banana" in ep:
+        if "grok-imagine-image" in ep:
+            args["aspect_ratio"] = colon_ar
+            picked = None
+            for a in spec.resolution_choices or ():
+                if str(a).lower() == res.lower():
+                    picked = str(a)
+                    break
+            args["resolution"] = picked or (spec.default_resolution or "1k")
+            args.setdefault("quality", "medium")
+        elif "nano-banana" in ep:
             # Nano Banana / 2 / Pro: aspect_ratio "16:9"; 2+Pro also resolution
             args["aspect_ratio"] = colon_ar
             if spec.resolution_choices:
@@ -2066,6 +2262,8 @@ def build_vision_arguments(
             or is_h3
             or is_flux3
             or "grok-imagine-video" in ep
+            or "ltx-2.5" in ep
+            or "lightricks/ltx" in ep
             or getattr(spec, "duration_as_int", False)
         ):
             dur = dur.replace("s", "").strip()
@@ -2200,6 +2398,18 @@ def build_vision_arguments(
             imgs = [image_url] + imgs
         vids = [u for u in (ref_video_urls or []) if u]
         auds = [u for u in (ref_audio_urls or []) if u]
+        if "avatar-x" in ep:
+            audio = (auds[0] if auds else None)
+            video = (vids[0] if vids else source_video_url)
+            if not audio:
+                raise ValueError(
+                    "Mirage Avatar X reference needs a voice/audio clip "
+                    "(and optional talking-head video)."
+                )
+            args["audio_url"] = audio
+            if video:
+                args["video_url"] = video
+            return args
         if not imgs and not vids:
             raise ValueError(
                 "R2V needs Character 1 / identity refs (or a motion clip)."

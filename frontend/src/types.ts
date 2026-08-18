@@ -128,9 +128,41 @@ export type PromptNodeData = {
   maxRefs: number;
 };
 
+export type ToolKind =
+  | "upscale"
+  | "denoise"
+  | "restore"
+  | "deblur"
+  | "interpolate";
+
 export type ResultNodeData = {
   result: GenerateResponse;
   onClose?: () => void;
+  onTool?: (kind: ToolKind) => void;
+};
+
+export type ToolModelRow = {
+  id: string;
+  key?: string;
+  label: string;
+  notes?: string;
+  cost?: string;
+  supports_factor?: boolean;
+  factor_choices?: string[];
+  default_factor?: string;
+  supports_strength?: boolean;
+  default_strength?: number | null;
+};
+
+export type ToolNodeData = {
+  kind: ToolKind;
+  title: string;
+  source: LibraryItem;
+  mediaKind: "image" | "video";
+  onClose?: () => void;
+  onGenerated: (result: GenerateResponse) => void;
+  onReplace: (item: LibraryItem) => void;
+  onOpenLibrary: () => void;
 };
 
 export type SourceNodeData = {
