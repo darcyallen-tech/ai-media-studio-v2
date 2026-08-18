@@ -199,6 +199,8 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
     preset_action = (vals.get("action_preset") or "").strip()
     sequence = _split_names(vals.get("sequence") or "")
     dialogue = _parse_dialogue(vals.get("dialogue") or "")
+    speaker = (vals.get("speaker") or "").strip()
+    speech = (vals.get("speech") or "").strip()
     react_to = (vals.get("react_to") or "").strip()
     who_s = _join_names(people)
     prop_s = _join_names(props)
@@ -214,7 +216,13 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
         sequence=sequence,
         dialogue=dialogue,
         react_to=react_to,
+        speaker=speaker,
+        speech=speech,
     )
+    if beat in ("Action", "Entrance", "Reaction"):
+        extra = _speech_clause(speaker, speech, dialogue)
+        if extra:
+            body = f"{body.rstrip('.')}. {extra}"
     action = f"[{beat} · {emotion}] {body}".strip()
     if not action.endswith("."):
         action += "."
@@ -292,11 +300,12 @@ def _compose_dialogue(
     dialogue: list[tuple[str, str]],
     where: str,
 ) -> str:
-    spoken = [(n, line) for n, line in dialogue if line]
+    spoken = [(n, line) for n, line in dialogue if (line or "").strip()]
     parts: list[str] = []
     for name, line in spoken:
         quote = line.strip().strip('"')
-        parts.append(f'{name}: "{quote}"')
+        if quote:
+            parts.append(f'{name}: "{quote}"')
     silent = [n for n in present if n not in {s[0] for s in spoken}]
     if silent:
         extra = _join_names(silent)
@@ -305,6 +314,22 @@ def _compose_dialogue(
     if where:
         parts.append(f"Location: {where}.")
     return " ".join(parts).strip() or "They talk."
+
+
+def _speech_clause(
+    speaker: str,
+    speech: str,
+    dialogue: list[tuple[str, str]],
+) -> str:
+    line = (speech or "").strip().strip('"')
+    if speaker and line:
+        return f'{speaker}: "{line}"'
+    bits: list[str] = []
+    for name, raw in dialogue:
+        quote = (raw or "").strip().strip('"')
+        if quote:
+            bits.append(f'{name}: "{quote}"')
+    return " ".join(bits)
 
 
 def _compose_body(
@@ -320,9 +345,11 @@ def _compose_body(
     sequence: list[str] | None = None,
     dialogue: list[tuple[str, str]] | None = None,
     react_to: str = "",
+    speaker: str = "",
+    speech: str = "",
 ) -> str:
     lines = dialogue or []
-    if beat == "Dialogue" or (beat == "Action" and any(line for _, line in lines)):
+    if beat == "Dialogue":
         return _compose_dialogue(people or [], lines, where)
 
     if beat == "Establish":

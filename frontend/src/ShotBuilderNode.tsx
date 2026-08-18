@@ -105,6 +105,8 @@ export default function ShotBuilderNode({
   const [steps, setSteps] = useState<[string, string, string]>(["", "", ""]);
   const [lines, setLines] = useState<Record<string, string>>({});
   const [reactTo, setReactTo] = useState("");
+  const [speaker, setSpeaker] = useState("");
+  const [speech, setSpeech] = useState("");
   const [framing, setFraming] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
@@ -114,6 +116,8 @@ export default function ShotBuilderNode({
   const showFromTo =
     beat === "Entrance" || beat === "Exit" || beat === "Establish";
   const showDialogue = beat === "Dialogue";
+  const showOptionalSpeech =
+    beat === "Action" || beat === "Entrance" || beat === "Reaction";
   const showAction = beat === "Action";
   const showReaction = beat === "Reaction";
   const showProps =
@@ -166,7 +170,9 @@ export default function ShotBuilderNode({
             sequence: steps.filter(Boolean).join("|"),
             emotion_custom: emotionCustom,
             framing,
-            dialogue,
+            dialogue: showDialogue ? dialogue : "",
+            speaker: showOptionalSpeech ? speaker : "",
+            speech: showOptionalSpeech ? speech : "",
             react_to: reactTo,
           },
         }),
@@ -361,6 +367,36 @@ export default function ShotBuilderNode({
               onChange={(e) => setReactTo(e.target.value)}
             />
           </label>
+        ) : null}
+
+        {showOptionalSpeech ? (
+          <>
+            <label className="builder-field">
+              <span className="field-label">Speaker (optional)</span>
+              <select
+                className="model nodrag"
+                value={speaker}
+                onChange={(e) => setSpeaker(e.target.value)}
+              >
+                <option value="">—</option>
+                {characters.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="builder-field">
+              <span className="field-label">Line (optional)</span>
+              <input
+                className="model nodrag"
+                type="text"
+                placeholder="Empty = no quotes"
+                value={speech}
+                onChange={(e) => setSpeech(e.target.value)}
+              />
+            </label>
+          </>
         ) : null}
 
         <label className="builder-field">
