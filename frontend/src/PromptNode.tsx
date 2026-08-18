@@ -30,6 +30,7 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "image", label: "Image" },
   { id: "video", label: "Video" },
   { id: "frame", label: "Frame" },
+  { id: "storyboard", label: "Storyboard" },
   { id: "audio", label: "Audio" },
 ];
 
@@ -49,6 +50,7 @@ const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
     { id: "extend", label: "Extend" },
   ],
   frame: [{ id: "frame", label: "Edit" }],
+  storyboard: [{ id: "storyboard", label: "Board" }],
   audio: [
     { id: "music", label: "Music" },
     { id: "sfx", label: "SFX" },
@@ -141,6 +143,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const promptRequired = modality !== "i2v";
   const isAudio = mode === "audio";
   const isFrame = mode === "frame";
+  const isStoryboard = mode === "storyboard";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
   const characters = data.characters ?? [];
   const scenes = data.scenes ?? [];
@@ -255,6 +258,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   }, [mode, modality, selectedModel, onModalityChange, isLocked]);
 
   useEffect(() => {
+    if (mode === "storyboard") {
+      setModels([]);
+      setModelId("");
+      setModelsError(null);
+      return;
+    }
     const ac = new AbortController();
     setModelsError(null);
     setModels([]);
@@ -473,10 +482,18 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   }
 
   return (
-    <div className={isFrame ? "studio-node prompt-node frame-wide" : "studio-node prompt-node"}>
+    <div
+      className={
+        isFrame
+          ? "studio-node prompt-node frame-wide"
+          : isStoryboard
+            ? "studio-node prompt-node storyboard-toolbar"
+            : "studio-node prompt-node"
+      }
+    >
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">
-        <span>{lock?.title || "Prompt"}</span>
+        <span>{lock?.title || (isStoryboard ? "Storyboard" : "Prompt")}</span>
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag">
@@ -511,7 +528,45 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint pin-edit-banner">{lock?.title || "Image · I2I"}</p>
         )}
 
-        {!isLocked && !isFrame ? (
+        {isStoryboard ? (
+          <>
+            <p className="hint">
+              Assets feed the Hub. Shots and Assemble come later.
+            </p>
+            <div className="source-row">
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={data.onAddCharacter}
+              >
+                Add Character
+              </button>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={data.onAddScene}
+              >
+                Add Scene
+              </button>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={data.onAddProp}
+              >
+                Add Prop
+              </button>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={data.onAddHub}
+              >
+                Add Hub
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {!isStoryboard && !isLocked && !isFrame ? (
         <div className="pills chips" role="tablist" aria-label="Modality">
           {modalityOptions.map((item) => (
             <button
@@ -533,6 +588,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         </div>
         ) : null}
 
+        {!isStoryboard ? (
+        <>
         <label className="field-label" htmlFor="model">
           Model
         </label>
@@ -843,6 +900,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint warn" role="alert">
             {error}
           </p>
+        ) : null}
+        </>
         ) : null}
       </div>
       <Handle type="source" position={Position.Right} className="node-handle" />

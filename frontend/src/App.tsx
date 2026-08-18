@@ -18,6 +18,7 @@ import LibraryPanel from "./LibraryPanel";
 import MediaLightbox from "./MediaLightbox";
 import SettingsPanel from "./SettingsPanel";
 import DirectorNode from "./DirectorNode";
+import HubNode from "./HubNode";
 import PromptBuilderNode from "./PromptBuilderNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
@@ -54,7 +55,10 @@ import {
   type Mode,
   type ModelRow,
   directorAllowed,
+  type AssetRole,
   type DirectorNodeData,
+  type HubAsset,
+  type HubNodeData,
   type PromptBuilderNodeData,
   type PromptNodeData,
   type RefCatalogEntry,
@@ -78,6 +82,8 @@ type StudioNode =
   | Node<SourceNodeData, "last">
   | Node<RefNodeData, "character">
   | Node<RefNodeData, "scene">
+  | Node<RefNodeData, "prop">
+  | Node<HubNodeData, "hub">
   | Node<ToolNodeData, "upscale">
   | Node<ToolNodeData, "denoise">
   | Node<ToolNodeData, "restore">
@@ -96,6 +102,8 @@ const nodeTypes: NodeTypes = {
   last: SourceNode,
   character: RefNode,
   scene: RefNode,
+  prop: RefNode,
+  hub: HubNode,
   upscale: ToolNode,
   denoise: ToolNode,
   restore: ToolNode,
@@ -138,6 +146,7 @@ const LAST_ID = "last";
 const RESULT_ID = "result";
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
+const HUB_ID = "asset-hub";
 const PIN_EDIT_SOURCE = "pin-edit-source";
 const PIN_EDIT_PROMPT = "pin-edit-prompt";
 const PIN_EDIT_RESULT = "pin-edit-result";
@@ -189,6 +198,10 @@ function StudioCanvas() {
   const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
   const [characters, setCharacters] = useState<RefSlotState[]>([]);
   const [scenes, setScenes] = useState<RefSlotState[]>([]);
+  const [props, setProps] = useState<RefSlotState[]>([]);
+  const [hubTitle, setHubTitle] = useState("");
+  const [hubNotes, setHubNotes] = useState("");
+  const [hubIds, setHubIds] = useState<string[]>([]);
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [studioMode, setStudioMode] = useState<Mode>("image");
@@ -296,6 +309,13 @@ function StudioCanvas() {
       if (id.startsWith("scene-")) {
         setScenes((cur) => cur.filter((r) => r.id !== id));
       }
+      if (id.startsWith("prop-")) {
+        setProps((cur) => cur.filter((r) => r.id !== id));
+      }
+      if (id === HUB_ID) {
+        setHubIds([]);
+      }
+      setHubIds((cur) => cur.filter((row) => row !== id));
       if (TOOL_TYPES.includes(id.split("-")[0] as ToolKind)) {
         setToolSources((cur) => {
           const next = { ...cur };
@@ -858,21 +878,33 @@ function StudioCanvas() {
   );
 
   const addRefNode = useCallback(
-    (role: "character" | "scene") => {
-      const reserved = reservedRefNodes(sourceItem, characters, scenes);
-      if (maxRefs > 0 && reserved >= maxRefs) {
-        toast(`This model allows at most ${maxRefs} reference images.`, true);
-        return;
+    (role: AssetRole) => {
+      const story = studioMode === "storyboard";
+      if (!story) {
+        const reserved = reservedRefNodes(sourceItem, characters, scenes);
+        if (maxRefs > 0 && reserved >= maxRefs) {
+          toast(`This model allows at most ${maxRefs} reference images.`, true);
+          return;
+        }
       }
-      const id = `${role === "character" ? "char" : "scene"}-${Date.now().toString(36)}`;
-      const row: RefSlotState = { id, catalogId: "", note: "", item: null };
+      const prefix =
+        role === "character" ? "char" : role === "scene" ? "scene" : "prop";
+      const id = `${prefix}-${Date.now().toString(36)}`;
+      const row: RefSlotState = {
+        id,
+        catalogId: "",
+        note: "",
+        label: "",
+        item: null,
+      };
       if (role === "character") setCharacters((cur) => [...cur, row]);
-      else setScenes((cur) => [...cur, row]);
+      else if (role === "scene") setScenes((cur) => [...cur, row]);
+      else setProps((cur) => [...cur, row]);
       setNodes((current) => {
         if (current.some((n) => n.id === id)) return current;
         const prompt = current.find((n) => n.id === "prompt");
         const siblings = current.filter((n) =>
-          ["source", "character", "scene"].includes(n.type || ""),
+          ["source", "character", "scene", "prop"].includes(n.type || ""),
         );
         const y = siblings.length
           ? Math.max(...siblings.map((n) => n.position.y)) + 250
@@ -886,12 +918,23 @@ function StudioCanvas() {
           },
           dragHandle: ".node-header",
           data: {
-            title: role === "character" ? "Character" : "Scene",
+            title:
+              role === "character"
+                ? "Character"
+                : role === "scene"
+                  ? "Scene"
+                  : "Prop",
             role,
             item: null,
             catalogId: "",
             note: "",
-            catalog: role === "character" ? charCatalog : sceneCatalog,
+            label: "",
+            catalog:
+              role === "character"
+                ? charCatalog
+                : role === "scene"
+                  ? sceneCatalog
+                  : [],
             onClear: () => undefined,
             onOpenLibrary: () => setLibraryOpen(true),
             onAttach: () => undefined,
@@ -902,6 +945,27 @@ function StudioCanvas() {
         };
         return [...current, node];
       });
+      if (story) {
+        setNodes((current) => {
+          if (!current.some((n) => n.id === HUB_ID)) return current;
+          setHubIds((cur) => (cur.includes(id) ? cur : [...cur, id]));
+          setEdges((eds) => {
+            const hubEdge = `e-${id}-hub`;
+            if (eds.some((e) => e.id === hubEdge)) return eds;
+            return addEdge(
+              {
+                id: hubEdge,
+                source: id,
+                target: HUB_ID,
+                style: { stroke: "#8aa4c2", strokeWidth: 2 },
+              },
+              eds,
+            );
+          });
+          return current;
+        });
+        return;
+      }
       const edgeId = `e-${id}-prompt`;
       setEdges((current) => {
         if (current.some((e) => e.id === edgeId)) return current;
@@ -926,6 +990,7 @@ function StudioCanvas() {
       setEdges,
       setNodes,
       sourceItem,
+      studioMode,
     ],
   );
 
@@ -934,6 +999,96 @@ function StudioCanvas() {
     [addRefNode],
   );
   const addSceneNode = useCallback(() => addRefNode("scene"), [addRefNode]);
+  const addPropNode = useCallback(() => addRefNode("prop"), [addRefNode]);
+
+  const connectAssetToHub = useCallback(
+    (id: string) => {
+      setHubIds((cur) => (cur.includes(id) ? cur : [...cur, id]));
+      setEdges((current) => {
+        const edgeId = `e-${id}-hub`;
+        if (current.some((e) => e.id === edgeId)) return current;
+        return addEdge(
+          {
+            id: edgeId,
+            source: id,
+            target: HUB_ID,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [setEdges],
+  );
+
+  const addHub = useCallback(() => {
+    const existingIds = [
+      ...characters.map((r) => r.id),
+      ...scenes.map((r) => r.id),
+      ...props.map((r) => r.id),
+    ];
+    setNodes((current) => {
+      if (current.some((n) => n.id === HUB_ID)) return current;
+      const prompt = current.find((n) => n.id === "prompt");
+      const node: StudioNode = {
+        id: HUB_ID,
+        type: "hub",
+        position: {
+          x: (prompt?.position.x ?? PROMPT_POS.x) + 480,
+          y: prompt?.position.y ?? PROMPT_POS.y,
+        },
+        dragHandle: ".node-header",
+        data: {
+          title: hubTitle,
+          notes: hubNotes,
+          assets: [],
+          onTitle: setHubTitle,
+          onNotes: setHubNotes,
+          onClose: () => closeNode(HUB_ID),
+        },
+      };
+      return [...current, node];
+    });
+    setHubIds((cur) => {
+      const next = new Set(cur);
+      for (const id of existingIds) next.add(id);
+      return [...next];
+    });
+    setEdges((current) => {
+      let next = current;
+      for (const id of existingIds) {
+        const edgeId = `e-${id}-hub`;
+        if (next.some((e) => e.id === edgeId)) continue;
+        next = addEdge(
+          {
+            id: edgeId,
+            source: id,
+            target: HUB_ID,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          next,
+        );
+      }
+      return next;
+    });
+  }, [
+    characters,
+    closeNode,
+    hubNotes,
+    hubTitle,
+    props,
+    scenes,
+    setEdges,
+    setNodes,
+  ]);
+
+  const addAssetToHub = useCallback(
+    (id: string) => {
+      addHub();
+      connectAssetToHub(id);
+    },
+    [addHub, connectAssetToHub],
+  );
 
   useEffect(() => {
     if (!plan.characters && !plan.scenes) {
@@ -972,14 +1127,19 @@ function StudioCanvas() {
 
   const tryAttachSlot = useCallback(
     (slot: string, item: LibraryItem) => {
-      if (slot.startsWith("char-") || slot.startsWith("scene-")) {
+      if (
+        slot.startsWith("char-") ||
+        slot.startsWith("scene-") ||
+        slot.startsWith("prop-")
+      ) {
         if (!slotAccepts("image", item)) {
           toast(slotNeedLabel("image"), true);
           return false;
         }
         const isChar = slot.startsWith("char-");
-        const rows = isChar ? characters : scenes;
-        const setter = isChar ? setCharacters : setScenes;
+        const isProp = slot.startsWith("prop-");
+        const rows = isChar ? characters : isProp ? props : scenes;
+        const setter = isChar ? setCharacters : isProp ? setProps : setScenes;
         const existing = rows.find((r) => r.id === slot);
         const replacing = Boolean(existing?.item?.path);
         if (!replacing && atRefLimit()) {
@@ -1023,6 +1183,7 @@ function StudioCanvas() {
       characters,
       maxRefs,
       plan.source,
+      props,
       scenes,
       sourceAccept,
       sourceItem,
@@ -1059,6 +1220,15 @@ function StudioCanvas() {
           tryAttachSlot(emptyScene.id, item);
           return;
         }
+        const emptyProp = props.find((r) => !r.item);
+        if (emptyProp) {
+          tryAttachSlot(emptyProp.id, item);
+          return;
+        }
+        if (studioMode === "storyboard") {
+          toast("Add a Character, Scene, or Prop first, or drop onto one.", true);
+          return;
+        }
         if (plan.source && !sourceItem) {
           tryAttachSlot("source", item);
           return;
@@ -1076,6 +1246,7 @@ function StudioCanvas() {
       firstItem,
       lastItem,
       plan,
+      props,
       scenes,
       sourceItem,
       studioMode,
@@ -1103,6 +1274,11 @@ function StudioCanvas() {
             ...r,
             catalogId,
             item: catalogId ? mapped || r.item : r.item,
+            label:
+              r.label ||
+              (catalogId
+                ? entry?.label || entry?.name || r.label
+                : r.label),
           };
         }),
       );
@@ -1127,6 +1303,50 @@ function StudioCanvas() {
       current.filter((e) => e.source !== DIRECTOR_ID && e.target !== DIRECTOR_ID),
     );
   }, [setEdges, setNodes, studioMode, studioModality]);
+
+  useEffect(() => {
+    if (studioMode === "storyboard") {
+      closePinEdit();
+      setSourceItem(null);
+      setFirstItem(null);
+      setLastItem(null);
+      setNodes((current) =>
+        current.filter(
+          (n) =>
+            n.id !== SOURCE_ID &&
+            n.id !== FIRST_ID &&
+            n.id !== LAST_ID &&
+            n.id !== BUILDER_ID &&
+            n.id !== DIRECTOR_ID,
+        ),
+      );
+      setEdges((current) =>
+        current.filter(
+          (e) =>
+            e.source !== SOURCE_ID &&
+            e.source !== FIRST_ID &&
+            e.source !== LAST_ID &&
+            e.source !== BUILDER_ID &&
+            e.source !== DIRECTOR_ID &&
+            e.target !== SOURCE_ID,
+        ),
+      );
+      return;
+    }
+    setProps([]);
+    setHubIds([]);
+    setNodes((current) =>
+      current.filter((n) => n.type !== "prop" && n.id !== HUB_ID),
+    );
+    setEdges((current) =>
+      current.filter(
+        (e) =>
+          !String(e.source).startsWith("prop-") &&
+          e.source !== HUB_ID &&
+          e.target !== HUB_ID,
+      ),
+    );
+  }, [closePinEdit, setEdges, setNodes, studioMode]);
 
   useEffect(() => {
     if (pinEdit && !framePins.some((p) => p.id === pinEdit.pinId)) {
@@ -1160,6 +1380,8 @@ function StudioCanvas() {
               onAddLast: addLastNode,
               onAddCharacter: addCharacterNode,
               onAddScene: addSceneNode,
+              onAddProp: addPropNode,
+              onAddHub: addHub,
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
@@ -1220,6 +1442,34 @@ function StudioCanvas() {
             data: {
               onClose: () => closeNode(DIRECTOR_ID),
               onApply: applyDirectorPrompt,
+            },
+          };
+        }
+        if (n.id === HUB_ID) {
+          const lookup = [...characters, ...scenes, ...props];
+          const assets: HubAsset[] = hubIds
+            .map((id) => lookup.find((r) => r.id === id))
+            .filter((row): row is RefSlotState => Boolean(row))
+            .map((row) => ({
+              id: row.id,
+              role: row.id.startsWith("scene-")
+                ? "scene"
+                : row.id.startsWith("prop-")
+                  ? "prop"
+                  : "character",
+              label: row.label || row.item?.name || "",
+              item: row.item,
+            }));
+          return {
+            ...n,
+            type: "hub",
+            data: {
+              title: hubTitle,
+              notes: hubNotes,
+              assets,
+              onTitle: setHubTitle,
+              onNotes: setHubNotes,
+              onClose: () => closeNode(HUB_ID),
             },
           };
         }
@@ -1401,6 +1651,7 @@ function StudioCanvas() {
               item: row.item,
               catalogId: row.catalogId,
               note: row.note,
+              label: row.label ?? "",
               catalog: charCatalog,
               onClear: () =>
                 setCharacters((cur) =>
@@ -1417,6 +1668,14 @@ function StudioCanvas() {
                 setCharacters((cur) =>
                   cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
                 ),
+              onLabel: (label) =>
+                setCharacters((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
+                ),
+              onAddToHub:
+                studioMode === "storyboard"
+                  ? () => addAssetToHub(n.id)
+                  : undefined,
               onClose: () => closeNode(n.id),
             },
           };
@@ -1433,6 +1692,7 @@ function StudioCanvas() {
               item: row.item,
               catalogId: row.catalogId,
               note: row.note,
+              label: row.label ?? "",
               catalog: sceneCatalog,
               onClear: () =>
                 setScenes((cur) =>
@@ -1449,6 +1709,52 @@ function StudioCanvas() {
                 setScenes((cur) =>
                   cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
                 ),
+              onLabel: (label) =>
+                setScenes((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
+                ),
+              onAddToHub:
+                studioMode === "storyboard"
+                  ? () => addAssetToHub(n.id)
+                  : undefined,
+              onClose: () => closeNode(n.id),
+            },
+          };
+        }
+        if (n.type === "prop") {
+          const row = props.find((r) => r.id === n.id);
+          if (!row) return n;
+          return {
+            ...n,
+            type: "prop",
+            data: {
+              title: "Prop",
+              role: "prop",
+              item: row.item,
+              catalogId: row.catalogId,
+              note: row.note,
+              label: row.label ?? "",
+              catalog: [],
+              onClear: () =>
+                setProps((cur) =>
+                  cur.map((r) =>
+                    r.id === n.id
+                      ? { ...r, item: null, catalogId: "", note: "" }
+                      : r,
+                  ),
+                ),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onAttach: (item) => tryAttachSlot(n.id, item),
+              onPickCatalog: () => undefined,
+              onNote: (note) =>
+                setProps((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
+                ),
+              onLabel: (label) =>
+                setProps((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
+                ),
+              onAddToHub: () => addAssetToHub(n.id),
               onClose: () => closeNode(n.id),
             },
           };
@@ -1457,9 +1763,12 @@ function StudioCanvas() {
       }),
     );
   }, [
+    addAssetToHub,
     addCharacterNode,
     addFirstNode,
     addDirector,
+    addHub,
+    addPropNode,
     addPromptBuilder,
     applyBuilderPrompt,
     applyDirectorPrompt,
@@ -1474,6 +1783,9 @@ function StudioCanvas() {
     charCatalog,
     characters,
     firstItem,
+    hubIds,
+    hubNotes,
+    hubTitle,
     framePins,
     lastItem,
     maxRefs,
@@ -1482,6 +1794,7 @@ function StudioCanvas() {
     pinEdit,
     plan.source,
     sourceAccept,
+    props,
     sceneCatalog,
     scenes,
     setNodes,
@@ -1628,7 +1941,7 @@ function StudioCanvas() {
       const hit = getNodes().find((n) => {
         if (
           !n.type ||
-          !["source", "first", "last", "character", "scene"].includes(n.type)
+          !["source", "first", "last", "character", "scene", "prop"].includes(n.type)
         )
           return false;
         const w = n.measured?.width ?? 240;
@@ -1647,7 +1960,8 @@ function StudioCanvas() {
         hit.id === FIRST_ID ||
         hit.id === LAST_ID ||
         hit.id.startsWith("char-") ||
-        hit.id.startsWith("scene-")
+        hit.id.startsWith("scene-") ||
+        hit.id.startsWith("prop-")
       ) {
         tryAttachSlot(hit.id, item);
       }
@@ -1667,6 +1981,9 @@ function StudioCanvas() {
         (src === LAST_ID && tgt === "prompt") ||
         (src.startsWith("char-") && tgt === "prompt") ||
         (src.startsWith("scene-") && tgt === "prompt") ||
+        (src.startsWith("char-") && tgt === HUB_ID) ||
+        (src.startsWith("scene-") && tgt === HUB_ID) ||
+        (src.startsWith("prop-") && tgt === HUB_ID) ||
         (src === BUILDER_ID && tgt === "prompt") ||
         (src === DIRECTOR_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
@@ -1675,6 +1992,14 @@ function StudioCanvas() {
         (TOOL_TYPES.some((t) => src.startsWith(`${t}-`)) &&
           tgt.startsWith("result"));
       if (!ok) return;
+      if (
+        tgt === HUB_ID &&
+        (src.startsWith("char-") ||
+          src.startsWith("scene-") ||
+          src.startsWith("prop-"))
+      ) {
+        setHubIds((cur) => (cur.includes(src) ? cur : [...cur, src]));
+      }
       setEdges((eds) =>
         addEdge(
           { ...connection, style: { stroke: "#8aa4c2", strokeWidth: 2 } },
@@ -1747,8 +2072,11 @@ function StudioCanvas() {
             (src === LAST_ID && tgt === "prompt") ||
             (src.startsWith("char-") && tgt === "prompt") ||
             (src.startsWith("scene-") && tgt === "prompt") ||
+            (src.startsWith("char-") && tgt === HUB_ID) ||
+            (src.startsWith("scene-") && tgt === HUB_ID) ||
+            (src.startsWith("prop-") && tgt === HUB_ID) ||
             (src === BUILDER_ID && tgt === "prompt") ||
-        (src === DIRECTOR_ID && tgt === "prompt") ||
+            (src === DIRECTOR_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||
             (src.startsWith("result") &&
               TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||

@@ -1,4 +1,4 @@
-export type Mode = "image" | "video" | "frame" | "audio";
+export type Mode = "image" | "video" | "frame" | "storyboard" | "audio";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -82,7 +82,7 @@ export type GraphInputs = {
   scenes?: boolean;
 };
 
-export type RefRole = "character" | "scene" | "source";
+export type RefRole = "character" | "scene" | "source" | "prop";
 
 export type RefCatalogEntry = {
   id: string;
@@ -99,6 +99,7 @@ export type RefSlotState = {
   id: string;
   catalogId: string;
   note: string;
+  label?: string;
   item: LibraryItem | null;
 };
 
@@ -131,6 +132,8 @@ export type PromptNodeData = {
   onAddLast: () => void;
   onAddCharacter: () => void;
   onAddScene: () => void;
+  onAddProp?: () => void;
+  onAddHub?: () => void;
   onModalityChange: (
     mode: Mode,
     modality: string,
@@ -250,18 +253,39 @@ export type SourceNodeData = {
   locked?: boolean;
 };
 
+export type AssetRole = "character" | "scene" | "prop";
+
 export type RefNodeData = {
   title: string;
-  role: "character" | "scene";
+  role: AssetRole;
   item: LibraryItem | null;
   catalogId: string;
   note: string;
+  label?: string;
   catalog: RefCatalogEntry[];
   onClear: () => void;
   onOpenLibrary: () => void;
   onAttach: (item: LibraryItem) => void;
   onPickCatalog: (id: string) => void;
   onNote: (note: string) => void;
+  onLabel?: (label: string) => void;
+  onAddToHub?: () => void;
+  onClose?: () => void;
+};
+
+export type HubAsset = {
+  id: string;
+  role: AssetRole;
+  label: string;
+  item: LibraryItem | null;
+};
+
+export type HubNodeData = {
+  title: string;
+  notes: string;
+  assets: HubAsset[];
+  onTitle: (value: string) => void;
+  onNotes: (value: string) => void;
   onClose?: () => void;
 };
 
@@ -313,6 +337,9 @@ export function inputPlan(
   model?: ModelRow | null,
   mode?: Mode,
 ): GraphInputs {
+  if (mode === "storyboard" || modality === "storyboard") {
+    return { characters: true, scenes: true };
+  }
   if (mode === "frame" || modality === "frame") {
     return { source: "video" };
   }

@@ -10,7 +10,7 @@ import {
   type RefNodeData,
 } from "./types";
 
-export type RefFlowNode = Node<RefNodeData, "character" | "scene">;
+export type RefFlowNode = Node<RefNodeData, "character" | "scene" | "prop">;
 
 function itemFromEvent(event: DragEvent): LibraryItem | null {
   return peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
@@ -18,12 +18,16 @@ function itemFromEvent(event: DragEvent): LibraryItem | null {
 
 export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
   const item = data.item;
-  const title = data.title || (data.role === "scene" ? "Scene" : "Character");
+  const title =
+    data.title ||
+    (data.role === "scene" ? "Scene" : data.role === "prop" ? "Prop" : "Character");
   const [hover, setHover] = useState<"ok" | "bad" | null>(null);
   const placeholder =
     data.role === "scene"
       ? "this location is…"
-      : "this character is…";
+      : data.role === "prop"
+        ? "this prop is…"
+        : "this character is…";
 
   function incomingItem(event: DragEvent): LibraryItem | null {
     return (
@@ -97,6 +101,7 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag nopan">
+        {data.role !== "prop" ? (
         <select
           className="model nodrag"
           value={data.catalogId}
@@ -114,6 +119,21 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
             </option>
           ))}
         </select>
+        ) : null}
+
+        <input
+          className="model nodrag"
+          type="text"
+          placeholder={
+            data.role === "scene"
+              ? "Label (e.g. Gym interior)"
+              : data.role === "prop"
+                ? "Label (e.g. Red mug)"
+                : "Label (e.g. Alice)"
+          }
+          value={data.label ?? ""}
+          onChange={(e) => data.onLabel?.(e.target.value)}
+        />
 
         {item ? (
           <div className="source-preview">
@@ -165,6 +185,26 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
               Attach still as {data.role} ref
             </button>
           )}
+          <button
+            type="button"
+            className="ghost nodrag"
+            onClick={() =>
+              toast(
+                `${title} Creator comes in Phase 17 — attach a still and name it for now.`,
+              )
+            }
+          >
+            New {title}
+          </button>
+          {data.onAddToHub ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              onClick={data.onAddToHub}
+            >
+              Add to Hub
+            </button>
+          ) : null}
         </div>
       </div>
       <Handle type="source" position={Position.Right} className="node-handle" />
