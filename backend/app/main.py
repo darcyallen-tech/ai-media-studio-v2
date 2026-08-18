@@ -53,6 +53,7 @@ from app.assets import (  # noqa: E402
     resolve_asset_still,
     sheet_model_ok,
 )
+from app.sheet import builder_fields, generate_angle  # noqa: E402
 from app.aleph_service import (  # noqa: E402
     estimate_frame_label,
     extract_pin_still,
@@ -117,7 +118,7 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase17"
+APP_VERSION = "2.0.0-phase18"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -1105,6 +1106,61 @@ class AssetGenerateIn(BaseModel):
     source_still: str = ""
 
 
+class AssetSheetCreateIn(BaseModel):
+    kind: str = "character"
+    name: str
+    notes: str = ""
+    parent_id: str = ""
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetSheetAngleIn(BaseModel):
+    asset_id: str
+    slot: str = "front"
+    model_id: str = ""
+    extra: str = ""
+    costume_ref: str = ""
+    wardrobe: str = ""
+
+
+@app.get("/assets/builder/{kind}")
+def assets_builder_fields(kind: str) -> dict[str, Any]:
+    return builder_fields(kind)
+
+
+@app.post("/assets/sheet/create")
+def assets_sheet_create(body: AssetSheetCreateIn) -> dict[str, Any]:
+    try:
+        row = create_asset(
+            kind=body.kind,
+            name=body.name,
+            notes=body.notes,
+            parent_id=body.parent_id,
+            fields=dict(body.fields or {}),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/sheet/angle")
+def assets_sheet_angle(body: AssetSheetAngleIn) -> dict[str, Any]:
+    try:
+        row = generate_angle(
+            asset_id=body.asset_id,
+            slot=body.slot,
+            model_id=body.model_id,
+            extra=body.extra,
+            costume_ref=body.costume_ref,
+            wardrobe=body.wardrobe,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
 @app.get("/assets")
 def assets_get(kind: str | None = Query(default=None)) -> dict[str, Any]:
     want = (kind or "").strip().lower() or None
@@ -1186,8 +1242,11 @@ def assets_delete(asset_id: str) -> dict[str, Any]:
 
 
 @app.get("/assets/{asset_id}/still")
-def assets_still(asset_id: str) -> FileResponse:
-    path = resolve_asset_still(asset_id)
+def assets_still(
+    asset_id: str,
+    slot: str | None = Query(default=None),
+) -> FileResponse:
+    path = resolve_asset_still(asset_id, slot)
     if path is None:
         row = get_asset(asset_id)
         kind = str((row or {}).get("kind") or "character")

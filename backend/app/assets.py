@@ -17,7 +17,16 @@ KINDS: tuple[Kind, ...] = ("character", "scene", "prop")
 ASSETS_DIR = PROJECT_ROOT / "data" / "assets"
 ASSETS_INDEX = ASSETS_DIR / "assets.json"
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-_MAX_STILLS = {"character": 3, "scene": 1, "prop": 1}
+_MAX_STILLS = {"character": 8, "scene": 3, "prop": 1}
+IDENTITY_SLOTS: tuple[str, ...] = (
+    "front",
+    "side",
+    "closeup",
+    "back",
+    "threequarter_front",
+    "threequarter_back",
+    "top",
+)
 
 SHEET_MODELS = ("flux", "seedream", "nano")
 
@@ -74,25 +83,26 @@ def _normalize_kind(raw: str | None) -> Kind | None:
 def _still_list(row: dict[str, Any]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
-    for key in ("sheet_path",):
-        p = str(row.get(key) or "").strip()
-        if p and p.lower() not in seen:
-            seen.add(p.lower())
-            out.append(p)
-    raw = row.get("still_paths")
-    extras = raw if isinstance(raw, list) else []
-    single = str(row.get("still_path") or "").strip()
-    if single:
-        extras = [single, *extras]
-    for item in extras:
-        p = str(item or "").strip()
+
+    def add(raw: str | None) -> None:
+        p = str(raw or "").strip()
         if not p:
-            continue
+            return
         key = p.lower()
         if key in seen:
-            continue
+            return
         seen.add(key)
         out.append(p)
+
+    ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+    for slot in IDENTITY_SLOTS:
+        add(str(ident.get(slot) or ""))
+    add(str(row.get("sheet_path") or ""))
+    add(str(row.get("still_path") or ""))
+    raw = row.get("still_paths")
+    extras = raw if isinstance(raw, list) else []
+    for item in extras:
+        add(str(item or ""))
     return [p for p in out if Path(p).is_file()]
 
 
@@ -134,27 +144,53 @@ def _new_id(kind: Kind) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:10]}"
 
 
+def _parent_name(parent_id: str) -> str:
+    if not parent_id:
+        return ""
+    for row in _load_index():
+        if str(row.get("id") or "") == parent_id:
+            return str(row.get("name") or "").strip()
+    return ""
+
+
 def _to_public(row: dict[str, Any]) -> dict[str, Any]:
     kind = str(row.get("kind") or "character")
     aid = str(row.get("id") or "")
     stills = _still_list(row)
-    primary = stills[0] if stills else ""
+    ident_raw = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+    identity: dict[str, str] = {}
+    identity_urls: dict[str, str] = {}
+    for slot in IDENTITY_SLOTS:
+        p = str(ident_raw.get(slot) or "").strip()
+        if p and Path(p).is_file():
+            identity[slot] = p
+            identity_urls[slot] = f"/assets/{aid}/still?slot={slot}"
+    primary = identity.get("front") or (stills[0] if stills else "")
     url = f"/assets/{aid}/still" if primary else None
+    parent_id = str(row.get("parent_id") or "").strip() or None
+    name = str(row.get("name") or "").strip() or "Untitled"
+    parent = _parent_name(parent_id) if parent_id else ""
+    label = f"{parent} / {name}" if parent else name
     return {
         "id": aid,
-        "name": str(row.get("name") or "").strip() or "Untitled",
-        "label": str(row.get("name") or "").strip() or "Untitled",
+        "name": name,
+        "label": label,
         "notes": str(row.get("notes") or "").strip(),
         "kind": kind,
         "still_path": primary or None,
         "still_paths": stills,
-        "sheet_path": str(row.get("sheet_path") or "").strip() or None,
+        "sheet_path": str(row.get("sheet_path") or identity.get("front") or "").strip() or None,
         "has_still": bool(primary),
         "url": url,
-        "thumb_url": url,
+        "thumb_url": identity_urls.get("front") or url,
         "owned": True,
         "created": row.get("created"),
         "model": str(row.get("model") or ""),
+        "parent_id": parent_id,
+        "is_costume": bool(parent_id),
+        "identity": identity,
+        "identity_urls": identity_urls,
+        "fields": row.get("fields") if isinstance(row.get("fields"), dict) else {},
     }
 
 
@@ -170,6 +206,19 @@ def list_assets(kind: str | None = None) -> list[dict[str, Any]]:
             continue
         out.append(_to_public(row))
     out.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+    if want == "character":
+        bases = [r for r in out if not r.get("parent_id")]
+        kids = [r for r in out if r.get("parent_id")]
+        grouped: list[dict[str, Any]] = []
+        by_parent: dict[str, list[dict[str, Any]]] = {}
+        for kid in kids:
+            by_parent.setdefault(str(kid.get("parent_id") or ""), []).append(kid)
+        for base in bases:
+            grouped.append(base)
+            grouped.extend(by_parent.pop(str(base.get("id") or ""), []))
+        for leftover in by_parent.values():
+            grouped.extend(leftover)
+        return grouped
     return out
 
 
@@ -230,6 +279,9 @@ def create_asset(
     files: list[tuple[str, bytes]] | None = None,
     sheet_path: str = "",
     model: str = "",
+    parent_id: str = "",
+    fields: dict[str, Any] | None = None,
+    identity: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     parsed = _normalize_kind(kind)
     if parsed is None:
@@ -264,16 +316,30 @@ def create_asset(
         sheet = str(dest)
         if sheet not in saved:
             saved.insert(0, sheet)
+    ident: dict[str, str] = {}
+    if identity:
+        for slot, raw in identity.items():
+            p = str(raw or "").strip()
+            if p and Path(p).is_file():
+                ident[str(slot)] = p
+    if saved and "front" not in ident:
+        ident["front"] = saved[0]
+    parent = (parent_id or "").strip()
+    if parent and not get_asset(parent):
+        raise ValueError("Parent character not found.")
     row = {
         "id": aid,
         "kind": parsed,
         "name": label,
         "notes": (notes or "").strip(),
         "still_paths": saved,
-        "sheet_path": sheet,
+        "sheet_path": sheet or ident.get("front", ""),
         "model": (model or "").strip(),
         "created": _now(),
         "updated": _now(),
+        "parent_id": parent or None,
+        "fields": dict(fields or {}),
+        "identity": ident,
     }
     rows = _load_index()
     rows.append(row)
@@ -295,20 +361,74 @@ def delete_asset(asset_id: str) -> bool:
         keep.append(row)
     if found is None:
         return False
+    children = [r for r in keep if str(r.get("parent_id") or "") == key]
+    keep = [r for r in keep if str(r.get("parent_id") or "") != key]
     _write_index(keep)
     kind = _normalize_kind(str(found.get("kind") or ""))
     if kind:
         folder = _folder(kind, key)
         if folder.is_dir():
             shutil.rmtree(folder, ignore_errors=True)
+    for child in children:
+        cid = str(child.get("id") or "")
+        ck = _normalize_kind(str(child.get("kind") or ""))
+        if cid and ck:
+            folder = _folder(ck, cid)
+            if folder.is_dir():
+                shutil.rmtree(folder, ignore_errors=True)
     return True
 
 
-def resolve_asset_still(asset_id: str) -> Path | None:
+def attach_identity_still(
+    asset_id: str,
+    slot: str,
+    src: str,
+    *,
+    model: str = "",
+) -> dict[str, Any]:
+    key = (slot or "").strip().lower()
+    if key not in IDENTITY_SLOTS:
+        raise ValueError(f"Unknown identity slot: {slot}")
+    src_path = Path(src)
+    if not src_path.is_file():
+        raise ValueError("Still file not found.")
+    rows = _load_index()
+    found: dict[str, Any] | None = None
+    for row in rows:
+        if str(row.get("id") or "") == asset_id:
+            found = row
+            break
+    if found is None:
+        raise ValueError("Asset not found.")
+    kind = _normalize_kind(str(found.get("kind") or ""))
+    if kind is None:
+        raise ValueError("Invalid asset kind.")
+    dest = _copy_still(kind, asset_id, src_path, IDENTITY_SLOTS.index(key) + 1)
+    ident = found.get("identity") if isinstance(found.get("identity"), dict) else {}
+    ident[key] = str(dest)
+    found["identity"] = ident
+    stills = _still_list(found)
+    found["still_paths"] = stills
+    found["still_path"] = ident.get("front") or (stills[0] if stills else "")
+    if key == "front":
+        found["sheet_path"] = str(dest)
+    if model:
+        found["model"] = model
+    found["updated"] = _now()
+    _write_index(rows)
+    return _to_public(found)
+
+
+def resolve_asset_still(asset_id: str, slot: str | None = None) -> Path | None:
     row = get_asset(asset_id)
     if not row:
         return None
-    path = primary_still_path(row)
+    ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+    want = (slot or "").strip().lower()
+    if want and want in ident:
+        path = str(ident.get(want) or "").strip()
+    else:
+        path = primary_still_path(row)
     if not path:
         return None
     try:
@@ -359,6 +479,7 @@ def generate_asset(
     label = (name or "").strip()
     if not label:
         raise ValueError("Name is required.")
+    from app.config import OUTPUT_DIR
     from app.create import generate
     from app.create_catalog import default_model_for
     from app.create_state import CreateParams, CreateSlots, CreateState
@@ -380,6 +501,7 @@ def generate_asset(
         slots=CreateSlots(start_still=src if modality == "i2i" else None),
         params=CreateParams(),
         surface="studio",
+        output_dir=OUTPUT_DIR,
     )
     result = generate(state)
     if not result.ok:

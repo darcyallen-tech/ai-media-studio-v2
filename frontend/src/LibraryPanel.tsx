@@ -541,7 +541,13 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
                       )}
                     </div>
                     <span className="library-name">{asset.label || asset.name}</span>
-                    <span className="hint">{asset.kind}</span>
+                    <span className="hint">
+                      {asset.is_costume
+                        ? "costume"
+                        : asset.kind === "character" && asset.identity_urls
+                          ? `character · ${Object.keys(asset.identity_urls).length} angles`
+                          : asset.kind}
+                    </span>
                   </div>
                 );
               })

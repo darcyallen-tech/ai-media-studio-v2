@@ -279,6 +279,13 @@ export type StudioAsset = {
   owned?: boolean;
   created?: string;
   model?: string;
+  parent_id?: string | null;
+  is_costume?: boolean;
+  identity?: Record<string, string>;
+  identity_urls?: Record<string, string>;
+  fields?: Record<string, string>;
+  angle?: string;
+  modality?: string;
 };
 
 export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
