@@ -44,9 +44,10 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onPick: (item: LibraryItem) => void;
+  onNewAsset?: (kind: AssetRole | "costume") => void;
 };
 
-export default function LibraryPanel({ open, onClose, onPick }: Props) {
+export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Props) {
   const [pane, setPane] = useState<Pane>("media");
   const [filter, setFilter] = useState<Filter>("all");
   const [section, setSection] = useState<LibrarySource>("uploads");
@@ -471,21 +472,36 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
             <button
               type="button"
               className="ghost"
-              onClick={() => setCreating("character")}
+              onClick={() =>
+                onNewAsset ? onNewAsset("character") : setCreating("character")
+              }
             >
               New Character
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => setCreating("scene")}
+              onClick={() =>
+                onNewAsset ? onNewAsset("costume") : setCreating("character")
+              }
+            >
+              Costume Designer
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                onNewAsset ? onNewAsset("scene") : setCreating("scene")
+              }
             >
               New Scene
             </button>
             <button
               type="button"
               className="ghost"
-              onClick={() => setCreating("prop")}
+              onClick={() =>
+                onNewAsset ? onNewAsset("prop") : setCreating("prop")
+              }
             >
               New Prop
             </button>

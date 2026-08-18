@@ -9,6 +9,11 @@ export const EXTRA_SLOTS = [
   "top",
 ] as const;
 
+export const WARDROBE_M =
+  "minimal form-fit neutral crew-neck tee and fitted trousers, simple shoes, no logos, no accessories";
+export const WARDROBE_F =
+  "minimal form-fit neutral tank and fitted trousers, simple shoes, no logos, no accessories";
+
 export const SLOT_LABEL: Record<string, string> = {
   front: "Front",
   side: "Side",

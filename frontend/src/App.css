@@ -665,6 +665,14 @@
   width: min(560px, 100%);
 }
 
+.creator-builder-node {
+  width: 340px;
+}
+
+.sheet-angle-node {
+  width: 280px;
+}
+
 .sheet-progress {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));

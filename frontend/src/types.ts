@@ -286,6 +286,7 @@ export type StudioAsset = {
   fields?: Record<string, string>;
   angle?: string;
   modality?: string;
+  prompt?: string;
 };
 
 export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
@@ -302,6 +303,47 @@ export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
     thumb_url: asset.thumb_url || url || null,
   };
 }
+
+export type CreatorKind = "character" | "costume" | "scene" | "prop";
+
+export type SheetAnglePatch = {
+  slot: string;
+  label?: string;
+  prompt?: string;
+  url?: string;
+  path?: string;
+  generating?: boolean;
+  error?: string | null;
+};
+
+export type CreatorBuilderNodeData = {
+  kind: CreatorKind;
+  attachSlotId?: string;
+  bases?: StudioAsset[];
+  onClose?: () => void;
+  onAngle: (slot: string, patch: SheetAnglePatch) => void;
+  onSession?: (info: {
+    assetId: string;
+    t2iModel: string;
+    r2iModel: string;
+    slots: string[];
+  }) => void;
+  onSaved: (asset: StudioAsset) => void;
+};
+
+export type SheetAngleNodeData = {
+  builderId: string;
+  slot: string;
+  label: string;
+  prompt: string;
+  url?: string;
+  path?: string;
+  generating?: boolean;
+  error?: string | null;
+  onPrompt: (prompt: string) => void;
+  onRegen: () => void;
+  onClose?: () => void;
+};
 
 export type RefNodeData = {
   title: string;

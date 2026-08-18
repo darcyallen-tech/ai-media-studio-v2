@@ -16,8 +16,9 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import AssetCreator from "./AssetCreator";
+import CreatorBuilderNode from "./CreatorBuilderNode";
 import LibraryPanel from "./LibraryPanel";
+import SheetAngleNode from "./SheetAngleNode";
 import MediaLightbox from "./MediaLightbox";
 import SettingsPanel from "./SettingsPanel";
 import DirectorNode from "./DirectorNode";
@@ -56,6 +57,7 @@ import {
   type GridSnap,
 } from "./canvasPrefs";
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
+import { SLOT_LABEL } from "./sheetUi";
 import { bindToast, toast } from "./toast";
 import {
   assetToLibraryItem,
@@ -73,6 +75,9 @@ import {
   type ModelRow,
   directorAllowed,
   type AssetRole,
+  type CreatorBuilderNodeData,
+  type CreatorKind,
+  type SheetAnglePatch,
   type DirectorNodeData,
   type HubAsset,
   type HubNodeData,
@@ -84,6 +89,7 @@ import {
   type ResultNodeData,
   type ShotBuilderNodeData,
   type ShotNodeData,
+  type SheetAngleNodeData,
   type ShotState,
   type SlotAccept,
   type StudioAsset,
@@ -107,6 +113,8 @@ type StudioNode =
   | Node<HubNodeData, "hub">
   | Node<ShotNodeData, "shot">
   | Node<ShotBuilderNodeData, "shot-builder">
+  | Node<CreatorBuilderNodeData, "creator-builder">
+  | Node<SheetAngleNodeData, "sheet-angle">
   | Node<ToolNodeData, "upscale">
   | Node<ToolNodeData, "denoise">
   | Node<ToolNodeData, "restore">
@@ -129,6 +137,8 @@ const nodeTypes: NodeTypes = {
   hub: HubNode,
   shot: ShotNode,
   "shot-builder": ShotBuilderNode,
+  "creator-builder": CreatorBuilderNode,
+  "sheet-angle": SheetAngleNode,
   upscale: ToolNode,
   denoise: ToolNode,
   restore: ToolNode,
@@ -277,10 +287,18 @@ function StudioCanvas() {
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [propCatalog, setPropCatalog] = useState<RefCatalogEntry[]>([]);
-  const [creatingAsset, setCreatingAsset] = useState<{
-    kind: AssetRole;
-    slotId?: string;
-  } | null>(null);
+  const [builderSessions, setBuilderSessions] = useState<
+    Record<
+      string,
+      {
+        assetId: string;
+        t2iModel: string;
+        r2iModel: string;
+        slots: string[];
+        attachSlotId?: string;
+      }
+    >
+  >({});
   const [studioMode, setStudioMode] = useState<Mode>("image");
   const [studioModality, setStudioModality] = useState("t2i");
   const [appliedPrompt, setAppliedPrompt] = useState<{
@@ -464,6 +482,27 @@ function StudioCanvas() {
         setHubIds([]);
       }
       setHubIds((cur) => cur.filter((row) => row !== id));
+      if (id.startsWith("cbuild-")) {
+        setBuilderSessions((cur) => {
+          const next = { ...cur };
+          delete next[id];
+          return next;
+        });
+        setNodes((current) =>
+          current.filter(
+            (n) => n.id !== id && !n.id.startsWith(`sang-${id}-`),
+          ),
+        );
+        setEdges((current) =>
+          current.filter(
+            (e) =>
+              e.source !== id &&
+              e.target !== id &&
+              !String(e.source).startsWith(`sang-${id}-`) &&
+              !String(e.target).startsWith(`sang-${id}-`),
+          ),
+        );
+      }
       if (id.startsWith("shot-")) {
         setShots((cur) => renumberShots(cur.filter((s) => s.id !== id)));
         setActiveShotId((cur) => (cur === id ? null : cur));
@@ -1158,6 +1197,156 @@ function StudioCanvas() {
   );
   const addSceneNode = useCallback(() => addRefNode("scene"), [addRefNode]);
   const addPropNode = useCallback(() => addRefNode("prop"), [addRefNode]);
+
+  const addCreatorBuilder = useCallback(
+    (kind: CreatorKind, attachSlotId?: string) => {
+      const id = `cbuild-${kind}-${Date.now().toString(36)}`;
+      setNodes((current) => {
+        if (current.some((n) => n.id === id)) return current;
+        const prompt = current.find((n) => n.id === "prompt");
+        const builders = current.filter((n) => n.type === "creator-builder");
+        const y = builders.length
+          ? Math.max(...builders.map((n) => n.position.y)) + 36
+          : (prompt?.position.y ?? PROMPT_POS.y) - 20;
+        const node: StudioNode = {
+          id,
+          type: "creator-builder",
+          position: {
+            x: Math.max(-520, (prompt?.position.x ?? PROMPT_POS.x) - 460),
+            y,
+          },
+          dragHandle: ".node-header",
+          data: {
+            kind,
+            attachSlotId,
+            onAngle: () => undefined,
+            onSaved: () => undefined,
+            onClose: () => closeNode(id),
+          },
+        };
+        return [...current, node];
+      });
+    },
+    [closeNode, setNodes],
+  );
+
+  const upsertSheetAngle = useCallback(
+    (builderId: string, slot: string, patch: SheetAnglePatch) => {
+      const angleId = `sang-${builderId}-${slot}`;
+      setNodes((current) => {
+        const builder = current.find((n) => n.id === builderId);
+        const existing = current.find((n) => n.id === angleId);
+        const order = ["front", "side", "closeup", "back", "threequarter_front", "threequarter_back", "top"];
+        const idx = Math.max(0, order.indexOf(slot));
+        const position = existing?.position ?? {
+          x: (builder?.position.x ?? PROMPT_POS.x) + 400,
+          y: (builder?.position.y ?? PROMPT_POS.y) + idx * 250,
+        };
+        const prev = existing?.type === "sheet-angle" ? existing.data : null;
+        const node: StudioNode = {
+          id: angleId,
+          type: "sheet-angle",
+          position,
+          dragHandle: ".node-header",
+          data: {
+            builderId,
+            slot,
+            label: patch.label || prev?.label || SLOT_LABEL[slot] || slot,
+            prompt: patch.prompt ?? prev?.prompt ?? "",
+            url: patch.url ?? prev?.url,
+            path: patch.path ?? prev?.path,
+            generating: patch.generating ?? prev?.generating ?? false,
+            error: patch.error === undefined ? prev?.error ?? null : patch.error,
+            onPrompt: () => undefined,
+            onRegen: () => undefined,
+            onClose: () => closeNode(angleId),
+          },
+        };
+        const withNode = existing
+          ? current.map((n) => (n.id === angleId ? node : n))
+          : [...current, node];
+        return withNode;
+      });
+      setEdges((current) => {
+        const edgeId = `e-${builderId}-${slot}`;
+        if (current.some((e) => e.id === edgeId)) return current;
+        return addEdge(
+          {
+            id: edgeId,
+            source: builderId,
+            target: angleId,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [closeNode, setEdges, setNodes],
+  );
+
+  const regenSheetAngle = useCallback(
+    async (builderId: string, slot: string) => {
+      const session = builderSessions[builderId];
+      if (!session?.assetId) {
+        toast("Generate the sheet first.", true);
+        return;
+      }
+      const live = getNodes();
+      const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
+      const prompt =
+        angle?.type === "sheet-angle" ? angle.data.prompt || "" : "";
+      const order = session.slots.length ? session.slots : ["front", "side", "closeup"];
+      const idx = order.indexOf(slot);
+      const priorSlot = idx > 0 ? order[idx - 1] : "";
+      const priorNode = priorSlot
+        ? live.find((n) => n.id === `sang-${builderId}-${priorSlot}`)
+        : null;
+      const priorPath =
+        priorNode?.type === "sheet-angle" ? priorNode.data.path || "" : "";
+      upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
+      try {
+        const res = await fetch("/assets/sheet/angle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            asset_id: session.assetId,
+            slot,
+            model_id: slot === "front" ? session.t2iModel : session.r2iModel,
+            prompt,
+            source_still: priorPath,
+          }),
+        });
+        const body = (await res.json()) as {
+          ok?: boolean;
+          item?: StudioAsset;
+          detail?: string;
+          error?: string;
+        };
+        if (!res.ok || !body.item) {
+          throw new Error(
+            (typeof body.detail === "string" ? body.detail : null) ||
+              body.error ||
+              "Regenerate failed.",
+          );
+        }
+        const path = body.item.identity?.[slot] || body.item.still_path || "";
+        const url = body.item.identity_urls?.[slot] || body.item.url || "";
+        upsertSheetAngle(builderId, slot, {
+          slot,
+          prompt: String(body.item.prompt || prompt || ""),
+          path,
+          url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
+          generating: false,
+          error: null,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Regenerate failed.";
+        upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
+        toast(msg, true);
+      }
+    },
+    [builderSessions, getNodes, upsertSheetAngle],
+  );
 
   const connectAssetToHub = useCallback(
     (id: string) => {
@@ -2196,8 +2385,7 @@ function StudioCanvas() {
                 studioMode === "storyboard"
                   ? () => addAssetToHub(n.id)
                   : undefined,
-              onCreate: () =>
-                setCreatingAsset({ kind: "character", slotId: n.id }),
+              onCreate: () => addCreatorBuilder("character", n.id),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2239,7 +2427,7 @@ function StudioCanvas() {
                 studioMode === "storyboard"
                   ? () => addAssetToHub(n.id)
                   : undefined,
-              onCreate: () => setCreatingAsset({ kind: "scene", slotId: n.id }),
+              onCreate: () => addCreatorBuilder("scene", n.id),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2278,7 +2466,7 @@ function StudioCanvas() {
                   cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
                 ),
               onAddToHub: () => addAssetToHub(n.id),
-              onCreate: () => setCreatingAsset({ kind: "prop", slotId: n.id }),
+              onCreate: () => addCreatorBuilder("prop", n.id),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2346,6 +2534,57 @@ function StudioCanvas() {
             },
           };
         }
+        if (n.type === "creator-builder") {
+          const kind = n.data.kind;
+          return {
+            ...n,
+            type: "creator-builder",
+            data: {
+              kind,
+              attachSlotId: n.data.attachSlotId,
+              onClose: () => closeNode(n.id),
+              onAngle: (slot, patch) => upsertSheetAngle(n.id, slot, patch),
+              onSession: (info) =>
+                setBuilderSessions((cur) => ({
+                  ...cur,
+                  [n.id]: { ...info, attachSlotId: n.data.attachSlotId },
+                })),
+              onSaved: (asset) => {
+                void (async () => {
+                  try {
+                    const res = await fetch("/assets");
+                    const body = (await res.json()) as { items?: StudioAsset[] };
+                    const full =
+                      (body.items ?? []).find((row) => row.id === asset.id) ||
+                      asset;
+                    applyCreatedAsset(full, n.data.attachSlotId);
+                  } catch {
+                    applyCreatedAsset(asset, n.data.attachSlotId);
+                  }
+                  loadCatalogs();
+                  toast("Saved to Assets.");
+                })();
+              },
+            },
+          };
+        }
+        if (n.type === "sheet-angle") {
+          return {
+            ...n,
+            type: "sheet-angle",
+            data: {
+              ...n.data,
+              onPrompt: (prompt) =>
+                upsertSheetAngle(n.data.builderId, n.data.slot, {
+                  slot: n.data.slot,
+                  prompt,
+                }),
+              onRegen: () =>
+                void regenSheetAngle(n.data.builderId, n.data.slot),
+              onClose: () => closeNode(n.id),
+            },
+          };
+        }
         return n;
       }),
     );
@@ -2358,6 +2597,7 @@ function StudioCanvas() {
     addPropNode,
     addShot,
     addShotBuilder,
+    addCreatorBuilder,
     addPromptBuilder,
     applyShotBuilder,
     activeShotId,
@@ -2370,6 +2610,8 @@ function StudioCanvas() {
     addSourceNode,
     applyPinStill,
     applyStillToPin,
+    applyCreatedAsset,
+    builderSessions,
     closePinEdit,
     charCatalog,
     characters,
@@ -2379,10 +2621,12 @@ function StudioCanvas() {
     hubTitle,
     framePins,
     lastItem,
+    loadCatalogs,
     maxRefs,
     onModalityChange,
     pickCatalog,
     pinEdit,
+    regenSheetAngle,
     plan.source,
     sourceAccept,
     propCatalog,
@@ -2401,6 +2645,7 @@ function StudioCanvas() {
     studioModality,
     toolSources,
     tryAttachSlot,
+    upsertSheetAngle,
   ]);
 
   useEffect(() => {
@@ -2706,6 +2951,8 @@ function StudioCanvas() {
             (src.startsWith("spb-") && tgt.startsWith("shot-")) ||
             (src === BUILDER_ID && tgt === "prompt") ||
             (src === DIRECTOR_ID && tgt === "prompt") ||
+            (src.startsWith("cbuild-") && tgt.startsWith("sang-")) ||
+            (src.startsWith("sang-") && tgt.startsWith("sang-")) ||
             (src === "prompt" && tgt.startsWith("result")) ||
             (src.startsWith("result") &&
               TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
@@ -2731,18 +2978,8 @@ function StudioCanvas() {
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
+        onNewAsset={(kind) => addCreatorBuilder(kind)}
       />
-      {creatingAsset ? (
-        <AssetCreator
-          kind={creatingAsset.kind}
-          onClose={() => setCreatingAsset(null)}
-          onSaved={(asset) => {
-            applyCreatedAsset(asset, creatingAsset.slotId);
-            setCreatingAsset(null);
-            loadCatalogs();
-          }}
-        />
-      ) : null}
       <MediaLightbox />
       {toastMsg ? (
         <div
