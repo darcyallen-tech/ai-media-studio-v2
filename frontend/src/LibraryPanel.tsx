@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { beginLibraryDrag, endLibraryDrag, peekLibraryDrag } from "./libraryDrag";
 import { filesFromDataTransfer, importOsFiles } from "./osImport";
+import { openLightbox } from "./lightbox";
 import { sendToResolve, toast } from "./toast";
+import { isAudioPath, isVideoPath } from "./media";
 import {
   writeLibraryPayload,
   type LibraryBucket,
@@ -244,7 +246,21 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
               role="button"
               tabIndex={0}
             >
-              <div className="library-thumb">
+              <div
+                className="library-thumb"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const src = item.url || item.thumb_url;
+                  if (!src) return;
+                  const kind = isVideoPath(src)
+                    ? "video"
+                    : isAudioPath(src)
+                      ? "audio"
+                      : "image";
+                  openLightbox({ src, kind, title: item.name });
+                }}
+              >
                 {item.thumb_url ? (
                   <img src={item.thumb_url} alt="" draggable={false} />
                 ) : (

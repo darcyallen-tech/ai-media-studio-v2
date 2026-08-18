@@ -2,6 +2,7 @@ import { useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
+import { openLightbox } from "./lightbox";
 import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
 import { filesFromDataTransfer, isOsFileDrag } from "./osImport";
 import { toast } from "./toast";
@@ -115,7 +116,20 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
       <div className="node-body nodrag nopan">
         {item ? (
           <>
-            <div className="source-preview">
+            <div
+              className="source-preview"
+              onDoubleClick={() => {
+                const src = item.url || item.thumb_url;
+                if (!src) return;
+                const kind =
+                  item.kind === "video" || isVideoPath(src)
+                    ? "video"
+                    : item.kind === "audio" || isAudioPath(src)
+                      ? "audio"
+                      : "image";
+                openLightbox({ src, kind, title: item.name });
+              }}
+            >
               {item.kind === "video" || isVideoPath(item.url) ? (
                 <video src={item.url} muted draggable={false} />
               ) : item.kind === "audio" || isAudioPath(item.url) ? (

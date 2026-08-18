@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
+import { openLightbox } from "./lightbox";
 import { sendToResolve } from "./toast";
 import type { ResultNodeData, ToolKind } from "./types";
 
@@ -63,11 +64,26 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         <div className="media">
           {paths.map((src) =>
             isVideoPath(src) ? (
-              <video key={src} src={src} controls playsInline />
+              <video
+                key={src}
+                src={src}
+                controls
+                playsInline
+                onDoubleClick={() =>
+                  openLightbox({ src, kind: "video" })
+                }
+              />
             ) : isAudioPath(src) ? (
               <audio key={src} src={src} controls />
             ) : (
-              <img key={src} src={src} alt="Generated result" />
+              <img
+                key={src}
+                src={src}
+                alt="Generated result"
+                onDoubleClick={() =>
+                  openLightbox({ src, kind: "image" })
+                }
+              />
             ),
           )}
           {paths.length === 0 ? (

@@ -15,6 +15,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import LibraryPanel from "./LibraryPanel";
+import MediaLightbox from "./MediaLightbox";
+import SettingsPanel from "./SettingsPanel";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
 import ResultNode from "./ResultNode";
@@ -148,6 +150,7 @@ const initialNodes: StudioNode[] = [
 
 function StudioCanvas() {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
   const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
   const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
@@ -1099,9 +1102,20 @@ function StudioCanvas() {
   return (
     <div className="app">
       <header className="topbar">
-        <div>
-          <h1>AI Media Studio V2</h1>
-          <p>Wheel zoom · Middle-drag pan</p>
+        <div className="topbar-left">
+          <button
+            type="button"
+            className="library-toggle settings-toggle"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => setSettingsOpen((v) => !v)}
+          >
+            ⚙
+          </button>
+          <div>
+            <h1>AI Media Studio V2</h1>
+            <p>Wheel zoom · Middle-drag pan</p>
+          </div>
         </div>
         <button
           type="button"
@@ -1111,6 +1125,10 @@ function StudioCanvas() {
           Library
         </button>
       </header>
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -1167,6 +1185,7 @@ function StudioCanvas() {
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
       />
+      <MediaLightbox />
       {toastMsg ? (
         <div
           className={toastMsg.error ? "toast error" : "toast"}

@@ -15,7 +15,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -55,19 +55,34 @@ from app.library import (  # noqa: E402
     list_library,
     list_source,
     record_generated,
+    resolve_handoff_dir,
     resolve_library_file,
     reveal_in_folder,
     thumb_path,
     write_upload,
 )
 from app.resolve_export import send_file_to_resolve  # noqa: E402
-from app.secrets_store import apply_secrets_to_env  # noqa: E402
+from app.billing import (  # noqa: E402
+    dashboard_urls,
+    fetch_fal_balance,
+    fetch_runware_balance,
+    fetch_xai_balance,
+)
+from app.secrets_store import (  # noqa: E402
+    apply_secrets_to_env,
+    effective_fal_key,
+    effective_runware_key,
+    effective_xai_key,
+    mask_key,
+    save_secrets,
+)
+from app.spend_ledger import export_csv, log_spend, spend_summary  # noqa: E402
 
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase8"
+APP_VERSION = "2.0.0-phase9"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -138,6 +153,19 @@ class ToolRunIn(BaseModel):
     strength: float | None = None
     prompt: str | None = None
     duration_s: float | None = None
+
+
+class SettingsKeysIn(BaseModel):
+    fal_key: str | None = None
+    xai_api_key: str | None = None
+    runware_key: str | None = None
+    clear_fal: bool = False
+    clear_xai: bool = False
+    clear_runware: bool = False
+
+
+class SettingsOpenIn(BaseModel):
+    which: str
 
 
 class EnhanceIn(BaseModel):
@@ -306,6 +334,21 @@ def _audio_estimate(
     return estimate_audio_label(model_id, modality, duration=duration, prompt=prompt)
 
 
+def _log_job_spend(
+    *,
+    ok: bool,
+    cost: str,
+    model_id: str | None = None,
+    job_kind: str | None = None,
+) -> None:
+    if not ok:
+        return
+    try:
+        log_spend(cost=cost, model_id=model_id, job_kind=job_kind)
+    except Exception:
+        pass
+
+
 def _payload(
     *,
     ok: bool,
@@ -468,6 +511,12 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
                 duration_sec=duration,
                 model=audio.model or audio.model_key,
             )
+            _log_job_spend(
+                ok=True,
+                cost=cost,
+                model_id=audio.model_key or body.model_id,
+                job_kind=audio.job_kind,
+            )
         return _payload(
             ok=audio.ok,
             result_paths=_public_paths(local_paths),
@@ -504,6 +553,12 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             cost=cost,
             duration_sec=duration,
             model=result.model or result.model_key,
+        )
+        _log_job_spend(
+            ok=True,
+            cost=cost,
+            model_id=result.model_key or result.model or body.model_id,
+            job_kind=result.job_kind,
         )
     return _payload(
         ok=result.ok,
@@ -580,6 +635,12 @@ def tools_run(body: ToolRunIn) -> dict[str, Any]:
             duration_sec=duration,
             model=result.model or result.model_key,
         )
+        _log_job_spend(
+            ok=True,
+            cost=cost,
+            model_id=result.model_key or result.model or body.model_id,
+            job_kind=result.job_kind,
+        )
     return _payload(
         ok=result.ok,
         result_paths=_public_paths(local_paths),
@@ -597,6 +658,126 @@ def tools_run(body: ToolRunIn) -> dict[str, Any]:
             "metrics_line": result.metrics_line,
         },
     )
+
+
+@app.get("/settings")
+def settings_get() -> dict[str, Any]:
+    inbox, inbox_note = resolve_handoff_dir()
+    outbox = os.environ.get("RESOLVE_OUTBOX") or os.environ.get("RESOLVE_EXPORT")
+    outbox_path = Path(outbox).expanduser() if outbox else OUTPUT_DIR
+    return {
+        "ok": True,
+        "keys": {
+            "fal": {
+                "set": bool(effective_fal_key()),
+                "mask": mask_key(effective_fal_key()),
+            },
+            "xai": {
+                "set": bool(effective_xai_key()),
+                "mask": mask_key(effective_xai_key()),
+            },
+            "runware": {
+                "set": bool(effective_runware_key()),
+                "mask": mask_key(effective_runware_key()),
+            },
+        },
+        "dashboards": dashboard_urls(),
+        "paths": {
+            "outputs": str(OUTPUT_DIR),
+            "resolve_inbox": str(inbox) if inbox else None,
+            "resolve_inbox_note": inbox_note,
+            "resolve_outbox": str(outbox_path),
+        },
+        "preferences": {
+            "theme": "day",
+            "retention": "later",
+        },
+    }
+
+
+@app.post("/settings/keys")
+def settings_keys(body: SettingsKeysIn) -> dict[str, Any]:
+    save_secrets(
+        fal_key=body.fal_key,
+        xai_api_key=body.xai_api_key,
+        runware_key=body.runware_key,
+        clear_fal=body.clear_fal,
+        clear_xai=body.clear_xai,
+        clear_runware=body.clear_runware,
+    )
+    apply_secrets_to_env()
+    return settings_get()
+
+
+@app.get("/settings/balances")
+def settings_balances() -> dict[str, Any]:
+    fal = fetch_fal_balance()
+    xai = fetch_xai_balance()
+    runware = fetch_runware_balance()
+    return {
+        "ok": True,
+        "fal": {
+            "ok": fal.ok,
+            "label": fal.label,
+            "amount": fal.amount,
+            "detail": fal.detail,
+            "billing_url": fal.billing_url,
+        },
+        "xai": {
+            "ok": xai.ok,
+            "label": xai.label,
+            "amount": xai.amount,
+            "detail": xai.detail,
+            "billing_url": xai.billing_url,
+        },
+        "runware": {
+            "ok": runware.ok,
+            "label": runware.label,
+            "amount": runware.amount,
+            "detail": runware.detail,
+            "billing_url": runware.billing_url,
+        },
+    }
+
+
+@app.get("/settings/spend")
+def settings_spend(
+    granularity: str = Query(default="month"),
+    year: int | None = Query(default=None),
+) -> dict[str, Any]:
+    _ = granularity
+    return spend_summary(year=year)
+
+
+@app.get("/settings/spend/export.csv")
+def settings_spend_csv(year: int = Query(...)) -> Response:
+    name, text = export_csv(year=year)
+    return Response(
+        content=text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@app.post("/settings/open")
+def settings_open(body: SettingsOpenIn) -> dict[str, Any]:
+    which = (body.which or "").strip().lower()
+    inbox, _ = resolve_handoff_dir()
+    outbox = os.environ.get("RESOLVE_OUTBOX") or os.environ.get("RESOLVE_EXPORT")
+    mapping = {
+        "outputs": OUTPUT_DIR,
+        "resolve_inbox": inbox,
+        "resolve_outbox": Path(outbox).expanduser() if outbox else OUTPUT_DIR,
+    }
+    path = mapping.get(which)
+    if path is None:
+        raise HTTPException(status_code=400, detail="Unknown path.")
+    try:
+        Path(path).mkdir(parents=True, exist_ok=True)
+        reveal_in_folder(str(path))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "path": str(path)}
 
 
 @app.get("/characters")
