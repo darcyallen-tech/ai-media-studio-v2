@@ -143,7 +143,7 @@ export function inputPlan(
     return { source: "video" };
   }
   if (modality === "r2v") {
-    return { source: "any" };
+    return { source: "image" };
   }
   return {};
 }

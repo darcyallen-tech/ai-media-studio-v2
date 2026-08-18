@@ -18,8 +18,13 @@ import LibraryPanel from "./LibraryPanel";
 import PromptNode from "./PromptNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
-import { peekLibraryDrag } from "./libraryDrag";
-import { bindToast } from "./toast";
+import {
+  consumeLibraryDrag,
+  peekLibraryDrag,
+  slotAccepts,
+  slotNeedLabel,
+} from "./libraryDrag";
+import { bindToast, toast } from "./toast";
 import {
   hasLibraryPayload,
   inputPlan,
@@ -209,31 +214,62 @@ function StudioCanvas() {
     setPlan(inputPlan(modality));
   }, []);
 
+  const tryAttachSlot = useCallback(
+    (slot: "source" | "first" | "last", item: LibraryItem) => {
+      const accept: SlotAccept =
+        slot === "source" ? (plan.source ?? "image") : "image";
+      if (!slotAccepts(accept, item)) {
+        toast(slotNeedLabel(accept), true);
+        return false;
+      }
+      if (slot === "first") {
+        setFirstItem(item);
+        addFirstNode();
+        return true;
+      }
+      if (slot === "last") {
+        setLastItem(item);
+        addLastNode();
+        return true;
+      }
+      setSourceItem(item);
+      addSourceNode();
+      return true;
+    },
+    [addFirstNode, addLastNode, addSourceNode, plan.source],
+  );
+
   const attachMedia = useCallback(
     (item: LibraryItem) => {
-      const kind = item.kind;
       if (plan.first || plan.last) {
-        if (kind === "video") return;
         if (!firstItem) {
-          setFirstItem(item);
-          addFirstNode();
+          tryAttachSlot("first", item);
           return;
         }
         if (!lastItem) {
-          setLastItem(item);
-          addLastNode();
+          tryAttachSlot("last", item);
           return;
         }
-        setLastItem(item);
+        tryAttachSlot("last", item);
         return;
       }
-      if (plan.source === "video" && kind !== "video") return;
-      if (plan.source === "image" && kind === "video") return;
-      setSourceItem(item);
-      addSourceNode();
+      if (plan.source) {
+        tryAttachSlot("source", item);
+      }
     },
-    [addFirstNode, addLastNode, addSourceNode, firstItem, lastItem, plan],
+    [firstItem, lastItem, plan, tryAttachSlot],
   );
+
+  useEffect(() => {
+    if (plan.source === "image" && sourceItem?.kind === "video") {
+      setSourceItem(null);
+    }
+    if (plan.source === "video" && sourceItem && sourceItem.kind !== "video") {
+      setSourceItem(null);
+    }
+    if (firstItem?.kind === "video") setFirstItem(null);
+    if (lastItem?.kind === "video") setLastItem(null);
+  }, [plan.source, sourceItem, firstItem, lastItem]);
 
   useEffect(() => {
     setNodes((current) =>
@@ -312,6 +348,36 @@ function StudioCanvas() {
     spawnResult,
   ]);
 
+  useEffect(() => {
+    function onWinOver(event: globalThis.DragEvent) {
+      if (!peekLibraryDrag()) return;
+      const el = document.elementFromPoint(event.clientX, event.clientY);
+      if (!el?.closest("[data-drop-slot]")) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    }
+    function onWinDrop(event: globalThis.DragEvent) {
+      const item =
+        peekLibraryDrag() ||
+        (event.dataTransfer ? parseLibraryPayload(event.dataTransfer) : null);
+      if (!item) return;
+      const el = document.elementFromPoint(event.clientX, event.clientY);
+      const slotEl = el?.closest("[data-drop-slot]") as HTMLElement | null;
+      const slot = slotEl?.dataset.dropSlot;
+      if (slot !== "source" && slot !== "first" && slot !== "last") return;
+      event.preventDefault();
+      event.stopPropagation();
+      consumeLibraryDrag();
+      tryAttachSlot(slot, item);
+    }
+    window.addEventListener("dragover", onWinOver, true);
+    window.addEventListener("drop", onWinDrop, true);
+    return () => {
+      window.removeEventListener("dragover", onWinOver, true);
+      window.removeEventListener("drop", onWinDrop, true);
+    };
+  }, [tryAttachSlot]);
+
   const onFlowDragOver = useCallback((event: DragEvent) => {
     if (peekLibraryDrag() || hasLibraryPayload(event.dataTransfer)) {
       event.preventDefault();
@@ -337,11 +403,12 @@ function StudioCanvas() {
         );
       });
       if (!hit) return;
-      if (hit.id === SOURCE_ID) setSourceItem(item);
-      if (hit.id === FIRST_ID) setFirstItem(item);
-      if (hit.id === LAST_ID) setLastItem(item);
+      consumeLibraryDrag();
+      if (hit.id === SOURCE_ID || hit.id === FIRST_ID || hit.id === LAST_ID) {
+        tryAttachSlot(hit.id, item);
+      }
     },
-    [getNodes, screenToFlowPosition],
+    [getNodes, screenToFlowPosition, tryAttachSlot],
   );
 
   const onConnect = useCallback(

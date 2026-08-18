@@ -1,7 +1,8 @@
 import { useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
-import { peekLibraryDrag } from "./libraryDrag";
+import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
+import { toast } from "./toast";
 import {
   hasLibraryPayload,
   parseLibraryPayload,
@@ -12,54 +13,60 @@ import {
 
 export type SourceFlowNode = Node<SourceNodeData, "source" | "first" | "last">;
 
-function accepts(accept: SlotAccept, item: LibraryItem): boolean {
-  if (accept === "any") return true;
-  if (accept === "image") return item.kind !== "video" && item.kind !== "audio";
-  if (accept === "video") return item.kind === "video";
-  return true;
-}
-
 function itemFromEvent(event: DragEvent): LibraryItem | null {
   return peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
 }
 
-export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
+export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
   const item = data.item;
   const title = data.title || "Source";
-  const accept = data.accept || "any";
-  const [hot, setHot] = useState(false);
+  const accept: SlotAccept = data.accept || "any";
+  const [hover, setHover] = useState<"ok" | "bad" | null>(null);
+
+  function incomingItem(event: DragEvent): LibraryItem | null {
+    return peekLibraryDrag() || (hasLibraryPayload(event.dataTransfer) ? peekLibraryDrag() : null);
+  }
 
   function allowDrop(event: DragEvent) {
-    const incoming = peekLibraryDrag();
-    if (!incoming && !hasLibraryPayload(event.dataTransfer)) return false;
+    const incoming = peekLibraryDrag() || (hasLibraryPayload(event.dataTransfer) ? true : null);
+    if (!incoming) return false;
     event.preventDefault();
     event.stopPropagation();
-    event.dataTransfer.dropEffect = "copy";
+    const itemNow = peekLibraryDrag();
+    const ok = itemNow ? slotAccepts(accept, itemNow) : true;
+    event.dataTransfer.dropEffect = ok ? "copy" : "none";
     return true;
   }
 
   function onDragEnter(event: DragEvent) {
-    if (allowDrop(event)) setHot(true);
+    if (!allowDrop(event)) return;
+    const next = incomingItem(event);
+    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
   }
 
   function onDragOver(event: DragEvent) {
-    allowDrop(event);
+    if (!allowDrop(event)) return;
+    const next = peekLibraryDrag();
+    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
   }
 
   function onDragLeave(event: DragEvent) {
     const next = event.relatedTarget as globalThis.Node | null;
     if (next && event.currentTarget.contains(next)) return;
-    setHot(false);
+    setHover(null);
   }
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
     event.stopPropagation();
-    setHot(false);
+    setHover(null);
     const dragged = itemFromEvent(event);
-    if (dragged && accepts(accept, dragged)) {
-      data.onAttach(dragged);
+    if (!dragged) return;
+    if (!slotAccepts(accept, dragged)) {
+      toast(slotNeedLabel(accept), true);
+      return;
     }
+    data.onAttach(dragged);
   }
 
   const hint =
@@ -69,9 +76,18 @@ export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
         ? "Drop a still or open Library"
         : "Drop media or open Library";
 
+  const cls =
+    hover === "ok"
+      ? "studio-node source-node drop-hot"
+      : hover === "bad"
+        ? "studio-node source-node drop-bad"
+        : "studio-node source-node";
+
   return (
     <div
-      className={hot ? "studio-node source-node drop-hot" : "studio-node source-node"}
+      className={cls}
+      data-drop-slot={id}
+      data-drop-accept={accept}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}

@@ -85,7 +85,7 @@ npm run dev
 
 Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/library`, `/resolve`, `/outputs` to the backend.
 
-Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / **resolution** / audio only when the catalog model lists choices. **Enhance** rewrites the prompt via xAI (does not generate). Drag Library items onto Source / First / Last.
+Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / **resolution** / audio only when the catalog model lists choices. **Enhance** rewrites the prompt via xAI (does not generate). Drag Library items onto Source / First / Last (green = ok, red = wrong type).
 
 | Modality | Inputs |
 |----------|--------|
