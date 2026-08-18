@@ -4,14 +4,14 @@ Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
 
 **V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
 
-Phase 1: Prompt → Generate → Result in the browser (image T2I smoke). No node canvas yet.
+Phase 2: day-mode node canvas. One Prompt node → Generate → Result node. No night mode yet.
 
 ## Layout
 
 ```
 ai-media-studio-v2/
   backend/app/     FastAPI + create_state / catalog / generate (V1 logic, imports adapted)
-  frontend/        Vite + React (mode, modality, model, prompt, result)
+  frontend/        Vite + React day canvas (Prompt node, Result node)
   outputs/         generated media (served at /outputs/...)
 ```
 
@@ -75,9 +75,11 @@ npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/outputs` to the backend.
+Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/outputs` to the backend.
 
-Smoke: Image → T2I → Flux 2 Pro (catalog default) → short prompt → Generate. Image, cost, and time should appear.
+Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom (clamped). Prompt node (Image/Video/Audio, modality chips, model, prompt, Generate). On success a Result node appears, connected from Prompt.
+
+Smoke: open UI → dotted light canvas + Prompt node → Image/T2I/Flux 2 Pro → Generate → Result node with image, cost, and time.
 
 ## V1
 
