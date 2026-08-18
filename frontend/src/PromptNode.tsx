@@ -9,6 +9,8 @@ import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
 import {
   composeStoryboardPrompt,
+  distributeShotSeconds,
+  storyboardDurationChoices,
   storyboardDurationToken,
   storyboardRefItems,
 } from "./storyboard";
@@ -352,10 +354,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       modality: isStoryboard ? "r2v" : modality,
       model_id: modelId,
     });
-    if (isStoryboard) {
-      const tok = storyboardDurationToken(data.shots ?? [], selectedModel);
-      if (tok) qs.set("duration", tok);
-    } else if (duration) qs.set("duration", duration);
+    const durTok = isStoryboard
+      ? duration || storyboardDurationToken(data.shots ?? [], selectedModel)
+      : duration;
+    if (durTok) qs.set("duration", durTok);
     if (aspect) qs.set("aspect", aspect);
     if (resolution) qs.set("resolution", resolution);
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
@@ -406,12 +408,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             scenes,
             isFrame ? pins : undefined,
           );
+      const sbDuration =
+        duration || storyboardDurationToken(storyShots, selectedModel);
       const composed = isStoryboard
         ? composeStoryboardPrompt(
             data.hubTitle || "",
             prompt.trim(),
             storyAssets,
             storyShots,
+            distributeShotSeconds(storyShots, sbDuration),
           )
         : composePrompt(prompt.trim(), characters, scenes);
       if (isFrame && slots.source_video) {
@@ -451,11 +456,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           surface: "studio",
           params: {
             duration: isStoryboard
-              ? storyboardDurationToken(storyShots, selectedModel)
+              ? sbDuration
               : isFrame && clipDuration > 0
                 ? String(clipDuration)
                 : duration || null,
-            aspect: aspect || null,
+            aspect: isStoryboard
+              ? aspect && aspect.toLowerCase() !== "auto"
+                ? aspect
+                : null
+              : aspect || null,
             resolution: resolution || null,
             audio_on: audioOn,
             extra: isAudio
@@ -601,6 +610,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             notes={prompt}
             onNotes={setPrompt}
             onModel={setModelId}
+            duration={duration}
+            aspect={aspect}
+            resolution={resolution}
+            onDuration={setDuration}
+            onAspect={setAspect}
+            onResolution={setResolution}
             onGenerate={() => void onGenerate()}
             onEnhance={() => void onEnhance()}
           />
@@ -963,6 +978,12 @@ function StoryboardPrompt({
   notes,
   onNotes,
   onModel,
+  duration,
+  aspect,
+  resolution,
+  onDuration,
+  onAspect,
+  onResolution,
   onGenerate,
   onEnhance,
 }: {
@@ -979,6 +1000,12 @@ function StoryboardPrompt({
   notes: string;
   onNotes: (v: string) => void;
   onModel: (id: string) => void;
+  duration: string;
+  aspect: string;
+  resolution: string;
+  onDuration: (v: string) => void;
+  onAspect: (v: string) => void;
+  onResolution: (v: string) => void;
   onGenerate: () => void;
   onEnhance: () => void;
 }) {
@@ -994,8 +1021,14 @@ function StoryboardPrompt({
   }
   const canGo =
     Boolean(modelId) && !loading && !enhancing && missing.length === 0;
-  const durs = durationOptions(selectedModel);
+  const durs = storyboardDurationChoices(selectedModel);
   const aspects = selectedModel?.aspect_choices ?? [];
+  const resolutions = resolutionOptions(selectedModel);
+  const holds = distributeShotSeconds(shots, duration);
+  const overrideHint = shots
+    .filter((s) => s.duration.trim())
+    .map((s) => `${s.label || `Shot ${s.order}`} ${s.duration.trim()}`)
+    .join(" · ");
 
   return (
     <>
@@ -1055,23 +1088,71 @@ function StoryboardPrompt({
       </select>
       {modelsError ? <p className="hint warn">{modelsError}</p> : null}
       {selectedModel?.notes ? <p className="hint">{selectedModel.notes}</p> : null}
-      {durs.length || aspects.length ? (
+      {durs.length || aspects.length || resolutions.length ? (
         <div className="params">
           {durs.length ? (
             <label className="param">
               <span>Duration</span>
-              <span className="hint">
-                {formatDurationToken(
-                  storyboardDurationToken(shots, selectedModel),
-                )}{" "}
-                (from shots)
-              </span>
+              <select
+                className="model nodrag"
+                value={duration}
+                onChange={(e) => onDuration(e.target.value)}
+              >
+                {durs.map((tok) => (
+                  <option key={tok} value={tok}>
+                    {formatDurationToken(tok)}
+                  </option>
+                ))}
+              </select>
             </label>
           ) : null}
           {aspects.length ? (
-            <span className="hint">Aspect: {selectedModel?.default_aspect || aspects[0]}</span>
+            <label className="param">
+              <span>Aspect</span>
+              <select
+                className="model nodrag"
+                value={aspect || "auto"}
+                onChange={(e) =>
+                  onAspect(e.target.value === "auto" ? "" : e.target.value)
+                }
+              >
+                <option value="auto">Auto</option>
+                {aspects.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {resolutions.length ? (
+            <label className="param">
+              <span>Resolution</span>
+              <select
+                className="model nodrag"
+                value={resolution}
+                onChange={(e) => onResolution(e.target.value)}
+              >
+                {resolutions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
         </div>
+      ) : null}
+      {overrideHint ? (
+        <p className="hint">Shot overrides: {overrideHint}. Empty shots split the rest.</p>
+      ) : duration && shots.length > 1 ? (
+        <p className="hint">
+          {formatDurationToken(duration)} split across {shots.length} shots
+          {holds.size
+            ? ` (~${[...holds.values()][0]?.toFixed?.(1) ?? ""}s each)`
+            : ""}
+          .
+        </p>
       ) : null}
       <label className="field-label" htmlFor="sb-notes">
         Global notes
