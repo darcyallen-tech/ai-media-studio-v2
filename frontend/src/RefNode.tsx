@@ -1,5 +1,6 @@
 import { useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import NodeClose from "./NodeClose";
 import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
 import { toast } from "./toast";
 import {
@@ -91,7 +92,10 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="node-header">{title}</div>
+      <div className="node-header">
+        <span>{title}</span>
+        <NodeClose onClose={data.onClose} />
+      </div>
       <div className="node-body nodrag nopan">
         <select
           className="model nodrag"

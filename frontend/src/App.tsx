@@ -135,6 +135,26 @@ function StudioCanvas() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { screenToFlowPosition, getNodes } = useReactFlow();
 
+  const closeNode = useCallback(
+    (id: string) => {
+      if (id === "prompt") return;
+      if (id === SOURCE_ID) setSourceItem(null);
+      if (id === FIRST_ID) setFirstItem(null);
+      if (id === LAST_ID) setLastItem(null);
+      if (id.startsWith("char-")) {
+        setCharacters((cur) => cur.filter((r) => r.id !== id));
+      }
+      if (id.startsWith("scene-")) {
+        setScenes((cur) => cur.filter((r) => r.id !== id));
+      }
+      setNodes((current) => current.filter((n) => n.id !== id));
+      setEdges((current) =>
+        current.filter((e) => e.source !== id && e.target !== id),
+      );
+    },
+    [setEdges, setNodes],
+  );
+
   const spawnResult = useCallback(
     (result: GenerateResponse) => {
       setNodes((current) => {
@@ -149,7 +169,7 @@ function StudioCanvas() {
           type: "result",
           position,
           dragHandle: ".node-header",
-          data: { result },
+          data: { result, onClose: () => closeNode(RESULT_ID) },
         };
         if (existing) {
           return current.map((n) => (n.id === RESULT_ID ? next : n));
@@ -169,7 +189,7 @@ function StudioCanvas() {
         );
       });
     },
-    [setEdges, setNodes],
+    [closeNode, setEdges, setNodes],
   );
 
   const ensureSlot = useCallback(
@@ -197,6 +217,7 @@ function StudioCanvas() {
             onClear: () => undefined,
             onOpenLibrary: () => setLibraryOpen(true),
             onAttach: () => undefined,
+            onClose: () => closeNode(id),
           },
         };
         return [...current, node];
@@ -215,7 +236,7 @@ function StudioCanvas() {
         );
       });
     },
-    [setEdges, setNodes],
+    [closeNode, setEdges, setNodes],
   );
 
   const addSourceNode = useCallback(() => {
@@ -289,6 +310,7 @@ function StudioCanvas() {
             onAttach: () => undefined,
             onPickCatalog: () => undefined,
             onNote: () => undefined,
+            onClose: () => closeNode(id),
           },
         };
         return [...current, node];
@@ -310,6 +332,7 @@ function StudioCanvas() {
     [
       charCatalog,
       characters,
+      closeNode,
       maxRefs,
       sceneCatalog,
       scenes,
@@ -538,6 +561,7 @@ function StudioCanvas() {
               onClear: () => setSourceItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setSourceItem(item),
+              onClose: () => closeNode(SOURCE_ID),
             },
           };
         }
@@ -552,6 +576,7 @@ function StudioCanvas() {
               onClear: () => setFirstItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setFirstItem(item),
+              onClose: () => closeNode(FIRST_ID),
             },
           };
         }
@@ -566,6 +591,19 @@ function StudioCanvas() {
               onClear: () => setLastItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setLastItem(item),
+              onClose: () => closeNode(LAST_ID),
+            },
+          };
+        }
+        if (n.id === RESULT_ID) {
+          const result = "result" in n.data ? n.data.result : undefined;
+          if (!result) return n;
+          return {
+            ...n,
+            type: "result",
+            data: {
+              result,
+              onClose: () => closeNode(RESULT_ID),
             },
           };
         }
@@ -597,6 +635,7 @@ function StudioCanvas() {
                 setCharacters((cur) =>
                   cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
                 ),
+              onClose: () => closeNode(n.id),
             },
           };
         }
@@ -628,6 +667,7 @@ function StudioCanvas() {
                 setScenes((cur) =>
                   cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
                 ),
+              onClose: () => closeNode(n.id),
             },
           };
         }
@@ -637,6 +677,7 @@ function StudioCanvas() {
   }, [
     addCharacterNode,
     addFirstNode,
+    closeNode,
     addLastNode,
     addSceneNode,
     addSourceNode,

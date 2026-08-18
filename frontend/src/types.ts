@@ -24,6 +24,10 @@ export type ModelRow = {
   resolution_choices?: string[];
   default_resolution?: string;
   supports_audio?: boolean;
+  supports_duration?: boolean;
+  supports_voice?: boolean;
+  default_voice?: string;
+  voices?: string[];
   requires_end_frame?: boolean;
   supports_end_frame?: boolean;
   required_slots?: string[];
@@ -126,6 +130,7 @@ export type PromptNodeData = {
 
 export type ResultNodeData = {
   result: GenerateResponse;
+  onClose?: () => void;
 };
 
 export type SourceNodeData = {
@@ -135,6 +140,7 @@ export type SourceNodeData = {
   onClear: () => void;
   onOpenLibrary: () => void;
   onAttach: (item: LibraryItem) => void;
+  onClose?: () => void;
 };
 
 export type RefNodeData = {
@@ -149,6 +155,7 @@ export type RefNodeData = {
   onAttach: (item: LibraryItem) => void;
   onPickCatalog: (id: string) => void;
   onNote: (note: string) => void;
+  onClose?: () => void;
 };
 
 export const LIBRARY_DRAG_MIME = "application/x-ams-library";

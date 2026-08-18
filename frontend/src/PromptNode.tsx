@@ -39,10 +39,7 @@ const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
   audio: [
     { id: "music", label: "Music" },
     { id: "sfx", label: "SFX" },
-    { id: "ambience", label: "Ambience" },
-    { id: "video_sfx", label: "Video SFX" },
-    { id: "voiceover", label: "Voiceover" },
-    { id: "voice_clone", label: "Clone" },
+    { id: "voice", label: "Voice" },
   ],
 };
 
@@ -59,6 +56,8 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [aspect, setAspect] = useState("");
   const [resolution, setResolution] = useState("");
   const [audioOn, setAudioOn] = useState<boolean | null>(null);
+  const [voice, setVoice] = useState("");
+  const [instrumental, setInstrumental] = useState(true);
   const [estimate, setEstimate] = useState("Est. cost: —");
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
@@ -74,7 +73,9 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const aspects = selectedModel?.aspect_choices ?? [];
   const resolutions = resolutionOptions(selectedModel);
   const showAudio = Boolean(selectedModel?.supports_audio);
+  const voices = selectedModel?.voices ?? [];
   const promptRequired = modality !== "i2v";
+  const isAudio = mode === "audio";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
   const characters = data.characters ?? [];
   const scenes = data.scenes ?? [];
@@ -167,6 +168,8 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
       resDef && resOpts.includes(resDef) ? resDef : resOpts[0] || "",
     );
     setAudioOn(selectedModel.supports_audio ? true : null);
+    setVoice(selectedModel.default_voice || selectedModel.voices?.[0] || "");
+    setInstrumental(true);
   }, [selectedModel]);
 
   useEffect(() => {
@@ -180,6 +183,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     if (aspect) qs.set("aspect", aspect);
     if (resolution) qs.set("resolution", resolution);
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
+    if (mode === "audio" && prompt.trim()) qs.set("prompt", prompt.trim());
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Estimate ${res.status}`);
@@ -193,7 +197,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [mode, modality, modelId, duration, aspect, resolution, audioOn]);
+  }, [mode, modality, modelId, duration, aspect, resolution, audioOn, prompt]);
 
   async function onGenerate() {
     if (!canGenerate) return;
@@ -222,6 +226,9 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
             aspect: aspect || null,
             resolution: resolution || null,
             audio_on: audioOn,
+            extra: isAudio
+              ? { voice: voice || null, instrumental }
+              : {},
           },
           slots,
         }),
@@ -352,7 +359,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">{selectedModel.notes}</p>
         ) : null}
 
-        {durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio ? (
+        {durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || isAudio && modality === "music" ? (
           <div className="params">
             {durs.length > 0 ? (
               <label className="param">
@@ -412,6 +419,32 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
                 Audio
               </label>
             ) : null}
+            {voices.length > 0 ? (
+              <label className="param">
+                <span>Voice</span>
+                <select
+                  className="model nodrag"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value)}
+                >
+                  {voices.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {isAudio && modality === "music" ? (
+              <label className="param check">
+                <input
+                  type="checkbox"
+                  checked={instrumental}
+                  onChange={(e) => setInstrumental(e.target.checked)}
+                />
+                Instrumental
+              </label>
+            ) : null}
           </div>
         ) : null}
 
@@ -422,7 +455,15 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           id="prompt"
           className="prompt nodrag nowheel"
           rows={5}
-          placeholder="Describe the still, clip, or track…"
+          placeholder={
+            isAudio && modality === "voice"
+              ? "Script to speak…"
+              : isAudio && modality === "sfx"
+                ? "Describe the sound…"
+                : isAudio
+                  ? "Style, mood, instruments…"
+                  : "Describe the still, clip, or track…"
+          }
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
@@ -522,8 +563,10 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           </div>
         ) : null}
 
-        {mode === "audio" ? (
-          <p className="hint">Audio generate is Phase 7 — models list only.</p>
+        {modality === "bridge" && data.source ? (
+          <p className="hint">
+            Bridge uses First/Last — you can close Source
+          </p>
         ) : null}
 
         {error ? (

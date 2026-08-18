@@ -1,5 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
+import NodeClose from "./NodeClose";
 import { sendToResolve } from "./toast";
 import type { ResultNodeData } from "./types";
 
@@ -32,7 +33,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   return (
     <div className="studio-node result-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
-      <div className="node-header">Result</div>
+      <div className="node-header">
+        <span>Result</span>
+        <NodeClose onClose={data.onClose} />
+      </div>
       <div className="node-body nodrag">
         <p className="meta">
           <span>{result.cost || "Cost: —"}</span>
@@ -65,7 +69,11 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             disabled={!copyPath}
             onClick={() =>
               void sendToResolve(copyPath, {
-                type: isVideoPath(copyPath) ? "video" : "image",
+                type: isAudioPath(copyPath)
+                  ? "audio"
+                  : isVideoPath(copyPath)
+                    ? "video"
+                    : "image",
                 cost: result.cost,
               })
             }

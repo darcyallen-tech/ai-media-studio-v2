@@ -297,7 +297,11 @@
 }
 
 .node-header {
-  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
   background: #c5d0dc;
   border-bottom: 1px solid #b4c2d2;
   font-size: 0.82rem;
@@ -306,6 +310,25 @@
   text-transform: uppercase;
   color: #3a4a5c;
   cursor: grab;
+}
+
+.node-close {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: #3a4a5c;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.node-close:hover {
+  background: #b4c2d2;
 }
 
 .node-header:active {

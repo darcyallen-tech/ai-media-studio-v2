@@ -23,14 +23,12 @@ from pydantic import BaseModel, Field
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(_REPO_ROOT / ".env")
 
-from app.audio_registry import (  # noqa: E402
-    AMBIENCE_MODELS,
-    MUSIC_MODELS,
-    SFX_MODELS,
-    VIDEO_SFX_MODELS,
-    VOICE_CLONE_MODELS,
-    VOICEOVER_MODELS,
-    format_audio_cost,
+from app.audio_registry import default_voices_for_model  # noqa: E402
+from app.audio_service import (  # noqa: E402
+    duration_tokens,
+    estimate_audio_label,
+    generate_audio,
+    ui_audio_registries,
 )
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.character_scene import (  # noqa: E402
@@ -64,7 +62,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase6"
+APP_VERSION = "2.0.0-phase7"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -79,18 +77,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-_AUDIO_REGISTRIES = {
-    "music": MUSIC_MODELS,
-    "sfx": SFX_MODELS,
-    "ambience": AMBIENCE_MODELS,
-    "video_sfx": VIDEO_SFX_MODELS,
-    "voiceover": VOICEOVER_MODELS,
-    "voice_clone": VOICE_CLONE_MODELS,
-}
-
-_AUDIO_NOOP = "Audio generate is not wired yet (Phase 7)."
-
 
 class RefRoleIn(BaseModel):
     path: str
@@ -264,15 +250,11 @@ def _error_message(result: CreateResult) -> str | None:
 
 
 def _audio_models(modality: str | None) -> list[dict[str, Any]]:
-    want = (modality or "").strip().lower() or None
     rows: list[dict[str, Any]] = []
-    registries = (
-        {want: _AUDIO_REGISTRIES[want]}
-        if want and want in _AUDIO_REGISTRIES
-        else _AUDIO_REGISTRIES
-    )
-    for category, registry in registries.items():
+    for category, registry in ui_audio_registries(modality).items():
         for spec in registry.values():
+            toks, default_dur = duration_tokens(spec)
+            voices = default_voices_for_model(spec) if spec.supports_voice else []
             rows.append(
                 {
                     "id": f"audio:{spec.key}",
@@ -282,22 +264,30 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     "endpoint": spec.endpoint,
                     "notes": spec.notes,
                     "cost_estimate_usd": spec.cost_estimate_usd,
-                    "cost": format_audio_cost(spec),
+                    "cost": estimate_audio_label(spec.key, spec.category),
                     "backend": "audio",
                     "source_key": spec.key,
+                    "supports_duration": spec.supports_duration,
+                    "duration_min": spec.duration_min_s if spec.supports_duration else None,
+                    "duration_max": spec.duration_max_s if spec.supports_duration else None,
+                    "duration_enum": toks,
+                    "default_duration": default_dur,
+                    "supports_voice": spec.supports_voice,
+                    "default_voice": spec.default_voice or None,
+                    "voices": voices,
                 }
             )
     return rows
 
 
-def _audio_estimate(model_id: str, modality: str | None) -> str:
-    raw = (model_id or "").strip()
-    if raw.startswith("audio:"):
-        raw = raw[6:]
-    for spec in _audio_models(modality):
-        if spec["id"] == f"audio:{raw}" or spec["source_key"] == raw or spec["label"] == raw:
-            return str(spec.get("cost") or f"Est. cost: ${spec['cost_estimate_usd']}")
-    return "Est. cost: —"
+def _audio_estimate(
+    model_id: str,
+    modality: str | None,
+    *,
+    duration: str | None = None,
+    prompt: str | None = None,
+) -> str:
+    return estimate_audio_label(model_id, modality, duration=duration, prompt=prompt)
 
 
 def _payload(
@@ -381,12 +371,14 @@ def estimate_get(
     aspect: str | None = Query(default=None),
     resolution: str | None = Query(default=None),
     generate_audio: bool | None = Query(default=None),
+    prompt: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Cost-only estimate from catalog helpers (query form)."""
     body = CreateStateIn(
         mode=mode,
         modality=modality,
         model_id=model_id,
+        prompt=prompt or "",
         params=ParamsIn(
             duration=duration,
             aspect=aspect,
@@ -417,7 +409,12 @@ def estimate_post(body: CreateStateIn) -> dict[str, Any]:
 
 def _estimate_payload(body: CreateStateIn) -> dict[str, Any]:
     if (body.mode or "").strip().lower() == "audio":
-        cost = _audio_estimate(body.model_id, body.modality)
+        cost = _audio_estimate(
+            body.model_id,
+            body.modality,
+            duration=body.params.duration,
+            prompt=body.prompt,
+        )
         return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
     state = _state_from_body(body)
     cost = estimate_create_cost(state)
@@ -430,12 +427,48 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
     Run V1 ``generate(CreateState)`` and return result_paths + cost + duration.
     """
     if (body.mode or "").strip().lower() == "audio":
+        t0 = time.perf_counter()
+        audio = generate_audio(
+            modality=body.modality,
+            model_id=body.model_id,
+            prompt=body.prompt,
+            duration=body.params.duration,
+            extra=dict(body.params.extra or {}),
+            output_dir=body.output_dir or OUTPUT_DIR,
+        )
+        elapsed = time.perf_counter() - t0
+        duration = audio.render_seconds if audio.render_seconds is not None else elapsed
+        cost = audio.cost_label or audio.metrics_line or _audio_estimate(
+            body.model_id,
+            body.modality,
+            duration=body.params.duration,
+            prompt=body.prompt,
+        )
+        local_paths = [audio.path] if audio.path else []
+        if audio.ok and local_paths:
+            record_generated(
+                local_paths,
+                cost=cost,
+                duration_sec=duration,
+                model=audio.model or audio.model_key,
+            )
         return _payload(
-            ok=False,
-            result_paths=[],
-            cost=_audio_estimate(body.model_id, body.modality),
-            duration_sec=0,
-            error=_AUDIO_NOOP,
+            ok=audio.ok,
+            result_paths=_public_paths(local_paths),
+            cost=cost,
+            duration_sec=duration,
+            error=None if audio.ok else (audio.status or "Audio generate failed."),
+            extra={
+                "status": audio.status,
+                "errors": [] if audio.ok else [audio.status],
+                "local_paths": local_paths,
+                "job_kind": audio.job_kind,
+                "model": audio.model,
+                "model_key": audio.model_key,
+                "endpoint": audio.endpoint,
+                "notes": list(audio.notes),
+                "metrics_line": audio.metrics_line,
+            },
         )
     state = _state_from_body(body)
     t0 = time.perf_counter()
