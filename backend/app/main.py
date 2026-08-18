@@ -102,7 +102,7 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase11"
+APP_VERSION = "2.0.0-phase12"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
