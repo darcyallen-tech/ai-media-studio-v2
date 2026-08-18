@@ -140,8 +140,8 @@ function itemFromResult(result: GenerateResponse): LibraryItem | null {
 }
 
 const WORLD: [[number, number], [number, number]] = [
-  [-200, -200],
-  [3600, 2400],
+  [-600, -600],
+  [10800, 7200],
 ];
 
 const PROMPT_POS = { x: 420, y: 90 };
@@ -309,7 +309,17 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const { screenToFlowPosition, getNodes } = useReactFlow();
+  const { screenToFlowPosition, getNodes, fitView } = useReactFlow();
+
+  const frameAll = useCallback(() => {
+    if (!getNodes().length) return;
+    void fitView({
+      padding: 0.2,
+      duration: 220,
+      minZoom: 0.2,
+      maxZoom: 1,
+    });
+  }, [fitView, getNodes]);
 
   const closePinEdit = useCallback(() => {
     setPinEdit(null);
@@ -2234,13 +2244,23 @@ function StudioCanvas() {
             <p>Wheel zoom · Middle-drag pan</p>
           </div>
         </div>
-        <button
-          type="button"
-          className="library-toggle"
-          onClick={() => setLibraryOpen((v) => !v)}
-        >
-          Library
-        </button>
+        <div className="topbar-right">
+          <button
+            type="button"
+            className="library-toggle"
+            title="Fit all nodes in view"
+            onClick={frameAll}
+          >
+            Frame all
+          </button>
+          <button
+            type="button"
+            className="library-toggle"
+            onClick={() => setLibraryOpen((v) => !v)}
+          >
+            Library
+          </button>
+        </div>
       </header>
       <SettingsPanel
         open={settingsOpen}
@@ -2265,7 +2285,7 @@ function StudioCanvas() {
         zoomOnScroll
         zoomOnPinch
         zoomOnDoubleClick={false}
-        minZoom={0.4}
+        minZoom={0.2}
         maxZoom={1.6}
         translateExtent={WORLD}
         nodesConnectable
