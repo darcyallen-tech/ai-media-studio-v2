@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { sendToResolve } from "./toast";
 import {
   writeLibraryPayload,
@@ -90,7 +91,12 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
 
   function onDragStart(event: DragEvent, item: LibraryItem) {
     event.stopPropagation();
+    beginLibraryDrag(item);
     writeLibraryPayload(event.dataTransfer, item);
+  }
+
+  function onDragEnd() {
+    endLibraryDrag();
   }
 
   function onPanelDragOver(event: DragEvent) {
@@ -192,6 +198,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
               draggable
               title={item.path}
               onDragStart={(e) => onDragStart(e, item)}
+              onDragEnd={onDragEnd}
               onClick={() => onPick(item)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") onPick(item);

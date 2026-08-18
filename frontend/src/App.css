@@ -64,7 +64,11 @@
   border-radius: 14px;
   box-shadow: 0 10px 28px rgba(60, 80, 110, 0.14);
   color: #1c2530;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.prompt-node {
+  overflow: visible;
 }
 
 .result-node {
@@ -73,6 +77,11 @@
 
 .source-node {
   width: 240px;
+}
+
+.source-node.drop-hot {
+  border-color: #6fdc12;
+  box-shadow: 0 0 0 2px #8fe83a, 0 10px 28px rgba(60, 80, 110, 0.14);
 }
 
 .source-preview img,
@@ -376,6 +385,11 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.enhance:not(:disabled) {
+  border-color: #7aaa2a;
+  background: #c8ec6a;
 }
 
 .generate {

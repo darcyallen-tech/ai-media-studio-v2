@@ -18,6 +18,7 @@ import LibraryPanel from "./LibraryPanel";
 import PromptNode from "./PromptNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
+import { peekLibraryDrag } from "./libraryDrag";
 import { bindToast } from "./toast";
 import {
   hasLibraryPayload,
@@ -312,7 +313,7 @@ function StudioCanvas() {
   ]);
 
   const onFlowDragOver = useCallback((event: DragEvent) => {
-    if (hasLibraryPayload(event.dataTransfer)) {
+    if (peekLibraryDrag() || hasLibraryPayload(event.dataTransfer)) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
     }
@@ -320,7 +321,7 @@ function StudioCanvas() {
 
   const onFlowDrop = useCallback(
     (event: DragEvent) => {
-      const item = parseLibraryPayload(event.dataTransfer);
+      const item = peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
       if (!item) return;
       event.preventDefault();
       const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
