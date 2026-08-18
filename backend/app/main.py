@@ -48,6 +48,7 @@ from app.aleph_service import (  # noqa: E402
     frame_models_for_ui,
     keyframes_from_payload,
     run_aleph_keyframe_edit,
+    save_pin_from_data_url,
 )
 from app.video_prep import prepare_aleph_source  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
@@ -138,6 +139,12 @@ class SlotsIn(BaseModel):
 class ExtractFrameIn(BaseModel):
     video_path: str
     seconds: float = 0.0
+
+
+class FramePinIn(BaseModel):
+    image: str
+    timestamp_s: float = 0.0
+    source_path: str | None = None
 
 
 class PrepareAlephIn(BaseModel):
@@ -698,18 +705,60 @@ def prepare_aleph_endpoint(body: PrepareAlephIn) -> dict[str, Any]:
     }
 
 
+def _pin_payload(row: dict[str, Any], seconds: float) -> dict[str, Any]:
+    t = float(row.get("timestamp_s") if row.get("timestamp_s") is not None else seconds)
+    return {
+        "ok": True,
+        "pin": {
+            "t": t,
+            "path": row.get("path"),
+            "thumb_url": row.get("thumb_url") or row.get("url"),
+            "url": row.get("url"),
+            "name": row.get("name"),
+            "id": row.get("id"),
+            "source": row.get("source") or "uploads",
+            "kind": row.get("kind") or "image",
+        },
+        "error": None,
+    }
+
+
+@app.post("/frame/pin")
+def frame_pin_endpoint(body: FramePinIn) -> dict[str, Any]:
+    """Save a canvas-captured still as a Frame pin. Always JSON."""
+    try:
+        row = save_pin_from_data_url(
+            body.image,
+            body.timestamp_s,
+            source_path=body.source_path,
+        )
+        return _pin_payload(row, body.timestamp_s)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).exception("Frame pin save failed")
+        return {
+            "ok": False,
+            "pin": None,
+            "error": str(exc) or "Could not save this pin.",
+        }
+
+
 @app.post("/extract-frame")
 def extract_frame_endpoint(body: ExtractFrameIn) -> dict[str, Any]:
-    """Pin still: extract a frame at ``seconds`` from a Library video."""
+    """Pin still: extract a frame at ``seconds`` from a Library video. Always JSON."""
     try:
         row = extract_pin_still(body.video_path, body.seconds)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except PermissionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _pin_payload(row, body.seconds)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract frame: {exc}") from exc
-    return {"ok": True, **row}
+        import logging
+
+        logging.getLogger(__name__).exception("extract-frame failed")
+        return {
+            "ok": False,
+            "pin": None,
+            "error": str(exc) or "Could not extract this frame.",
+        }
 
 
 @app.get("/tools")

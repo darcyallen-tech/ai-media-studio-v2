@@ -171,6 +171,53 @@ def keyframes_from_payload(raw: list[Any] | None) -> list[AlephKeyframe]:
     return out
 
 
+def save_pin_from_data_url(
+    image: str,
+    seconds: float,
+    *,
+    source_path: str | None = None,
+) -> dict[str, Any]:
+    """Decode a canvas data-URL still and store it under Library uploads/frames."""
+    import base64
+    import logging
+    import re
+
+    raw = (image or "").strip()
+    match = re.match(r"^data:(image/[\w.+-]+);base64,(.+)$", raw, re.I | re.S)
+    if not match:
+        raise ValueError("Pin image must be a data-URL still (image/*;base64).")
+    mime = match.group(1).lower()
+    try:
+        blob = base64.b64decode(match.group(2), validate=False)
+    except Exception as exc:
+        raise ValueError(f"Could not decode pin still: {exc}") from exc
+    if len(blob) < 32:
+        raise ValueError("Pin still was empty.")
+    if "png" in mime:
+        ext = ".png"
+    elif "webp" in mime:
+        ext = ".webp"
+    else:
+        ext = ".jpg"
+    ensure_library_dirs()
+    dest_dir = UPLOADS_DIR / "frames"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    t = max(0.0, round(float(seconds), 2))
+    tag = f"{t:.2f}".replace(".", "p")
+    src_stem = Path(source_path).stem if source_path else "pin"
+    src_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in src_stem)[:40] or "pin"
+    dest = dest_dir / f"{src_stem}_t{tag}{ext}"
+    if dest.exists():
+        dest = dest_dir / f"{src_stem}_t{tag}_{timestamp_now()}{ext}"
+    dest.write_bytes(blob)
+    row = _item(source="uploads", path=dest, root=UPLOADS_DIR)
+    if row is None:
+        raise RuntimeError("Pinned still could not be indexed.")
+    row["timestamp_s"] = t
+    logging.getLogger(__name__).info("Saved Frame pin t=%.2fs → %s", t, dest.name)
+    return row
+
+
 def extract_pin_still(video_path: str, seconds: float) -> dict[str, Any]:
     """Extract a still at ``seconds`` into Library uploads/frames."""
     src = Path(video_path)

@@ -18,6 +18,9 @@ export default defineConfig({
       "/scenes": "http://127.0.0.1:8000",
       "/tools": "http://127.0.0.1:8000",
       "/settings": "http://127.0.0.1:8000",
+      "/frame": "http://127.0.0.1:8000",
+      "/extract-frame": "http://127.0.0.1:8000",
+      "/prepare-aleph": "http://127.0.0.1:8000",
     },
   },
 });

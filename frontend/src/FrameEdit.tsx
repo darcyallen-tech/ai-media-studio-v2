@@ -6,6 +6,7 @@ import {
   slotAccepts,
   slotNeedLabel,
 } from "./libraryDrag";
+import { readJson } from "./http";
 import { toast } from "./toast";
 import {
   hasLibraryPayload,
@@ -44,6 +45,26 @@ export function formatClock(seconds: number): string {
   const sec = frac === 100 ? whole + 1 : whole;
   const cs = frac === 100 ? 0 : frac;
   return `${m}:${String(sec).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+}
+
+function captureVideoFrame(video: HTMLVideoElement): string {
+  const w = video.videoWidth || 0;
+  const h = video.videoHeight || 0;
+  if (w < 2 || h < 2) {
+    throw new Error("Could not read the current video frame.");
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not capture this frame.");
+  ctx.drawImage(video, 0, 0, w, h);
+  try {
+    return canvas.toDataURL("image/jpeg", 0.92);
+  } catch (err) {
+    console.error("Frame canvas capture failed", err);
+    throw new Error("Could not capture this frame from the video.");
+  }
 }
 
 function pinKind(t: number, duration: number): FramePin["pin"] {
@@ -102,38 +123,60 @@ export default function FrameEdit({
       return;
     }
     const el = videoRef.current;
-    const raw =
-      el && el.readyState >= 1 && Number.isFinite(el.currentTime)
-        ? el.currentTime
-        : current;
+    if (!el || el.readyState < 2) {
+      toast("Video is not ready to pin — wait for the clip to load.", true);
+      return;
+    }
+    const raw = Number.isFinite(el.currentTime) ? el.currentTime : current;
     const t = Math.max(0, Math.round(raw * 100) / 100);
     const near = pins.find((p) => Math.abs(p.timestamp_s - t) < 0.05);
     setPinning(true);
     try {
-      const res = await fetch("/extract-frame", {
+      const dataUrl = captureVideoFrame(el);
+      const res = await fetch("/frame/pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ video_path: source.path, seconds: t }),
+        body: JSON.stringify({
+          image: dataUrl,
+          timestamp_s: t,
+          source_path: source.path,
+        }),
       });
-      const body = (await res.json()) as LibraryItem & {
-        ok?: boolean;
-        detail?: string;
-        timestamp_s?: number;
-      };
-      if (!res.ok) {
-        toast(
-          typeof body.detail === "string"
-            ? body.detail
-            : "Could not extract this frame.",
-          true,
-        );
+      const body = await readJson(res);
+      if (!res.ok || body.ok === false) {
+        const err =
+          (typeof body.error === "string" && body.error) ||
+          (typeof body.detail === "string" && body.detail) ||
+          res.statusText ||
+          "Could not save this pin.";
+        toast(err, true);
         return;
       }
+      const pinRow = (body.pin || {}) as Record<string, unknown>;
+      const ts =
+        typeof pinRow.t === "number"
+          ? pinRow.t
+          : Number(pinRow.t) || t;
+      const path = String(pinRow.path || "");
+      const url = String(pinRow.thumb_url || pinRow.url || dataUrl);
+      if (!path) {
+        toast("Pin saved without a file path.", true);
+        return;
+      }
+      const image: LibraryItem = {
+        id: String(pinRow.id || `pin:${path}`),
+        name: String(pinRow.name || `t=${ts.toFixed(2)}s`),
+        source: String(pinRow.source || "uploads"),
+        kind: "image",
+        path,
+        url,
+        thumb_url: url,
+      };
       const pin: FramePin = {
         id: near?.id || `pin-${Date.now().toString(36)}`,
-        timestamp_s: body.timestamp_s ?? t,
-        pin: pinKind(body.timestamp_s ?? t, duration),
-        image: body,
+        timestamp_s: ts,
+        pin: pinKind(ts, duration),
+        image,
       };
       if (near) {
         onPinsChange(pins.map((p) => (p.id === near.id ? pin : p)));
@@ -143,6 +186,7 @@ export default function FrameEdit({
         );
       }
     } catch (err: unknown) {
+      console.error("Pin current frame failed", err);
       toast(err instanceof Error ? err.message : "Pin failed.", true);
     } finally {
       setPinning(false);
