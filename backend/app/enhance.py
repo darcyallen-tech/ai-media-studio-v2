@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from app.create_catalog import resolve_model
-from app.xai_client import XAIConfigError, chat_json
+from app.xai_client import XAIConfigError, chat_json, chat_json_vision
 
 SYSTEM = """You rewrite image/video generation prompts.
 
@@ -21,6 +21,9 @@ Rules:
 - If character / scene / source references are listed, mention them by role
   (character, scene, source) so the rewrite stays consistent with those
   identities and locations. Do not drop them.
+- When a source still is attached, look at it. Ground the rewrite in what is
+  visibly there (objects, people, sky, architecture, lighting). Name those
+  visible elements so the edit stays on the same frame.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -70,6 +73,7 @@ def enhance_prompt_text(
     modality: str = "",
     mode: str = "",
     refs: list[dict[str, Any]] | None = None,
+    image_urls: list[str] | None = None,
 ) -> dict[str, Any]:
     original = (prompt or "").strip()
     if not original:
@@ -82,15 +86,32 @@ def enhance_prompt_text(
     entry = resolve_model(model_id, mode=mode or None, modality=modality or None)
     label = (entry.label if entry else "") or model_id or "default model"
     extra = _refs_block(refs)
+    images = [p for p in (image_urls or []) if str(p).strip()]
+    vision_note = (
+        f"Source stills attached ({len(images)}). Describe visible content "
+        "and keep the rewrite on that same frame.\n\n"
+        if images
+        else ""
+    )
     user = (
         f"Mode: {mode or 'image'}\n"
         f"Modality: {modality or 't2i'}\n"
         f"Model: {label}\n\n"
+        + vision_note
         + (f"{extra}\n\n" if extra else "")
         + f"User prompt:\n{original}"
     )
     try:
-        raw = chat_json(system=SYSTEM, user=user, temperature=0.35, max_tokens=1200)
+        if images:
+            raw = chat_json_vision(
+                system=SYSTEM,
+                user_text=user,
+                image_paths=images,
+                temperature=0.35,
+                max_tokens=1200,
+            )
+        else:
+            raw = chat_json(system=SYSTEM, user=user, temperature=0.35, max_tokens=1200)
     except XAIConfigError as exc:
         return {"ok": False, "prompt": original, "original": original, "error": str(exc)}
     except Exception as exc:

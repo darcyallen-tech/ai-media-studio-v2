@@ -49,6 +49,7 @@ from app.aleph_service import (  # noqa: E402
     keyframes_from_payload,
     run_aleph_keyframe_edit,
     save_pin_from_data_url,
+    apply_pin_still,
 )
 from app.video_prep import prepare_aleph_source  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
@@ -147,6 +148,13 @@ class FramePinIn(BaseModel):
     source_path: str | None = None
 
 
+class FrameApplyIn(BaseModel):
+    image_path: str
+    timestamp_s: float = 0.0
+    source_path: str | None = None
+    pin_id: str | None = None
+
+
 class PrepareAlephIn(BaseModel):
     video_path: str
 
@@ -206,6 +214,7 @@ class EnhanceIn(BaseModel):
     modality: str = "t2i"
     mode: str = "image"
     refs: list[RefRoleIn] = Field(default_factory=list)
+    image_urls: list[str] = Field(default_factory=list)
 
 
 class CreateStateIn(BaseModel):
@@ -496,6 +505,7 @@ def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
         modality=body.modality,
         mode=body.mode,
         refs=[r.model_dump() for r in (body.refs or [])],
+        image_urls=list(body.image_urls or []),
     )
 
 
@@ -741,6 +751,32 @@ def frame_pin_endpoint(body: FramePinIn) -> dict[str, Any]:
             "ok": False,
             "pin": None,
             "error": str(exc) or "Could not save this pin.",
+        }
+
+
+@app.post("/frame/apply")
+def frame_apply_endpoint(body: FrameApplyIn) -> dict[str, Any]:
+    """Copy an I2I / Library still onto a pin. Always JSON."""
+    pin_id = (body.pin_id or "").strip()
+    if not pin_id:
+        return {"ok": False, "pin": None, "error": "Pin id is missing."}
+    try:
+        row = apply_pin_still(
+            body.image_path,
+            body.timestamp_s,
+            source_path=body.source_path,
+        )
+        payload = _pin_payload(row, body.timestamp_s)
+        payload["pin"]["id"] = pin_id
+        return payload
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).exception("Frame apply-to-pin failed")
+        return {
+            "ok": False,
+            "pin": None,
+            "error": str(exc) or "Could not apply this still to the pin.",
         }
 
 

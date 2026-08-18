@@ -143,6 +143,7 @@ export type PromptNodeData = {
   pins?: FramePin[];
   onPinsChange?: (pins: FramePin[]) => void;
   onEditPin?: (pin: FramePin) => void;
+  onCommitPinStill?: (pin: FramePin, item: LibraryItem) => void;
   editingPinId?: string | null;
   source: LibraryItem | null;
   first: LibraryItem | null;
@@ -165,6 +166,7 @@ export type ResultNodeData = {
   onTool?: (kind: ToolKind) => void;
   onApplyToPin?: () => void;
   applyLabel?: string;
+  dragItem?: LibraryItem | null;
 };
 
 export type ToolModelRow = {

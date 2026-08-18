@@ -35,6 +35,7 @@ import {
   importOsFiles,
   isOsFileDrag,
 } from "./osImport";
+import { readJson } from "./http";
 import { bindToast, toast } from "./toast";
 import {
   catalogToItem,
@@ -103,12 +104,13 @@ function itemFromResult(result: GenerateResponse): LibraryItem | null {
       ? "audio"
       : "image";
   const name = (local || url).split(/[\\/]/).pop() || "result";
+  const path = local || (url.startsWith("/outputs/") ? url : local);
   return {
     id: `gen:${local || url}`,
     name,
     source: "generated",
     kind,
-    path: local,
+    path,
     url,
     thumb_url: kind === "image" ? url : null,
   };
@@ -409,31 +411,92 @@ function StudioCanvas() {
     [closePinEdit, setEdges, setNodes, spawnPinResult],
   );
 
+  const applyStillToPin = useCallback(
+    async (pinId: string, item: LibraryItem, timestampS?: number) => {
+      const id = (pinId || "").trim();
+      if (!id) {
+        toast("Pin id is missing.", true);
+        return false;
+      }
+      const existing = framePins.find((p) => p.id === id);
+      if (!existing && pinEdit?.pinId !== id) {
+        toast("Pin id is missing.", true);
+        return false;
+      }
+      const path = (item.path || item.url || "").trim();
+      if (!path) {
+        toast("That still has no file path.", true);
+        return false;
+      }
+      const ts =
+        timestampS ??
+        existing?.timestamp_s ??
+        pinEdit?.timestamp_s ??
+        0;
+      try {
+        const res = await fetch("/frame/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_path: path,
+            timestamp_s: ts,
+            source_path: existing?.image.path || pinEdit?.still.path || null,
+            pin_id: id,
+          }),
+        });
+        const body = await readJson(res);
+        if (!body.ok || !body.pin) {
+          toast(
+            (typeof body.error === "string" && body.error) ||
+              "Could not apply this still to the pin.",
+            true,
+          );
+          return false;
+        }
+        const pinRow = body.pin as Record<string, unknown>;
+        const url = String(pinRow.thumb_url || pinRow.url || item.url || "");
+        const bust = url.includes("?") ? "&" : "?";
+        const fresh = url ? `${url}${bust}v=${Date.now()}` : url;
+        const still: LibraryItem = {
+          id: String(pinRow.id || id),
+          name: String(pinRow.name || item.name || "pin"),
+          source: String(pinRow.source || "uploads"),
+          kind: "image",
+          path: String(pinRow.path || path),
+          url: fresh,
+          thumb_url: fresh,
+        };
+        setFramePins((cur) =>
+          cur.map((p) => (p.id === id ? { ...p, image: still } : p)),
+        );
+        setPinEdit((cur) =>
+          cur && cur.pinId === id ? { ...cur, still } : cur,
+        );
+        toast(`Applied still to pin @ t=${Number(ts).toFixed(2)}s`);
+        return true;
+      } catch (err: unknown) {
+        console.error("Apply to pin failed", err);
+        toast(err instanceof Error ? err.message : "Apply to pin failed.", true);
+        return false;
+      }
+    },
+    [framePins, pinEdit],
+  );
+
   const applyPinStill = useCallback(
     (result: GenerateResponse) => {
-      if (!pinEdit) {
-        toast("No pin is being edited.", true);
+      if (!pinEdit?.pinId) {
+        toast("Pin id is missing.", true);
         return;
       }
       const item = itemFromResult(result);
-      if (!item || item.kind !== "image" || !item.path) {
+      if (!item || item.kind === "video" || item.kind === "audio") {
         toast("Apply to pin needs an image result.", true);
         return;
       }
-      const bust = item.url.includes("?") ? "&" : "?";
-      const url = item.url ? `${item.url}${bust}v=${Date.now()}` : item.url;
-      const still: LibraryItem = {
-        ...item,
-        url,
-        thumb_url: url || item.thumb_url,
-      };
-      setFramePins((cur) =>
-        cur.map((p) => (p.id === pinEdit.pinId ? { ...p, image: still } : p)),
-      );
-      toast(`Applied still to pin @ t=${pinEdit.timestamp_s.toFixed(2)}s`);
-      closePinEdit();
+      void applyStillToPin(pinEdit.pinId, item, pinEdit.timestamp_s);
     },
-    [closePinEdit, pinEdit],
+    [applyStillToPin, pinEdit],
   );
 
   const spawnResultNear = useCallback(
@@ -923,6 +986,9 @@ function StudioCanvas() {
               pins: framePins,
               onPinsChange: setFramePins,
               onEditPin: spawnPinEdit,
+              onCommitPinStill: (pin, item) => {
+                void applyStillToPin(pin.id, item, pin.timestamp_s);
+              },
               editingPinId: pinEdit?.pinId ?? null,
               source: sourceItem,
               first: firstItem,
@@ -1068,6 +1134,11 @@ function StudioCanvas() {
             n.id === PIN_EDIT_RESULT && pinEdit
               ? () => applyPinStill(result)
               : undefined;
+          const mapped = itemFromResult(result);
+          const dragItem =
+            n.id === PIN_EDIT_RESULT && mapped && mapped.kind === "image"
+              ? mapped
+              : null;
           return {
             ...n,
             type: "result",
@@ -1077,6 +1148,7 @@ function StudioCanvas() {
               onTool: (kind) => spawnTool(n.id, kind, result),
               onApplyToPin: pinApply,
               applyLabel: pinApply ? "Apply to pin" : undefined,
+              dragItem,
             },
           };
         }
@@ -1184,6 +1256,7 @@ function StudioCanvas() {
     addSceneNode,
     addSourceNode,
     applyPinStill,
+    applyStillToPin,
     closePinEdit,
     charCatalog,
     characters,

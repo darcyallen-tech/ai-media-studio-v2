@@ -428,6 +428,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           modality,
           mode,
           refs: enhanceRefs(data.source, characters, scenes),
+          image_urls: enhanceImagePaths(data),
         }),
       });
       const body = (await res.json()) as {
@@ -578,6 +579,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 }
               }}
               onEditPin={data.onEditPin}
+              onCommitPinStill={data.onCommitPinStill}
               editingPinId={data.editingPinId}
               preparing={phase === "preparing"}
             />
@@ -864,6 +866,18 @@ function composePrompt(
   }
   if (!lines.length) return base;
   return `${lines.join("\n")}\n\n${base}`.trim();
+}
+
+function enhanceImagePaths(data: PromptNodeData): string[] {
+  const out: string[] = [];
+  const add = (path?: string | null) => {
+    const p = (path || "").trim();
+    if (!p || out.includes(p)) return;
+    out.push(p);
+  };
+  if (itemMediaKind(data.source) === "image") add(data.source?.path);
+  for (const pin of data.pins || []) add(pin.image?.path);
+  return out.slice(0, 3);
 }
 
 function enhanceRefs(

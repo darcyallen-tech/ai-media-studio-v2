@@ -30,6 +30,7 @@ type Props = {
   onAddSource: () => void;
   onAttachSource?: (item: LibraryItem) => void;
   onEditPin?: (pin: FramePin) => void;
+  onCommitPinStill?: (pin: FramePin, item: LibraryItem) => void;
   editingPinId?: string | null;
   preparing?: boolean;
 };
@@ -81,6 +82,7 @@ export default function FrameEdit({
   onAddSource,
   onAttachSource,
   onEditPin,
+  onCommitPinStill,
   editingPinId,
   preparing,
 }: Props) {
@@ -215,6 +217,11 @@ export default function FrameEdit({
   }
 
   function replacePin(id: string, item: LibraryItem) {
+    const pin = pins.find((p) => p.id === id);
+    if (pin && onCommitPinStill) {
+      onCommitPinStill(pin, item);
+      return;
+    }
     onPinsChange(
       pins.map((p) => (p.id === id ? { ...p, image: item } : p)),
     );
@@ -499,7 +506,7 @@ function PinRow({
         <span>
           t={Number.isFinite(pin.timestamp_s) ? pin.timestamp_s.toFixed(2) : "—"}s
         </span>
-        <span className="hint">Drop a Library still to replace</span>
+        <span className="hint">Drop a Library or Result still</span>
       </div>
       {onEdit ? (
         <button type="button" className="ghost nodrag" onClick={onEdit}>

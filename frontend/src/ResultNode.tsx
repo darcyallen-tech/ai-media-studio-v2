@@ -1,9 +1,10 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
 import { sendToResolve } from "./toast";
-import type { ResultNodeData, ToolKind } from "./types";
+import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types";
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
@@ -80,6 +81,14 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 key={src}
                 src={src}
                 alt="Generated result"
+                draggable={Boolean(data.dragItem)}
+                onDragStart={(event) => {
+                  if (!data.dragItem) return;
+                  event.stopPropagation();
+                  beginLibraryDrag(data.dragItem);
+                  writeLibraryPayload(event.dataTransfer, data.dragItem);
+                }}
+                onDragEnd={() => endLibraryDrag()}
                 onDoubleClick={() =>
                   openLightbox({ src, kind: "image" })
                 }
@@ -109,7 +118,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             <button
               type="button"
               className="generate nodrag apply-pin"
-              disabled={!copyPath}
+              disabled={!copyPath && !data.dragItem?.path && !data.dragItem?.url}
               onClick={data.onApplyToPin}
             >
               {data.applyLabel || "Apply to pin"}

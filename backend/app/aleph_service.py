@@ -210,11 +210,72 @@ def save_pin_from_data_url(
     if dest.exists():
         dest = dest_dir / f"{src_stem}_t{tag}_{timestamp_now()}{ext}"
     dest.write_bytes(blob)
+    return _index_pin_still(dest, t)
+
+
+def apply_pin_still(
+    image_path: str,
+    seconds: float,
+    *,
+    source_path: str | None = None,
+) -> dict[str, Any]:
+    """Copy an I2I / Library still onto a pin under uploads/frames."""
+    import logging
+    import shutil
+
+    from app.config import OUTPUT_DIR
+    from app.library import is_allowed_path
+    from app.media import is_image_path
+
+    raw = (image_path or "").strip()
+    src = _resolve_still_path(raw)
+    if src is None or not src.is_file():
+        raise FileNotFoundError("Apply still not found.")
+    if not is_image_path(src):
+        raise ValueError("Apply to pin needs an image still.")
+    if not is_allowed_path(src):
+        # Generated outputs live under OUTPUT_DIR; allow those too.
+        try:
+            src.resolve().relative_to(OUTPUT_DIR.resolve())
+        except ValueError as exc:
+            raise PermissionError("Still is outside the Library.") from exc
+    ensure_library_dirs()
+    dest_dir = UPLOADS_DIR / "frames"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    t = max(0.0, round(float(seconds), 2))
+    tag = f"{t:.2f}".replace(".", "p")
+    stem_src = Path(source_path).stem if source_path else src.stem
+    src_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem_src)[:40] or "pin"
+    ext = src.suffix.lower() or ".png"
+    dest = dest_dir / f"{src_stem}_t{tag}_edit{ext}"
+    if dest.exists():
+        dest = dest_dir / f"{src_stem}_t{tag}_edit_{timestamp_now()}{ext}"
+    shutil.copy2(src, dest)
+    logging.getLogger(__name__).info("Applied still to pin t=%.2fs → %s", t, dest.name)
+    return _index_pin_still(dest, t)
+
+
+def _resolve_still_path(raw: str) -> Path | None:
+    from app.config import OUTPUT_DIR
+
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if text.startswith("/outputs/"):
+        cand = OUTPUT_DIR / text[len("/outputs/") :]
+        if cand.is_file():
+            return cand
+    p = Path(text)
+    if p.is_file():
+        return p
+    return None
+
+
+def _index_pin_still(dest: Path, seconds: float) -> dict[str, Any]:
     row = _item(source="uploads", path=dest, root=UPLOADS_DIR)
     if row is None:
         raise RuntimeError("Pinned still could not be indexed.")
-    row["timestamp_s"] = t
-    logging.getLogger(__name__).info("Saved Frame pin t=%.2fs → %s", t, dest.name)
+    row["timestamp_s"] = seconds
     return row
 
 
