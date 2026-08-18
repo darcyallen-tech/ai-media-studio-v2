@@ -52,6 +52,7 @@ Run uvicorn with cwd = `backend` so `app` imports resolve.
 | GET | `/estimate?mode=&modality=&model_id=` | Cost only |
 | POST | `/estimate` | Same CreateState JSON as generate |
 | POST | `/generate` | `{ ok, result_paths[], local_paths[], cost, duration_sec, error? }` |
+| POST | `/enhance` | `{ prompt, model_id, modality, mode }` → rewritten prompt |
 | GET | `/library?source=&type=` | Resolve / uploads / generated |
 | POST | `/library/import` | Multipart files or local `path` → uploads |
 | GET | `/library/file` · `/library/thumb` | Serve / thumbnail a library item |
@@ -84,7 +85,7 @@ npm run dev
 
 Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/library`, `/resolve`, `/outputs` to the backend.
 
-Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / audio only when the catalog model supports them. Library unchanged.
+Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / **resolution** / audio only when the catalog model lists choices. **Enhance** rewrites the prompt via xAI (does not generate). Drag Library items onto Source / First / Last.
 
 | Modality | Inputs |
 |----------|--------|

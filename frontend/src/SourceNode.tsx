@@ -2,23 +2,14 @@ import type { DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
 import {
-  LIBRARY_DRAG_MIME,
+  hasLibraryPayload,
+  parseLibraryPayload,
   type LibraryItem,
   type SlotAccept,
   type SourceNodeData,
 } from "./types";
 
 export type SourceFlowNode = Node<SourceNodeData, "source" | "first" | "last">;
-
-function parseLibraryDrag(event: DragEvent): LibraryItem | null {
-  const raw = event.dataTransfer.getData(LIBRARY_DRAG_MIME);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as LibraryItem;
-  } catch {
-    return null;
-  }
-}
 
 function accepts(accept: SlotAccept, item: LibraryItem): boolean {
   if (accept === "any") return true;
@@ -33,13 +24,18 @@ export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
   const accept = data.accept || "any";
 
   function onDragOver(event: DragEvent) {
+    if (!hasLibraryPayload(event.dataTransfer) && ![...event.dataTransfer.types].includes("Files")) {
+      return;
+    }
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
   }
 
   function onDrop(event: DragEvent) {
     event.preventDefault();
-    const dragged = parseLibraryDrag(event);
+    event.stopPropagation();
+    const dragged = parseLibraryPayload(event.dataTransfer);
     if (dragged && accepts(accept, dragged)) {
       data.onAttach(dragged);
     }

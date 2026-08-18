@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { sendToResolve } from "./toast";
 import {
-  LIBRARY_DRAG_MIME,
+  writeLibraryPayload,
   type LibraryBucket,
   type LibraryItem,
   type LibrarySource,
@@ -89,8 +89,8 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   function onDragStart(event: DragEvent, item: LibraryItem) {
-    event.dataTransfer.setData(LIBRARY_DRAG_MIME, JSON.stringify(item));
-    event.dataTransfer.effectAllowed = "copy";
+    event.stopPropagation();
+    writeLibraryPayload(event.dataTransfer, item);
   }
 
   function onPanelDragOver(event: DragEvent) {
@@ -201,7 +201,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
             >
               <div className="library-thumb">
                 {item.thumb_url ? (
-                  <img src={item.thumb_url} alt="" />
+                  <img src={item.thumb_url} alt="" draggable={false} />
                 ) : (
                   <span>{item.kind}</span>
                 )}

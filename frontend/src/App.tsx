@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type DragEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -7,6 +7,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -19,7 +20,9 @@ import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
 import { bindToast } from "./toast";
 import {
+  hasLibraryPayload,
   inputPlan,
+  parseLibraryPayload,
   type GenerateResponse,
   type GraphInputs,
   type LibraryItem,
@@ -103,6 +106,7 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const { screenToFlowPosition, getNodes } = useReactFlow();
 
   const spawnResult = useCallback(
     (result: GenerateResponse) => {
@@ -307,6 +311,38 @@ function StudioCanvas() {
     spawnResult,
   ]);
 
+  const onFlowDragOver = useCallback((event: DragEvent) => {
+    if (hasLibraryPayload(event.dataTransfer)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  const onFlowDrop = useCallback(
+    (event: DragEvent) => {
+      const item = parseLibraryPayload(event.dataTransfer);
+      if (!item) return;
+      event.preventDefault();
+      const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const hit = getNodes().find((n) => {
+        if (!n.type || !["source", "first", "last"].includes(n.type)) return false;
+        const w = n.measured?.width ?? 240;
+        const h = n.measured?.height ?? 220;
+        return (
+          p.x >= n.position.x &&
+          p.x <= n.position.x + w &&
+          p.y >= n.position.y &&
+          p.y <= n.position.y + h
+        );
+      });
+      if (!hit) return;
+      if (hit.id === SOURCE_ID) setSourceItem(item);
+      if (hit.id === FIRST_ID) setFirstItem(item);
+      if (hit.id === LAST_ID) setLastItem(item);
+    },
+    [getNodes, screenToFlowPosition],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       const ok =
@@ -346,6 +382,8 @@ function StudioCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onDragOver={onFlowDragOver}
+        onDrop={onFlowDrop}
         nodeTypes={nodeTypes}
         colorMode="light"
         proOptions={{ hideAttribution: true }}

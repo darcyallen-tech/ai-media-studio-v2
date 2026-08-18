@@ -34,6 +34,7 @@ from app.audio_registry import (  # noqa: E402
 )
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
+from app.enhance import enhance_prompt_text  # noqa: E402
 from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
 from app.library import (  # noqa: E402
@@ -57,7 +58,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase5"
+APP_VERSION = "2.0.0-phase5c"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -120,6 +121,13 @@ class ResolveSendIn(BaseModel):
     job_name: str | None = None
     model: str | None = None
     cost: str | None = None
+
+
+class EnhanceIn(BaseModel):
+    prompt: str
+    model_id: str = ""
+    modality: str = "t2i"
+    mode: str = "image"
 
 
 class CreateStateIn(BaseModel):
@@ -362,6 +370,17 @@ def estimate_get(
         ),
     )
     return _estimate_payload(body)
+
+
+@app.post("/enhance")
+def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
+    """Rewrite a prompt with xAI. Does not generate media."""
+    return enhance_prompt_text(
+        prompt=body.prompt,
+        model_id=body.model_id,
+        modality=body.modality,
+        mode=body.mode,
+    )
 
 
 @app.post("/estimate")

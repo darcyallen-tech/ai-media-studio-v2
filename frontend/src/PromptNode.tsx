@@ -4,6 +4,7 @@ import {
   durationOptions,
   formatDurationToken,
   inputPlan,
+  resolutionOptions,
   type GenerateResponse,
   type LibraryItem,
   type Mode,
@@ -53,9 +54,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [prompt, setPrompt] = useState("");
   const [duration, setDuration] = useState("");
   const [aspect, setAspect] = useState("");
+  const [resolution, setResolution] = useState("");
   const [audioOn, setAudioOn] = useState<boolean | null>(null);
   const [estimate, setEstimate] = useState("Est. cost: —");
   const [loading, setLoading] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const modalityOptions = MODALITIES[mode];
@@ -66,6 +69,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const plan = inputPlan(modality, selectedModel);
   const durs = durationOptions(selectedModel);
   const aspects = selectedModel?.aspect_choices ?? [];
+  const resolutions = resolutionOptions(selectedModel);
   const showAudio = Boolean(selectedModel?.supports_audio);
   const promptRequired = modality !== "i2v";
 
@@ -87,8 +91,10 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const canGenerate =
     Boolean(modelId) &&
     !loading &&
+    !enhancing &&
     missing.length === 0 &&
     (!promptRequired || prompt.trim().length > 0);
+  const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading;
 
   useEffect(() => {
     setModality(MODALITIES[mode][0]?.id ?? "");
@@ -133,6 +139,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     if (!selectedModel) {
       setDuration("");
       setAspect("");
+      setResolution("");
       setAudioOn(null);
       return;
     }
@@ -141,6 +148,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     setDuration(def);
     const as = selectedModel.aspect_choices ?? [];
     setAspect(selectedModel.default_aspect || as[0] || "");
+    const resOpts = resolutionOptions(selectedModel);
+    const resDef = selectedModel.default_resolution || "";
+    setResolution(
+      resDef && resOpts.includes(resDef) ? resDef : resOpts[0] || "",
+    );
     setAudioOn(selectedModel.supports_audio ? true : null);
   }, [selectedModel]);
 
@@ -153,6 +165,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     const qs = new URLSearchParams({ mode, modality, model_id: modelId });
     if (duration) qs.set("duration", duration);
     if (aspect) qs.set("aspect", aspect);
+    if (resolution) qs.set("resolution", resolution);
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then(async (res) => {
@@ -167,7 +180,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [mode, modality, modelId, duration, aspect, audioOn]);
+  }, [mode, modality, modelId, duration, aspect, resolution, audioOn]);
 
   async function onGenerate() {
     if (!canGenerate) return;
@@ -187,6 +200,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           params: {
             duration: duration || null,
             aspect: aspect || null,
+            resolution: resolution || null,
             audio_on: audioOn,
           },
           slots,
@@ -210,6 +224,43 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
       setError(err instanceof Error ? err.message : "Generate request failed.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onEnhance() {
+    if (!canEnhance) return;
+    setEnhancing(true);
+    setError(null);
+    try {
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          model_id: modelId,
+          modality,
+          mode,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        prompt?: string;
+        error?: string;
+        detail?: string;
+      };
+      if (!res.ok || !body.ok) {
+        setError(
+          body.error ||
+            (typeof body.detail === "string" ? body.detail : null) ||
+            "Enhance failed.",
+        );
+        return;
+      }
+      if (body.prompt) setPrompt(body.prompt);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Enhance failed.");
+    } finally {
+      setEnhancing(false);
     }
   }
 
@@ -280,7 +331,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">{selectedModel.notes}</p>
         ) : null}
 
-        {durs.length > 0 || aspects.length > 0 || showAudio ? (
+        {durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio ? (
           <div className="params">
             {durs.length > 0 ? (
               <label className="param">
@@ -309,6 +360,22 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
                   {aspects.map((a) => (
                     <option key={a} value={a}>
                       {a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {resolutions.length > 0 ? (
+              <label className="param">
+                <span>Resolution</span>
+                <select
+                  className="model nodrag"
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                >
+                  {resolutions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
                     </option>
                   ))}
                 </select>
@@ -382,14 +449,24 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">Audio generate is Phase 7 — models list only.</p>
         ) : null}
 
-        <button
-          type="button"
-          className="generate nodrag"
-          disabled={!canGenerate}
-          onClick={onGenerate}
-        >
-          {loading ? "Generating…" : "Generate"}
-        </button>
+        <div className="prompt-actions">
+          <button
+            type="button"
+            className="ghost nodrag"
+            disabled={!canEnhance}
+            onClick={onEnhance}
+          >
+            {enhancing ? "Enhancing…" : "Enhance"}
+          </button>
+          <button
+            type="button"
+            className="generate nodrag"
+            disabled={!canGenerate}
+            onClick={onGenerate}
+          >
+            {loading ? "Generating…" : "Generate"}
+          </button>
+        </div>
 
         {error ? (
           <p className="hint warn" role="alert">

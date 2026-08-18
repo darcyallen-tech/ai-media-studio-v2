@@ -21,6 +21,8 @@ export type ModelRow = {
   default_duration?: string;
   aspect_choices?: string[];
   default_aspect?: string;
+  resolution_choices?: string[];
+  default_resolution?: string;
   supports_audio?: boolean;
   requires_end_frame?: boolean;
   supports_end_frame?: boolean;
@@ -92,6 +94,38 @@ export type SourceNodeData = {
 
 export const LIBRARY_DRAG_MIME = "application/x-ams-library";
 
+export function writeLibraryPayload(dt: DataTransfer, item: LibraryItem) {
+  const raw = JSON.stringify(item);
+  dt.setData(LIBRARY_DRAG_MIME, raw);
+  dt.setData("application/json", raw);
+  dt.setData("text/plain", raw);
+  dt.effectAllowed = "copy";
+}
+
+export function parseLibraryPayload(dt: DataTransfer): LibraryItem | null {
+  const raw =
+    dt.getData(LIBRARY_DRAG_MIME) ||
+    dt.getData("application/json") ||
+    dt.getData("text/plain");
+  if (!raw) return null;
+  try {
+    const item = JSON.parse(raw) as LibraryItem;
+    if (item && typeof item.path === "string") return item;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function hasLibraryPayload(dt: DataTransfer): boolean {
+  const types = [...dt.types];
+  return (
+    types.includes(LIBRARY_DRAG_MIME) ||
+    types.includes("application/json") ||
+    types.includes("text/plain")
+  );
+}
+
 export function inputPlan(
   modality: string,
   model?: ModelRow | null,
@@ -117,6 +151,15 @@ export function inputPlan(
 export function durationOptions(model?: ModelRow | null): string[] {
   const raw = model?.duration_enum ?? [];
   return raw.map(String).filter((t) => t.trim() && t.toLowerCase() !== "auto");
+}
+
+export function resolutionOptions(model?: ModelRow | null): string[] {
+  const raw = (model?.resolution_choices ?? [])
+    .map(String)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const useful = raw.filter((t) => t.toLowerCase() !== "auto");
+  return useful.length ? raw : [];
 }
 
 export function formatDurationToken(tok: string): string {

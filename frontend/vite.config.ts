@@ -13,6 +13,7 @@ export default defineConfig({
       "/outputs": "http://127.0.0.1:8000",
       "/library": "http://127.0.0.1:8000",
       "/resolve": "http://127.0.0.1:8000",
+      "/enhance": "http://127.0.0.1:8000",
     },
   },
 });
