@@ -3,6 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
+import { filesFromDataTransfer, isOsFileDrag } from "./osImport";
 import { toast } from "./toast";
 import {
   hasLibraryPayload,
@@ -29,6 +30,12 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
   }
 
   function allowDrop(event: DragEvent) {
+    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      return true;
+    }
     const incoming = peekLibraryDrag() || (hasLibraryPayload(event.dataTransfer) ? true : null);
     if (!incoming) return false;
     event.preventDefault();
@@ -61,6 +68,13 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
     event.preventDefault();
     event.stopPropagation();
     setHover(null);
+    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
+      const files = filesFromDataTransfer(event.dataTransfer);
+      if (files.length && data.onOsFiles) {
+        data.onOsFiles(files);
+        return;
+      }
+    }
     const dragged = itemFromEvent(event);
     if (!dragged) return;
     if (!slotAccepts(accept, dragged)) {

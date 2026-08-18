@@ -18,6 +18,29 @@ from app.config import OUTPUT_DIR, PROJECT_ROOT
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"}
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus"}
+RAW_EXTS = {
+    ".arw",
+    ".cr2",
+    ".cr3",
+    ".nef",
+    ".nrw",
+    ".dng",
+    ".raf",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".srw",
+    ".raw",
+    ".rwl",
+    ".3fr",
+    ".erf",
+    ".kdc",
+    ".mos",
+    ".mef",
+    ".mrw",
+    ".sr2",
+    ".x3f",
+}
 
 UPLOADS_DIR = PROJECT_ROOT / "data" / "uploads"
 LIBRARY_DIR = PROJECT_ROOT / "data" / "library"
@@ -81,6 +104,52 @@ def kind_for(path: Path) -> str | None:
     if ext in AUDIO_EXTS:
         return "audio"
     return None
+
+
+def is_raw_ext(path: str | Path) -> bool:
+    return Path(path).suffix.lower() in RAW_EXTS
+
+
+def apply_exif_orientation(path: Path) -> None:
+    """Bake EXIF orientation into pixels so thumbs and generate stay upright."""
+    if kind_for(path) != "image":
+        return
+    try:
+        from PIL import Image, ImageOps
+    except Exception:
+        return
+    try:
+        with Image.open(path) as src:
+            orient = 1
+            try:
+                orient = int(src.getexif().get(0x0112, 1) or 1)
+            except Exception:
+                orient = 1
+            if orient in (0, 1):
+                return
+            oriented = ImageOps.exif_transpose(src)
+            if oriented is None:
+                return
+            fmt = (src.format or path.suffix.lstrip(".") or "JPEG").upper()
+            if fmt == "JPG":
+                fmt = "JPEG"
+            exif = oriented.getexif()
+            if 0x0112 in exif:
+                del exif[0x0112]
+            save_kw: dict[str, Any] = {}
+            if fmt == "JPEG":
+                save_kw["quality"] = 95
+                save_kw["subsampling"] = 0
+            if exif:
+                try:
+                    save_kw["exif"] = exif.tobytes()
+                except Exception:
+                    pass
+            out = oriented.copy()
+        out.save(path, format=fmt, **save_kw)
+        out.close()
+    except Exception:
+        return
 
 
 def _safe_rel(root: Path, path: Path) -> str | None:
@@ -362,9 +431,11 @@ def import_upload(src: Path, *, dest_name: str | None = None) -> dict[str, Any]:
     ensure_library_dirs()
     if not src.is_file():
         raise FileNotFoundError(f"Not a file: {src}")
+    if is_raw_ext(src):
+        raise ValueError("Unsupported format")
     kind = kind_for(src)
     if kind is None:
-        raise ValueError(f"Unsupported media type: {src.suffix}")
+        raise ValueError("Unsupported format")
     name = dest_name or src.name
     safe = Path(name).name
     dest = UPLOADS_DIR / safe
@@ -373,6 +444,7 @@ def import_upload(src: Path, *, dest_name: str | None = None) -> dict[str, Any]:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         dest = UPLOADS_DIR / f"{stem}_{stamp}{suffix}"
     shutil.copy2(src, dest)
+    apply_exif_orientation(dest)
     row = _item(source="uploads", path=dest, root=UPLOADS_DIR)
     if row is None:
         raise RuntimeError("Imported file could not be indexed.")
@@ -382,15 +454,15 @@ def import_upload(src: Path, *, dest_name: str | None = None) -> dict[str, Any]:
 def write_upload(filename: str, data: bytes) -> dict[str, Any]:
     ensure_library_dirs()
     safe = Path(filename).name or "upload.bin"
+    if is_raw_ext(safe) or kind_for(Path(safe)) is None:
+        raise ValueError("Unsupported format")
     dest = UPLOADS_DIR / safe
     if dest.exists():
         stem, suffix = dest.stem, dest.suffix
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         dest = UPLOADS_DIR / f"{stem}_{stamp}{suffix}"
     dest.write_bytes(data)
-    if kind_for(dest) is None:
-        dest.unlink(missing_ok=True)
-        raise ValueError(f"Unsupported media type: {dest.suffix}")
+    apply_exif_orientation(dest)
     row = _item(source="uploads", path=dest, root=UPLOADS_DIR)
     if row is None:
         raise RuntimeError("Imported file could not be indexed.")
@@ -414,9 +486,13 @@ def thumb_path(source: str, rel: str) -> Path:
     if kind == "video":
         _video_thumb(src, cache)
         return cache
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     with Image.open(src) as im:
+        try:
+            im = ImageOps.exif_transpose(im) or im
+        except Exception:
+            pass
         im = im.convert("RGB")
         im.thumbnail((320, 320))
         im.save(cache, format="JPEG", quality=82, optimize=True)

@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
-import {
-  filesFromDataTransfer,
-  importOsFiles,
-  isOsFileDrag,
-} from "./osImport";
+import { beginLibraryDrag, endLibraryDrag, peekLibraryDrag } from "./libraryDrag";
+import { filesFromDataTransfer, importOsFiles } from "./osImport";
 import { sendToResolve, toast } from "./toast";
 import {
   writeLibraryPayload,
@@ -93,6 +89,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
       await reload();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Import failed.";
+      console.error("Library import failed", err);
       setError(msg);
       toast(msg, true);
     } finally {
@@ -111,23 +108,22 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   function onPanelDragEnter(event: DragEvent) {
-    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
-    setDropHot(true);
+    if (peekLibraryDrag()) return;
     event.dataTransfer.dropEffect = "copy";
+    setDropHot(true);
   }
 
   function onPanelDragOver(event: DragEvent) {
-    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
+    if (peekLibraryDrag()) return;
     event.dataTransfer.dropEffect = "copy";
     setDropHot(true);
   }
 
   function onPanelDragLeave(event: DragEvent) {
-    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
     const next = event.relatedTarget as globalThis.Node | null;
     if (next && event.currentTarget.contains(next)) return;
@@ -135,13 +131,16 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   function onPanelDrop(event: DragEvent) {
-    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
     event.stopPropagation();
     setDropHot(false);
+    if (peekLibraryDrag()) return;
     const files = filesFromDataTransfer(event.dataTransfer);
     if (files.length) void importFiles(files);
-    else toast("No files found in that drop.", true);
+    else {
+      console.error("Library drop had no files", [...event.dataTransfer.types]);
+      toast("No files found in that drop.", true);
+    }
   }
 
   const active = buckets[section];

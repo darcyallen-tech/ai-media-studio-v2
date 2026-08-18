@@ -14,6 +14,29 @@ const IMAGE_EXTS = [
 const VIDEO_EXTS = [".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"];
 const AUDIO_EXTS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus"];
 const ALLOWED_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS, ...AUDIO_EXTS]);
+const RAW_EXTS = new Set([
+  ".arw",
+  ".cr2",
+  ".cr3",
+  ".nef",
+  ".nrw",
+  ".dng",
+  ".raf",
+  ".orf",
+  ".rw2",
+  ".pef",
+  ".srw",
+  ".raw",
+  ".rwl",
+  ".3fr",
+  ".erf",
+  ".kdc",
+  ".mos",
+  ".mef",
+  ".mrw",
+  ".sr2",
+  ".x3f",
+]);
 
 function extOf(name: string): string {
   const clean = name.split("?")[0].toLowerCase();
@@ -28,6 +51,8 @@ export function isOsFileDrag(dt: DataTransfer | null | undefined): boolean {
     return true;
   }
   if (dt.items && [...dt.items].some((it) => it.kind === "file")) return true;
+  // Explorer often reports no types until drop — treat unknown as possible files.
+  if (types.length === 0) return true;
   return false;
 }
 
@@ -45,53 +70,65 @@ export function filesFromDataTransfer(dt: DataTransfer): File[] {
   return out;
 }
 
+export function isRawFile(file: File): boolean {
+  return RAW_EXTS.has(extOf(file.name));
+}
+
 export function isAllowedMediaFile(file: File): boolean {
+  if (isRawFile(file)) return false;
+  const ext = extOf(file.name);
+  if (ext) return ALLOWED_EXTS.has(ext);
   const mime = (file.type || "").toLowerCase();
-  if (
+  return (
     mime.startsWith("image/") ||
     mime.startsWith("video/") ||
     mime.startsWith("audio/")
-  ) {
-    return true;
-  }
-  return ALLOWED_EXTS.has(extOf(file.name));
+  );
 }
 
 export async function importOsFiles(
   fileList: FileList | File[],
 ): Promise<LibraryItem[]> {
   const raw = Array.from(fileList);
-  const files = raw.filter(isAllowedMediaFile);
-  const skipped = raw.length - files.length;
-  if (!files.length) {
-    toast(
-      skipped
-        ? "That drop is not an image, video, or audio file."
-        : "No files to import.",
-      true,
-    );
+  if (!raw.length) {
+    toast("No files to import.", true);
     return [];
   }
-  const form = new FormData();
-  for (const file of files) form.append("files", file);
-  const res = await fetch("/library/import", { method: "POST", body: form });
-  const body = (await res.json()) as {
-    ok?: boolean;
-    items?: LibraryItem[];
-    errors?: string[];
-    detail?: string;
-  };
-  if (!res.ok) {
-    throw new Error(
-      typeof body.detail === "string" ? body.detail : "Import failed.",
-    );
+  const rejected = raw.filter((f) => isRawFile(f) || !isAllowedMediaFile(f));
+  const files = raw.filter(isAllowedMediaFile);
+  if (rejected.some(isRawFile)) {
+    toast("Unsupported format", true);
+  } else if (rejected.length && !files.length) {
+    toast("Unsupported format", true);
   }
-  if (body.errors?.length) {
-    toast(body.errors.join(" · "), true);
+  if (!files.length) {
+    console.error("Library import rejected", rejected.map((f) => f.name));
+    return [];
   }
-  if (skipped) {
-    toast(`${skipped} file(s) skipped (not image/video/audio).`, true);
+  try {
+    const form = new FormData();
+    for (const file of files) form.append("files", file);
+    const res = await fetch("/library/import", { method: "POST", body: form });
+    const body = (await res.json()) as {
+      ok?: boolean;
+      items?: LibraryItem[];
+      errors?: string[];
+      detail?: string;
+    };
+    if (!res.ok) {
+      const msg =
+        typeof body.detail === "string" ? body.detail : "Import failed.";
+      console.error("Library import failed", res.status, body);
+      throw new Error(msg);
+    }
+    if (body.errors?.length) {
+      console.error("Library import errors", body.errors);
+      toast(body.errors.join(" · "), true);
+    }
+    window.dispatchEvent(new Event("ams-library-imported"));
+    return body.items ?? [];
+  } catch (err) {
+    console.error("Library import failed", err);
+    throw err;
   }
-  window.dispatchEvent(new Event("ams-library-imported"));
-  return body.items ?? [];
 }

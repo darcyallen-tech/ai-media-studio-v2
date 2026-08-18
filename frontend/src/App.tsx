@@ -368,6 +368,7 @@ function StudioCanvas() {
             onClear: () => undefined,
             onOpenLibrary: () => setLibraryOpen(true),
             onAttach: () => undefined,
+            onOsFiles: () => undefined,
             onClose: () => closeNode(id),
           },
         };
@@ -712,6 +713,19 @@ function StudioCanvas() {
               onClear: () => setSourceItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setSourceItem(item),
+              onOsFiles: (files) => {
+                void importOsFiles(files)
+                  .then((items) => {
+                    if (items[0]) tryAttachSlot(SOURCE_ID, items[0]);
+                  })
+                  .catch((err: unknown) => {
+                    console.error("Library import failed", err);
+                    toast(
+                      err instanceof Error ? err.message : "Import failed.",
+                      true,
+                    );
+                  });
+              },
               onClose: () => closeNode(SOURCE_ID),
             },
           };
@@ -727,6 +741,19 @@ function StudioCanvas() {
               onClear: () => setFirstItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setFirstItem(item),
+              onOsFiles: (files) => {
+                void importOsFiles(files)
+                  .then((items) => {
+                    if (items[0]) tryAttachSlot(FIRST_ID, items[0]);
+                  })
+                  .catch((err: unknown) => {
+                    console.error("Library import failed", err);
+                    toast(
+                      err instanceof Error ? err.message : "Import failed.",
+                      true,
+                    );
+                  });
+              },
               onClose: () => closeNode(FIRST_ID),
             },
           };
@@ -742,6 +769,19 @@ function StudioCanvas() {
               onClear: () => setLastItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => setLastItem(item),
+              onOsFiles: (files) => {
+                void importOsFiles(files)
+                  .then((items) => {
+                    if (items[0]) tryAttachSlot(LAST_ID, items[0]);
+                  })
+                  .catch((err: unknown) => {
+                    console.error("Library import failed", err);
+                    toast(
+                      err instanceof Error ? err.message : "Import failed.",
+                      true,
+                    );
+                  });
+              },
               onClose: () => closeNode(LAST_ID),
             },
           };
@@ -883,41 +923,60 @@ function StudioCanvas() {
 
   useEffect(() => {
     function onWinOver(event: globalThis.DragEvent) {
-      const os = isOsFileDrag(event.dataTransfer);
-      if (!os && !peekLibraryDrag()) return;
       const el = document.elementFromPoint(event.clientX, event.clientY);
       const overLibrary = Boolean(el?.closest("[data-os-drop='library']"));
       const overSlot = Boolean(el?.closest("[data-drop-slot]"));
+      const os = isOsFileDrag(event.dataTransfer);
+      if (overLibrary && !peekLibraryDrag()) {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+        return;
+      }
+      if (!os && !peekLibraryDrag()) return;
       if (!os && !overSlot) return;
-      if (os || overSlot || overLibrary) {
+      if (os || overSlot) {
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
       }
     }
+    function importThenMaybeAttach(files: File[], slot?: string) {
+      void importOsFiles(files)
+        .then((items) => {
+          if (!items.length) return;
+          if (slot) {
+            tryAttachSlot(slot, items[0]);
+            return;
+          }
+          setLibraryOpen(true);
+          toast(`Imported ${items.length} file(s) to Uploads.`);
+        })
+        .catch((err: unknown) => {
+          console.error("Library import failed", err);
+          toast(err instanceof Error ? err.message : "Import failed.", true);
+        });
+    }
     function onWinDrop(event: globalThis.DragEvent) {
       const el = document.elementFromPoint(event.clientX, event.clientY);
       const overLibrary = Boolean(el?.closest("[data-os-drop='library']"));
-      if (isOsFileDrag(event.dataTransfer)) {
+      const files = event.dataTransfer
+        ? filesFromDataTransfer(event.dataTransfer)
+        : [];
+      if (files.length) {
         if (overLibrary) return;
-        const files = event.dataTransfer
-          ? filesFromDataTransfer(event.dataTransfer)
-          : [];
-        if (!files.length) return;
+        const slotEl = el?.closest("[data-drop-slot]") as HTMLElement | null;
+        const slot = slotEl?.dataset.dropSlot;
         event.preventDefault();
         event.stopPropagation();
-        void importOsFiles(files)
-          .then((items) => {
-            if (items.length) {
-              setLibraryOpen(true);
-              toast(`Imported ${items.length} file(s) to Uploads.`);
-            }
-          })
-          .catch((err: unknown) => {
-            toast(
-              err instanceof Error ? err.message : "Import failed.",
-              true,
-            );
-          });
+        importThenMaybeAttach(
+          files,
+          slot === "source" ||
+            slot === "first" ||
+            slot === "last" ||
+            slot?.startsWith("char-") ||
+            slot?.startsWith("scene-")
+            ? slot
+            : undefined,
+        );
         return;
       }
       const item =
@@ -960,7 +1019,7 @@ function StudioCanvas() {
 
   const onFlowDrop = useCallback(
     (event: DragEvent) => {
-      if (isOsFileDrag(event.dataTransfer)) {
+      if (isOsFileDrag(event.dataTransfer) && event.dataTransfer.files.length) {
         event.preventDefault();
         const files = filesFromDataTransfer(event.dataTransfer);
         if (!files.length) return;
@@ -972,6 +1031,7 @@ function StudioCanvas() {
             }
           })
           .catch((err: unknown) => {
+            console.error("Library import failed", err);
             toast(err instanceof Error ? err.message : "Import failed.", true);
           });
         return;

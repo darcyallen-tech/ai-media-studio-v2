@@ -172,6 +172,7 @@ export type SourceNodeData = {
   onClear: () => void;
   onOpenLibrary: () => void;
   onAttach: (item: LibraryItem) => void;
+  onOsFiles?: (files: File[]) => void;
   onClose?: () => void;
 };
 
