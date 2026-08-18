@@ -7,6 +7,26 @@ export type ResultFlowNode = Node<ResultNodeData, "result">;
 export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const result = data.result;
   const paths = result.result_paths ?? [];
+  const local = result.local_paths ?? [];
+  const copyPath = local[0] || "";
+
+  async function copyLocal() {
+    if (!copyPath) return;
+    try {
+      await navigator.clipboard.writeText(copyPath);
+    } catch {
+      window.prompt("Copy path:", copyPath);
+    }
+  }
+
+  async function showInFolder() {
+    if (!copyPath) return;
+    await fetch("/library/reveal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: copyPath }),
+    });
+  }
 
   return (
     <div className="studio-node result-node">
@@ -30,6 +50,14 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           {paths.length === 0 ? (
             <p className="hint">No media paths returned.</p>
           ) : null}
+        </div>
+        <div className="result-actions">
+          <button type="button" className="ghost nodrag" disabled={!copyPath} onClick={showInFolder}>
+            Show in folder
+          </button>
+          <button type="button" className="ghost nodrag" disabled={!copyPath} onClick={copyLocal}>
+            Copy path
+          </button>
         </div>
       </div>
     </div>

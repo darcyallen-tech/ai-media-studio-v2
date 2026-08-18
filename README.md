@@ -4,15 +4,16 @@ Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
 
 **V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
 
-Phase 2: day-mode node canvas. One Prompt node → Generate → Result node. No night mode yet.
+Phase 3: day canvas with Prompt, Source, Result nodes and a Library panel.
 
 ## Layout
 
 ```
 ai-media-studio-v2/
   backend/app/     FastAPI + create_state / catalog / generate (V1 logic, imports adapted)
-  frontend/        Vite + React day canvas (Prompt node, Result node)
+  frontend/        Vite + React day canvas (Prompt, Source, Result + Library)
   outputs/         generated media (served at /outputs/...)
+  data/uploads/    imported Library files
 ```
 
 ## Prerequisites
@@ -50,7 +51,11 @@ Run uvicorn with cwd = `backend` so `app` imports resolve.
 | GET | `/models?mode=image\|video\|audio&modality=t2i` | Catalog for the dropdown |
 | GET | `/estimate?mode=&modality=&model_id=` | Cost only |
 | POST | `/estimate` | Same CreateState JSON as generate |
-| POST | `/generate` | `{ ok, result_paths[], cost, duration_sec, error? }` |
+| POST | `/generate` | `{ ok, result_paths[], local_paths[], cost, duration_sec, error? }` |
+| GET | `/library?source=&type=` | Resolve / uploads / generated |
+| POST | `/library/import` | Multipart files or local `path` → uploads |
+| GET | `/library/file` · `/library/thumb` | Serve / thumbnail a library item |
+| POST | `/library/reveal` | Open the file in Explorer |
 | GET | `/outputs/...` | Generated files |
 
 `POST /generate` body (CreateState-compatible):
@@ -75,11 +80,11 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/outputs` to the backend.
+Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/library`, `/outputs` to the backend.
 
-Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom (clamped). Prompt node (Image/Video/Audio, modality chips, model, prompt, Generate). On success a Result node appears, connected from Prompt.
+Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** when the modality needs a still/clip. Library (right drawer): From Resolve (V1 `data/resolve_handoff` if present), Uploads, Generated. Import or drag OS files into Uploads; click/drag onto a Source node. Result node: preview, cost, time, Show in folder, Copy path.
 
-Smoke: open UI → dotted light canvas + Prompt node → Image/T2I/Flux 2 Pro → Generate → Result node with image, cost, and time.
+Smoke: T2I still works with Prompt only. Import an image → attach to Source → I2I Generate → Result.
 
 ## V1
 

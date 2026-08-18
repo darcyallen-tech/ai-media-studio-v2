@@ -25,6 +25,12 @@ frontend/.vite/
 outputs/*
 !outputs/.gitkeep
 
+# Library uploads / thumbs / generated index
+data/uploads/*
+!data/uploads/.gitkeep
+data/library/thumbs/
+data/library/generated.json
+
 # Local env / secrets — never commit real keys
 .env
 .env.*

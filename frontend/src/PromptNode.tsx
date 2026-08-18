@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import type { GenerateResponse, Mode, ModelRow, PromptNodeData } from "./types";
+import {
+  SOURCE_MODALITIES,
+  type GenerateResponse,
+  type LibraryItem,
+  type Mode,
+  type ModelRow,
+  type PromptNodeData,
+} from "./types";
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "image", label: "Image" },
@@ -51,8 +58,13 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     () => models.find((m) => m.id === modelId) ?? null,
     [models, modelId],
   );
+  const needsSource = SOURCE_MODALITIES.has(modality);
+  const source = data.source;
   const canGenerate =
-    prompt.trim().length > 0 && Boolean(modelId) && !loading;
+    prompt.trim().length > 0 &&
+    Boolean(modelId) &&
+    !loading &&
+    (!needsSource || Boolean(source?.path));
 
   useEffect(() => {
     setModality(MODALITIES[mode][0]?.id ?? "");
@@ -115,6 +127,10 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     setLoading(true);
     setError(null);
     try {
+      if (needsSource && !source?.path) {
+        setError("This modality needs a Source still or clip.");
+        return;
+      }
       const res = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,6 +141,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           prompt: prompt.trim(),
           surface: "studio",
           params: {},
+          slots: slotsFromSource(source, modality),
         }),
       });
       const body = (await res.json()) as GenerateResponse & { detail?: string };
@@ -150,6 +167,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
 
   return (
     <div className="studio-node prompt-node">
+      <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">Prompt</div>
       <div className="node-body nodrag">
         <div className="pills" role="tablist" aria-label="Mode">
@@ -227,6 +245,20 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         />
 
         <p className="estimate">{estimate}</p>
+        {needsSource ? (
+          <div className="source-row">
+            <button type="button" className="ghost nodrag" onClick={data.onAddSource}>
+              {source ? "Source attached" : "Add Source"}
+            </button>
+            {source ? (
+              <span className="hint" title={source.path}>
+                {source.name}
+              </span>
+            ) : (
+              <span className="hint warn">Needs a Source still or clip</span>
+            )}
+          </div>
+        ) : null}
         {mode === "audio" ? (
           <p className="hint">Audio generate is Phase 7 — models list only.</p>
         ) : null}
@@ -249,4 +281,13 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
       <Handle type="source" position={Position.Right} className="node-handle" />
     </div>
   );
+}
+
+function slotsFromSource(item: LibraryItem | null, modality: string) {
+  if (!item?.path) return {};
+  const videoMods = new Set(["v2v", "extend"]);
+  if (item.kind === "video" || videoMods.has(modality)) {
+    return { source_video: item.path };
+  }
+  return { start_still: item.path };
 }

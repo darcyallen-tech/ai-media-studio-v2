@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -35,12 +36,25 @@ from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
 from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
+from app.library import (  # noqa: E402
+    ensure_library_dirs,
+    import_upload,
+    is_allowed_path,
+    list_library,
+    list_source,
+    record_generated,
+    resolve_library_file,
+    reveal_in_folder,
+    thumb_path,
+    write_upload,
+)
 from app.secrets_store import apply_secrets_to_env  # noqa: E402
 
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
+ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase1"
+APP_VERSION = "2.0.0-phase3"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -91,6 +105,10 @@ class ParamsIn(BaseModel):
     draft: bool = False
     parameters_json: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class RevealIn(BaseModel):
+    path: str
 
 
 class CreateStateIn(BaseModel):
@@ -363,6 +381,19 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
     elapsed = time.perf_counter() - t0
     duration = result.render_seconds if result.render_seconds is not None else elapsed
     cost = result.cost_estimate or result.cost_label or result.metrics_line or ""
+    local_paths: list[str] = []
+    for raw in list(result.paths) + list(result.image_paths) + (
+        [result.video_path] if result.video_path else []
+    ):
+        if raw and raw not in local_paths:
+            local_paths.append(raw)
+    if result.ok:
+        record_generated(
+            local_paths,
+            cost=cost,
+            duration_sec=duration,
+            model=result.model or result.model_key,
+        )
     return _payload(
         ok=result.ok,
         result_paths=_collect_result_paths(result),
@@ -374,6 +405,7 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "errors": list(result.errors),
             "image_paths": list(result.image_paths),
             "video_path": result.video_path,
+            "local_paths": local_paths,
             "job_kind": result.job_kind,
             "model": result.model,
             "model_key": result.model_key,
@@ -383,6 +415,82 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "estimate": estimate_create_cost(state) if not result.ok else cost,
         },
     )
+
+
+@app.get("/library")
+def library_get(
+    source: str | None = Query(default=None, description="resolve | uploads | generated"),
+    type: str | None = Query(default=None, description="image | video | audio | all"),
+) -> dict[str, Any]:
+    want = (type or "").strip().lower() or None
+    src = (source or "").strip().lower() or None
+    if src:
+        if src not in ("resolve", "uploads", "generated"):
+            raise HTTPException(status_code=400, detail="source must be resolve, uploads, or generated")
+        return list_source(src, want)
+    return list_library(want)
+
+
+@app.get("/library/file")
+def library_file(
+    source: str = Query(...),
+    rel: str = Query(...),
+) -> FileResponse:
+    try:
+        path = resolve_library_file(source, rel)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path, filename=path.name)
+
+
+@app.get("/library/thumb")
+def library_thumb(
+    source: str = Query(...),
+    rel: str = Query(...),
+) -> FileResponse:
+    try:
+        path = thumb_path(source, rel)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.post("/library/import")
+async def library_import(
+    files: list[UploadFile] | None = File(default=None),
+    path: str | None = Form(default=None),
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    errors: list[str] = []
+    if path and path.strip():
+        try:
+            items.append(import_upload(Path(path.strip())))
+        except (OSError, ValueError, RuntimeError) as exc:
+            errors.append(str(exc))
+    for upload in files or []:
+        name = upload.filename or "upload.bin"
+        try:
+            data = await upload.read()
+            items.append(write_upload(name, data))
+        except (OSError, ValueError, RuntimeError) as exc:
+            errors.append(f"{name}: {exc}")
+    if not items and not errors:
+        raise HTTPException(status_code=400, detail="Provide files or a local path.")
+    return {"ok": bool(items), "items": items, "errors": errors}
+
+
+@app.post("/library/reveal")
+def library_reveal(body: RevealIn) -> dict[str, Any]:
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="path is required")
+    if not is_allowed_path(raw):
+        raise HTTPException(status_code=403, detail="Path is outside library roots.")
+    try:
+        reveal_in_folder(raw)
+    except (OSError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 app.mount(

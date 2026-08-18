@@ -11,6 +11,7 @@ export default defineConfig({
       "/generate": "http://127.0.0.1:8000",
       "/estimate": "http://127.0.0.1:8000",
       "/outputs": "http://127.0.0.1:8000",
+      "/library": "http://127.0.0.1:8000",
     },
   },
 });
