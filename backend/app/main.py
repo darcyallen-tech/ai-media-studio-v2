@@ -77,6 +77,7 @@ from app.library import (  # noqa: E402
 )
 from app.prefs import load_prefs, save_prefs  # noqa: E402
 from app.prompt_builder import apply_builder, list_builder_scenarios  # noqa: E402
+from app.director import apply_director, list_director_fields  # noqa: E402
 from app.resolve_export import send_file_to_resolve  # noqa: E402
 from app.billing import (  # noqa: E402
     dashboard_urls,
@@ -102,7 +103,7 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase12"
+APP_VERSION = "2.0.0-phase13"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -227,6 +228,10 @@ class BuilderApplyIn(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
     mode: str = "image"
     modality: str = ""
+
+
+class DirectorApplyIn(BaseModel):
+    fields: dict[str, Any] = Field(default_factory=dict)
 
 
 class LibraryPinIn(BaseModel):
@@ -1184,6 +1189,16 @@ def builder_apply(body: BuilderApplyIn) -> dict[str, Any]:
         modality=body.modality,
     )
     return {"ok": True, "prompt": text}
+
+
+@app.get("/director/fields")
+def director_fields() -> dict[str, Any]:
+    return {"ok": True, **list_director_fields()}
+
+
+@app.post("/director/apply")
+def director_apply(body: DirectorApplyIn) -> dict[str, Any]:
+    return {"ok": True, "prompt": apply_director(body.fields)}
 
 
 @app.get("/resolve/status")

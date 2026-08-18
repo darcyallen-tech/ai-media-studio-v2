@@ -820,6 +820,14 @@
   width: 380px;
 }
 
+.director-node {
+  width: 320px;
+}
+
+.director-node .prompt {
+  min-height: 64px;
+}
+
 .builder-fields {
   display: flex;
   flex-direction: column;

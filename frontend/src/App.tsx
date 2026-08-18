@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import LibraryPanel from "./LibraryPanel";
 import MediaLightbox from "./MediaLightbox";
 import SettingsPanel from "./SettingsPanel";
+import DirectorNode from "./DirectorNode";
 import PromptBuilderNode from "./PromptBuilderNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
@@ -52,6 +53,8 @@ import {
   type LibraryItem,
   type Mode,
   type ModelRow,
+  directorAllowed,
+  type DirectorNodeData,
   type PromptBuilderNodeData,
   type PromptNodeData,
   type RefCatalogEntry,
@@ -68,6 +71,7 @@ import "./App.css";
 type StudioNode =
   | Node<PromptNodeData, "prompt">
   | Node<PromptBuilderNodeData, "builder">
+  | Node<DirectorNodeData, "director">
   | Node<ResultNodeData, "result">
   | Node<SourceNodeData, "source">
   | Node<SourceNodeData, "first">
@@ -85,6 +89,7 @@ const TOOL_TYPES = ["upscale", "denoise", "restore", "deblur", "interpolate"] as
 const nodeTypes: NodeTypes = {
   prompt: PromptNode,
   builder: PromptBuilderNode,
+  director: DirectorNode,
   result: ResultNode,
   source: SourceNode,
   first: SourceNode,
@@ -132,6 +137,7 @@ const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
 const BUILDER_ID = "prompt-builder";
+const DIRECTOR_ID = "director";
 const PIN_EDIT_SOURCE = "pin-edit-source";
 const PIN_EDIT_PROMPT = "pin-edit-prompt";
 const PIN_EDIT_RESULT = "pin-edit-result";
@@ -190,6 +196,7 @@ function StudioCanvas() {
   const [appliedPrompt, setAppliedPrompt] = useState<{
     text: string;
     token: number;
+    mode: "replace" | "append";
   } | null>(null);
   const [theme, setTheme] = useState<ThemeName>(() => readStoredTheme());
   const [plan, setPlan] = useState<GraphInputs>({});
@@ -240,7 +247,19 @@ function StudioCanvas() {
   }, []);
 
   const applyBuilderPrompt = useCallback((text: string) => {
-    setAppliedPrompt((cur) => ({ text, token: (cur?.token ?? 0) + 1 }));
+    setAppliedPrompt((cur) => ({
+      text,
+      token: (cur?.token ?? 0) + 1,
+      mode: "replace",
+    }));
+  }, []);
+
+  const applyDirectorPrompt = useCallback((text: string) => {
+    setAppliedPrompt((cur) => ({
+      text,
+      token: (cur?.token ?? 0) + 1,
+      mode: "append",
+    }));
   }, []);
 
   useEffect(() => {
@@ -764,6 +783,47 @@ function StudioCanvas() {
     studioModality,
   ]);
 
+  const addDirector = useCallback(() => {
+    if (!directorAllowed(studioMode, studioModality)) return;
+    setNodes((current) => {
+      if (current.some((n) => n.id === DIRECTOR_ID)) return current;
+      const prompt = current.find((n) => n.id === "prompt");
+      const node: StudioNode = {
+        id: DIRECTOR_ID,
+        type: "director",
+        position: {
+          x: Math.max(-180, (prompt?.position.x ?? PROMPT_POS.x) - 440),
+          y: (prompt?.position.y ?? PROMPT_POS.y) + 220,
+        },
+        dragHandle: ".node-header",
+        data: {
+          onClose: () => closeNode(DIRECTOR_ID),
+          onApply: applyDirectorPrompt,
+        },
+      };
+      return [...current, node];
+    });
+    setEdges((current) => {
+      if (current.some((e) => e.id === "e-director-prompt")) return current;
+      return addEdge(
+        {
+          id: "e-director-prompt",
+          source: DIRECTOR_ID,
+          target: "prompt",
+          style: { stroke: "#8aa4c2", strokeWidth: 2 },
+        },
+        current,
+      );
+    });
+  }, [
+    applyDirectorPrompt,
+    closeNode,
+    setEdges,
+    setNodes,
+    studioMode,
+    studioModality,
+  ]);
+
   const onModalityChange = useCallback(
     (mode: Mode, modality: string, model?: ModelRow | null) => {
       setStudioMode(mode);
@@ -1058,6 +1118,17 @@ function StudioCanvas() {
   }, [studioMode, closePinEdit]);
 
   useEffect(() => {
+    if (directorAllowed(studioMode, studioModality)) return;
+    setNodes((current) => {
+      if (!current.some((n) => n.id === DIRECTOR_ID)) return current;
+      return current.filter((n) => n.id !== DIRECTOR_ID);
+    });
+    setEdges((current) =>
+      current.filter((e) => e.source !== DIRECTOR_ID && e.target !== DIRECTOR_ID),
+    );
+  }, [setEdges, setNodes, studioMode, studioModality]);
+
+  useEffect(() => {
     if (pinEdit && !framePins.some((p) => p.id === pinEdit.pinId)) {
       closePinEdit();
     }
@@ -1093,8 +1164,10 @@ function StudioCanvas() {
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
               onAddPromptBuilder: addPromptBuilder,
+              onAddDirector: addDirector,
               incomingPrompt: appliedPrompt?.text ?? null,
               incomingPromptToken: appliedPrompt?.token ?? 0,
+              incomingPromptMode: appliedPrompt?.mode ?? "replace",
               onAttachSource: (item) => tryAttachSlot(SOURCE_ID, item),
               pins: framePins,
               onPinsChange: setFramePins,
@@ -1137,6 +1210,16 @@ function StudioCanvas() {
               modality: studioModality,
               onClose: () => closeNode(BUILDER_ID),
               onApply: applyBuilderPrompt,
+            },
+          };
+        }
+        if (n.id === DIRECTOR_ID) {
+          return {
+            ...n,
+            type: "director",
+            data: {
+              onClose: () => closeNode(DIRECTOR_ID),
+              onApply: applyDirectorPrompt,
             },
           };
         }
@@ -1376,8 +1459,10 @@ function StudioCanvas() {
   }, [
     addCharacterNode,
     addFirstNode,
+    addDirector,
     addPromptBuilder,
     applyBuilderPrompt,
+    applyDirectorPrompt,
     appliedPrompt,
     closeNode,
     addLastNode,
@@ -1583,6 +1668,7 @@ function StudioCanvas() {
         (src.startsWith("char-") && tgt === "prompt") ||
         (src.startsWith("scene-") && tgt === "prompt") ||
         (src === BUILDER_ID && tgt === "prompt") ||
+        (src === DIRECTOR_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
         (src.startsWith("result") &&
           TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
@@ -1662,6 +1748,7 @@ function StudioCanvas() {
             (src.startsWith("char-") && tgt === "prompt") ||
             (src.startsWith("scene-") && tgt === "prompt") ||
             (src === BUILDER_ID && tgt === "prompt") ||
+        (src === DIRECTOR_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||
             (src.startsWith("result") &&
               TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||

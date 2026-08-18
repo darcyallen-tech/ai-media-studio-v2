@@ -19,6 +19,8 @@ import {
   type LibraryItem,
   type Mode,
   type ModelRow,
+  directorAllowed,
+  mergeDirectorBlock,
   type PromptNodeData,
   type RefRolePayload,
   type RefSlotState,
@@ -197,8 +199,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   useEffect(() => {
     if (!incomingToken) return;
     if (data.incomingPrompt == null) return;
+    if (data.incomingPromptMode === "append") {
+      setPrompt((cur) => mergeDirectorBlock(cur, data.incomingPrompt || ""));
+      return;
+    }
     setPrompt(data.incomingPrompt);
-  }, [incomingToken, data.incomingPrompt]);
+  }, [incomingToken, data.incomingPrompt, data.incomingPromptMode]);
 
   const addSourceRef = useRef(data.onAddSource);
   addSourceRef.current = data.onAddSource;
@@ -718,6 +724,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               onClick={data.onAddPromptBuilder}
             >
               Add Prompt Builder
+            </button>
+          ) : null}
+          {!isLocked && data.onAddDirector && directorAllowed(mode, modality) ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              onClick={data.onAddDirector}
+            >
+              Add Director
             </button>
           ) : null}
           <button

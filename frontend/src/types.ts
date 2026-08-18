@@ -141,8 +141,10 @@ export type PromptNodeData = {
   onAttachSource?: (item: LibraryItem) => void;
   onClose?: () => void;
   onAddPromptBuilder?: () => void;
+  onAddDirector?: () => void;
   incomingPrompt?: string | null;
   incomingPromptToken?: number;
+  incomingPromptMode?: "replace" | "append";
   lockTo?: PromptLock | null;
   pins?: FramePin[];
   onPinsChange?: (pins: FramePin[]) => void;
@@ -163,6 +165,38 @@ export type PromptBuilderNodeData = {
   onClose?: () => void;
   onApply: (text: string) => void;
 };
+
+export type DirectorNodeData = {
+  onClose?: () => void;
+  onApply: (text: string) => void;
+};
+
+export const DIRECTOR_MODALITIES = [
+  "t2v",
+  "i2v",
+  "r2v",
+  "bridge",
+  "extend",
+] as const;
+
+export function directorAllowed(mode?: Mode | string, modality?: string) {
+  return (
+    mode === "video" &&
+    DIRECTOR_MODALITIES.includes(
+      (modality || "").toLowerCase() as (typeof DIRECTOR_MODALITIES)[number],
+    )
+  );
+}
+
+export function mergeDirectorBlock(existing: string, block: string) {
+  const cam = block.trim();
+  const stripped = existing
+    .replace(/\n*Camera \(Director\):[\s\S]*$/i, "")
+    .trimEnd();
+  if (!cam) return stripped;
+  if (!stripped) return cam;
+  return `${stripped}\n\n${cam}`;
+}
 
 export type ToolKind =
   | "upscale"
