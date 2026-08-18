@@ -71,25 +71,26 @@ export default function FrameEdit({
   const [jumps, setJumps] = useState<{ t: number; url: string }[]>([]);
   const [hover, setHover] = useState<"ok" | "bad" | null>(null);
 
-  const src = source?.url || "";
+  const src = typeof source?.url === "string" ? source.url : "";
+  const hasVideo = itemMediaKind(source) === "video" && Boolean(src);
 
   useEffect(() => {
     setCurrent(0);
     setDuration(0);
     setPlaying(false);
     setJumps([]);
-    onDuration(0);
+    onDuration?.(0);
   }, [source?.path, onDuration]);
 
   function syncFromVideo() {
     const el = videoRef.current;
-    if (!el) return;
-    const t = el.currentTime || 0;
-    const d = el.duration;
-    setCurrent(t);
+    if (!el || el.readyState < 1) return;
+    const t = Number(el.currentTime);
+    const d = Number(el.duration);
+    if (Number.isFinite(t) && t >= 0) setCurrent(t);
     if (Number.isFinite(d) && d > 0) {
       setDuration(d);
-      onDuration(d);
+      onDuration?.(d);
     }
     setPlaying(!el.paused);
   }
@@ -101,7 +102,11 @@ export default function FrameEdit({
       return;
     }
     const el = videoRef.current;
-    const t = Math.max(0, Math.round((el?.currentTime ?? current) * 100) / 100);
+    const raw =
+      el && el.readyState >= 1 && Number.isFinite(el.currentTime)
+        ? el.currentTime
+        : current;
+    const t = Math.max(0, Math.round(raw * 100) / 100);
     const near = pins.find((p) => Math.abs(p.timestamp_s - t) < 0.05);
     setPinning(true);
     try {
@@ -146,16 +151,22 @@ export default function FrameEdit({
 
   function seekTo(t: number) {
     const el = videoRef.current;
-    if (!el) return;
-    const next = Math.max(0, Math.min(duration || t, t));
-    el.currentTime = next;
+    if (!el || el.readyState < 1) return;
+    const cap = duration > 0 ? duration : t;
+    const next = Math.max(0, Math.min(cap, t));
+    try {
+      el.currentTime = next;
+    } catch (err) {
+      console.error("Frame seek failed", err);
+      return;
+    }
     setCurrent(next);
   }
 
   function togglePlay() {
     const el = videoRef.current;
-    if (!el) return;
-    if (el.paused) void el.play();
+    if (!el || el.readyState < 1) return;
+    if (el.paused) void el.play().catch((err) => console.error("Frame play failed", err));
     else el.pause();
   }
 
@@ -218,7 +229,7 @@ export default function FrameEdit({
         <p className="hint">Preparing clip for Aleph…</p>
       ) : null}
 
-      {itemMediaKind(source) === "video" && src ? (
+      {hasVideo ? (
         <>
           <div
             className={
@@ -254,23 +265,28 @@ export default function FrameEdit({
               preload="metadata"
               draggable={false}
               onLoadedMetadata={syncFromVideo}
+              onLoadedData={syncFromVideo}
+              onDurationChange={syncFromVideo}
               onTimeUpdate={syncFromVideo}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onClick={togglePlay}
             />
           </div>
+          {duration > 0 ? (
           <input
             type="range"
             className="frame-scrub nodrag nowheel"
             min={0}
-            max={duration || 0}
+            max={duration}
             step={0.01}
-            value={Math.min(current, duration || current)}
-            disabled={!duration}
+            value={Math.min(current, duration)}
             onChange={(e) => seekTo(Number(e.target.value))}
             aria-label="Scrub source video"
           />
+          ) : (
+            <p className="hint">Loading clip metadata…</p>
+          )}
           <div className="frame-transport">
             <button type="button" className="ghost nodrag" onClick={togglePlay}>
               {playing ? "Pause" : "Play"}
@@ -350,7 +366,7 @@ export default function FrameEdit({
             />
           ))}
         </ul>
-      ) : source?.kind === "video" ? (
+      ) : hasVideo ? (
         <p className="hint">No pins yet — scrub, then pin the frame to edit.</p>
       ) : null}
     </div>
@@ -422,7 +438,9 @@ function PinRow({
         {thumb ? <img src={thumb} alt="" draggable={false} /> : <span />}
       </button>
       <div className="pin-meta">
-        <span>t={pin.timestamp_s.toFixed(2)}s</span>
+        <span>
+          t={Number.isFinite(pin.timestamp_s) ? pin.timestamp_s.toFixed(2) : "—"}s
+        </span>
         <span className="hint">Drop a Library still to replace</span>
       </div>
       <button type="button" className="ghost nodrag" onClick={onClear}>

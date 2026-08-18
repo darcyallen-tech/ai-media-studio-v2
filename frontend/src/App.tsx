@@ -418,7 +418,20 @@ function StudioCanvas() {
   const onModalityChange = useCallback(
     (mode: Mode, modality: string, model?: ModelRow | null) => {
       setStudioMode(mode);
-      setPlan(inputPlan(modality, model, mode));
+      setPlan((prev) => {
+        const next = inputPlan(modality, model, mode);
+        if (
+          prev.source === next.source &&
+          Boolean(prev.sourceOptional) === Boolean(next.sourceOptional) &&
+          Boolean(prev.first) === Boolean(next.first) &&
+          Boolean(prev.last) === Boolean(next.last) &&
+          Boolean(prev.characters) === Boolean(next.characters) &&
+          Boolean(prev.scenes) === Boolean(next.scenes)
+        ) {
+          return prev;
+        }
+        return next;
+      });
       setMaxRefs(maxRefImages(model, modality));
     },
     [],

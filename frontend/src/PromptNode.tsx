@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import FrameEdit, {
   ALEPH_MAX_PINS,
   ALEPH_MIN_S,
   type FramePin,
 } from "./FrameEdit";
+import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
 import {
   durationOptions,
@@ -53,7 +54,32 @@ const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
 
 export type PromptFlowNode = Node<PromptNodeData, "prompt">;
 
-export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
+const FRAME_FALLBACK_MODEL: ModelRow = {
+  id: "runware:aleph@2.0",
+  label: "Aleph 2.0 (Runware)",
+  mode: "frame",
+  modality: "frame",
+  notes: "Configure Runware / model unavailable — paste a Runware key in Settings.",
+  requires_runware: true,
+};
+
+function modesFor(mode: Mode) {
+  return MODALITIES[mode] ?? [];
+}
+
+export default function PromptNode(props: NodeProps<PromptFlowNode>) {
+  const [epoch, setEpoch] = useState(0);
+  return (
+    <PromptErrorBoundary
+      key={epoch}
+      onBackToImage={() => setEpoch((n) => n + 1)}
+    >
+      <PromptNodeInner {...props} />
+    </PromptErrorBoundary>
+  );
+}
+
+function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [mode, setMode] = useState<Mode>("image");
   const [modality, setModality] = useState("t2i");
   const [models, setModels] = useState<ModelRow[]>([]);
@@ -75,7 +101,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [clipDuration, setClipDuration] = useState(0);
   const [hasRunwareKey, setHasRunwareKey] = useState(true);
 
-  const modalityOptions = MODALITIES[mode];
+  const modalityOptions = modesFor(mode);
   const selectedModel = useMemo(
     () => models.find((m) => m.id === modelId) ?? null,
     [models, modelId],
@@ -137,15 +163,25 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading && phase === "idle";
 
   useEffect(() => {
-    setModality(MODALITIES[mode][0]?.id ?? "");
+    setModality(modesFor(mode)[0]?.id ?? "");
     setError(null);
     setPins([]);
     setClipDuration(0);
   }, [mode]);
 
+  const addSourceRef = useRef(data.onAddSource);
+  addSourceRef.current = data.onAddSource;
   useEffect(() => {
-    if (mode === "frame") data.onAddSource();
-  }, [mode, data.onAddSource]);
+    if (mode !== "frame") return;
+    const id = window.setTimeout(() => {
+      try {
+        addSourceRef.current?.();
+      } catch (err) {
+        console.error("Frame add Source failed", err);
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [mode]);
 
   useEffect(() => {
     setPins([]);
@@ -173,7 +209,11 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
 
   const onModalityChange = data.onModalityChange;
   useEffect(() => {
-    onModalityChange(mode, modality, selectedModel);
+    try {
+      onModalityChange?.(mode, modality, selectedModel);
+    } catch (err) {
+      console.error("onModalityChange failed", err);
+    }
   }, [mode, modality, selectedModel, onModalityChange]);
 
   useEffect(() => {
@@ -188,7 +228,13 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         return res.json();
       })
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const rows = body.models ?? [];
+        const rows = Array.isArray(body.models) ? body.models : [];
+        if (mode === "frame" && rows.length === 0) {
+          setModels([FRAME_FALLBACK_MODEL]);
+          setModelId(FRAME_FALLBACK_MODEL.id);
+          setModelsError("Configure Runware / model unavailable");
+          return;
+        }
         setModels(rows);
         const next =
           (body.default_id && rows.some((r) => r.id === body.default_id)
@@ -198,6 +244,13 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Models fetch failed", err);
+        if (mode === "frame") {
+          setModels([FRAME_FALLBACK_MODEL]);
+          setModelId(FRAME_FALLBACK_MODEL.id);
+          setModelsError("Configure Runware / model unavailable");
+          return;
+        }
         setModelsError(
           err instanceof Error ? err.message : "Could not load models.",
         );
@@ -393,7 +446,15 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
               onClick={() => {
                 const next = item.id;
                 setMode(next);
-                data.onModalityChange(next, MODALITIES[next][0]?.id ?? "", null);
+                try {
+                  data.onModalityChange?.(
+                    next,
+                    modesFor(next)[0]?.id ?? "",
+                    null,
+                  );
+                } catch (err) {
+                  console.error("Mode change failed", err);
+                }
               }}
             >
               {item.label}
@@ -450,21 +511,46 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">{selectedModel.notes}</p>
         ) : null}
 
-        {isFrame ? (
-          <FrameEdit
-            source={data.source}
-            pins={pins}
-            onPinsChange={setPins}
-            onDuration={onDuration}
-            hasRunwareKey={hasRunwareKey}
-            onOpenSettings={data.onOpenSettings}
-            onAddSource={data.onAddSource}
-            onAttachSource={(item) => {
-              data.onAddSource();
-              data.onAttachSource?.(item);
+        {isFrame && typeof FrameEdit !== "function" ? (
+          <p className="hint warn" role="alert">
+            Frame layout failed to load. Refresh the page or click Image.
+          </p>
+        ) : isFrame ? (
+          <PromptErrorBoundary
+            onBackToImage={() => {
+              setMode("image");
+              try {
+                data.onModalityChange?.("image", "t2i", null);
+              } catch (err) {
+                console.error("Back to Image failed", err);
+              }
             }}
-            preparing={phase === "preparing"}
-          />
+          >
+            <FrameEdit
+              source={data.source ?? null}
+              pins={Array.isArray(pins) ? pins : []}
+              onPinsChange={setPins}
+              onDuration={onDuration}
+              hasRunwareKey={hasRunwareKey}
+              onOpenSettings={data.onOpenSettings}
+              onAddSource={() => {
+                try {
+                  data.onAddSource?.();
+                } catch (err) {
+                  console.error("Frame add Source failed", err);
+                }
+              }}
+              onAttachSource={(item) => {
+                try {
+                  data.onAddSource?.();
+                  data.onAttachSource?.(item);
+                } catch (err) {
+                  console.error("Frame attach Source failed", err);
+                }
+              }}
+              preparing={phase === "preparing"}
+            />
+          </PromptErrorBoundary>
         ) : null}
 
         {!isFrame && (durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || isAudio && modality === "music") ? (

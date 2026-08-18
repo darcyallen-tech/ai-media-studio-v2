@@ -88,6 +88,27 @@
   width: 460px;
 }
 
+.prompt-crash {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.crash-log {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f6e8e8;
+  border: 1px solid #e0b4b4;
+  border-radius: 8px;
+  padding: 8px;
+  color: #7a2020;
+}
+
 .req-row {
   display: flex;
   align-items: center;
