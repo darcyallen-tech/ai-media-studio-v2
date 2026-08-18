@@ -223,6 +223,8 @@ class SettingsOpenIn(BaseModel):
 class SettingsPrefsIn(BaseModel):
     retention_days: int | None = None
     theme: str | None = None
+    grid_snap: str | None = None
+    edge_style: str | None = None
 
 
 class BuilderApplyIn(BaseModel):
@@ -1175,7 +1177,12 @@ def library_pin(item_id: str, body: LibraryPinIn | None = None) -> dict[str, Any
 
 @app.post("/settings/preferences")
 def settings_prefs(body: SettingsPrefsIn) -> dict[str, Any]:
-    prefs = save_prefs(retention_days=body.retention_days, theme=body.theme)
+    prefs = save_prefs(
+        retention_days=body.retention_days,
+        theme=body.theme,
+        grid_snap=body.grid_snap,
+        edge_style=body.edge_style,
+    )
     purged = {"purged": 0}
     try:
         purged = purge_expired()

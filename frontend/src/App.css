@@ -844,7 +844,13 @@
 }
 
 .shot-builder-node {
-  width: 320px;
+  width: 340px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .shot-node .prompt {

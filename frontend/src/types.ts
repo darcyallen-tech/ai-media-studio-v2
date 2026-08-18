@@ -351,6 +351,9 @@ export type ShotBuilderNodeData = {
   shotId: string;
   shotLabel: string;
   whoChoices: string[];
+  characters?: string[];
+  scenes?: string[];
+  props?: string[];
   onClose?: () => void;
   onApply: (patch: {
     action: string;

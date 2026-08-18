@@ -1,51 +1,60 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import type { ShotBuilderNodeData } from "./types";
 
 export type ShotBuilderFlowNode = Node<ShotBuilderNodeData, "shot-builder">;
 
-type FieldSpec = {
-  id: string;
-  label: string;
-  type?: string;
-  choices?: string[];
-  value?: string;
-  placeholder?: string;
-};
+const BEATS = [
+  "Establish",
+  "Entrance",
+  "Dialogue",
+  "Action",
+  "Reaction",
+  "Hold",
+];
+const EMOTIONS = ["Calm", "Tense", "Joyful", "Somber", "Urgent", "Mysterious"];
+const CAMERAS = [
+  "Static hold",
+  "Push in",
+  "Pull back",
+  "Orbit",
+  "Crane reveal",
+  "Handheld energy",
+];
 
 export default function ShotBuilderNode({
   data,
 }: NodeProps<ShotBuilderFlowNode>) {
-  const [fields, setFields] = useState<FieldSpec[]>([]);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const characters = data.characters ?? data.whoChoices ?? [];
+  const scenes = data.scenes ?? [];
+  const props = data.props ?? [];
+  const [beat, setBeat] = useState("Establish");
+  const [emotion, setEmotion] = useState("Calm");
+  const [camera, setCamera] = useState("Push in");
+  const [who, setWho] = useState<string[]>([]);
+  const [where, setWhere] = useState("");
+  const [whereTo, setWhereTo] = useState("");
+  const [pickedProps, setPickedProps] = useState<string[]>([]);
+  const [actionLine, setActionLine] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
-  const whoKey = (data.whoChoices || []).join("|");
 
-  useEffect(() => {
-    const ac = new AbortController();
-    const qs = new URLSearchParams({
-      who: whoKey,
-    });
-    fetch(`/shot-builder/fields?${qs}`, { signal: ac.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Shot builder ${res.status}`);
-        return res.json();
-      })
-      .then((body: { fields?: FieldSpec[] }) => {
-        const rows = Array.isArray(body.fields) ? body.fields : [];
-        setFields(rows);
-        const next: Record<string, string> = {};
-        for (const row of rows) next[row.id] = row.value ?? "";
-        setValues(next);
-      })
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Could not load builder.");
-      });
-    return () => ac.abort();
-  }, [whoKey]);
+  const preview = useMemo(() => {
+    const names = who.join(" and ");
+    const stuff = pickedProps.join(" and ");
+    if (names && stuff && where) {
+      return `${names} picks up ${stuff} in ${where}`;
+    }
+    if (where && whereTo) return `from ${where} into ${whereTo}`;
+    return "";
+  }, [pickedProps, where, whereTo, who]);
+
+  function toggle(list: string[], value: string) {
+    return list.includes(value)
+      ? list.filter((v) => v !== value)
+      : [...list, value];
+  }
 
   async function onApply() {
     if (applying) return;
@@ -55,7 +64,18 @@ export default function ShotBuilderNode({
       const res = await fetch("/shot-builder/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fields: values }),
+        body: JSON.stringify({
+          fields: {
+            beat,
+            emotion,
+            camera,
+            who: who.join("|"),
+            where,
+            where_to: whereTo,
+            props: pickedProps.join("|"),
+            action_line: actionLine,
+          },
+        }),
       });
       const body = (await res.json()) as {
         ok?: boolean;
@@ -99,41 +119,138 @@ export default function ShotBuilderNode({
           Fills {data.shotLabel || "this shot"} — existing action text is kept
           and the new beat is appended.
         </p>
-        {fields.map((field) => (
-          <label key={field.id} className="builder-field">
-            <span className="field-label">{field.label}</span>
-            {field.type === "text" || field.type === "textarea" ? (
-              <input
-                className="model nodrag"
-                type="text"
-                placeholder={field.placeholder || ""}
-                value={values[field.id] ?? ""}
-                onChange={(e) =>
-                  setValues((cur) => ({ ...cur, [field.id]: e.target.value }))
+        <label className="builder-field">
+          <span className="field-label">Beat type</span>
+          <select
+            className="model nodrag"
+            value={beat}
+            onChange={(e) => setBeat(e.target.value)}
+          >
+            {BEATS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="field-label">Who</span>
+        {characters.length ? (
+          <div className="chip-row">
+            {characters.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={
+                  who.includes(name) ? "pill modality on" : "pill modality"
                 }
-              />
-            ) : (
-              <select
-                className="model nodrag"
-                value={values[field.id] ?? ""}
-                onChange={(e) =>
-                  setValues((cur) => ({ ...cur, [field.id]: e.target.value }))
-                }
+                onClick={() => setWho((cur) => toggle(cur, name))}
               >
-                {(field.choices ?? []).map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
-            )}
-          </label>
-        ))}
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Add Hub characters to pick subjects.</p>
+        )}
+        <span className="field-label">Where</span>
+        {scenes.length ? (
+          <div className="chip-row">
+            {scenes.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={where === name ? "pill modality on" : "pill modality"}
+                onClick={() => setWhere((cur) => (cur === name ? "" : name))}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Add a Hub scene to set location.</p>
+        )}
+        <span className="field-label">Into (optional second location)</span>
+        {scenes.length ? (
+          <div className="chip-row">
+            {scenes.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={
+                  whereTo === name ? "pill modality on" : "pill modality"
+                }
+                onClick={() => setWhereTo((cur) => (cur === name ? "" : name))}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Pick a second scene for a move between rooms.</p>
+        )}
+        <span className="field-label">With prop</span>
+        {props.length ? (
+          <div className="chip-row">
+            {props.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={
+                  pickedProps.includes(name) ? "pill modality on" : "pill modality"
+                }
+                onClick={() => setPickedProps((cur) => toggle(cur, name))}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Add Hub props to mention them by name.</p>
+        )}
+        <label className="builder-field">
+          <span className="field-label">Emotion</span>
+          <select
+            className="model nodrag"
+            value={emotion}
+            onChange={(e) => setEmotion(e.target.value)}
+          >
+            {EMOTIONS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="builder-field">
+          <span className="field-label">Camera preset</span>
+          <select
+            className="model nodrag"
+            value={camera}
+            onChange={(e) => setCamera(e.target.value)}
+          >
+            {CAMERAS.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="builder-field">
+          <span className="field-label">Action (1 line, optional)</span>
+          <input
+            className="model nodrag"
+            type="text"
+            placeholder="Leave blank to use the beat helper"
+            value={actionLine}
+            onChange={(e) => setActionLine(e.target.value)}
+          />
+        </label>
+        {preview ? <p className="hint">{preview}</p> : null}
         <div className="prompt-actions">
           <button
             type="button"
             className="generate nodrag"
-            disabled={applying || fields.length === 0}
+            disabled={applying}
             onClick={() => void onApply()}
           >
             {applying ? "Applying…" : "Apply to shot"}

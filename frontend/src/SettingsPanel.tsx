@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { EdgeStyle, GridSnap } from "./canvasPrefs";
 import type { ThemeName } from "./theme";
 import { toast } from "./toast";
 
@@ -13,7 +14,12 @@ type SettingsBody = {
     resolve_inbox_note?: string | null;
     resolve_outbox?: string;
   };
-  preferences?: { theme?: string; retention_days?: number };
+  preferences?: {
+    theme?: string;
+    retention_days?: number;
+    grid_snap?: string;
+    edge_style?: string;
+  };
 };
 
 type BalanceRow = {
@@ -46,6 +52,10 @@ type Props = {
   onClose: () => void;
   theme: ThemeName;
   onTheme: (theme: ThemeName) => void;
+  gridSnap: GridSnap;
+  onGridSnap: (snap: GridSnap) => void;
+  edgeStyle: EdgeStyle;
+  onEdgeStyle: (style: EdgeStyle) => void;
 };
 
 function money(n: number | undefined) {
@@ -58,6 +68,10 @@ export default function SettingsPanel({
   onClose,
   theme,
   onTheme,
+  gridSnap,
+  onGridSnap,
+  edgeStyle,
+  onEdgeStyle,
 }: Props) {
   const [settings, setSettings] = useState<SettingsBody | null>(null);
   const [falDraft, setFalDraft] = useState("");
@@ -357,6 +371,51 @@ export default function SettingsPanel({
             onClick={() => onTheme("night")}
           >
             Night
+          </button>
+        </div>
+        <p className="hint">Grid snap</p>
+        <div className="pills" role="tablist" aria-label="Grid snap">
+          {(
+            [
+              ["off", "Off"],
+              ["fine", "Fine"],
+              ["medium", "Medium"],
+              ["coarse", "Coarse"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={gridSnap === id}
+              className={gridSnap === id ? "pill modality on" : "pill modality"}
+              onClick={() => onGridSnap(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="hint">Connection style</p>
+        <div className="pills" role="tablist" aria-label="Connection style">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={edgeStyle === "curved"}
+            className={edgeStyle === "curved" ? "pill modality on" : "pill modality"}
+            onClick={() => onEdgeStyle("curved")}
+          >
+            Curved
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={edgeStyle === "straight"}
+            className={
+              edgeStyle === "straight" ? "pill modality on" : "pill modality"
+            }
+            onClick={() => onEdgeStyle("straight")}
+          >
+            Straight
           </button>
         </div>
         <label className="settings-field">

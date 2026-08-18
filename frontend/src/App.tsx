@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from "react"
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -42,6 +43,17 @@ import {
   isOsFileDrag,
 } from "./osImport";
 import { readJson } from "./http";
+import {
+  normalizeEdgeStyle,
+  normalizeSnap,
+  readStoredEdgeStyle,
+  readStoredSnap,
+  snapGridFor,
+  storeEdgeStyle,
+  storeSnap,
+  type EdgeStyle,
+  type GridSnap,
+} from "./canvasPrefs";
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
 import { bindToast, toast } from "./toast";
 import {
@@ -189,6 +201,17 @@ function renumberShots(rows: ShotState[]): ShotState[] {
   });
 }
 
+function assetNames(rows: RefSlotState[], hubIds: string[]): string[] {
+  const attached = rows.filter((r) => hubIds.includes(r.id));
+  const src = attached.length ? attached : rows;
+  const out: string[] = [];
+  for (const row of src) {
+    const name = (row.label || row.item?.name || "").trim();
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
 function sequenceLine(rows: ShotState[]): string {
   if (!rows.length) return "";
   return [...rows]
@@ -256,6 +279,10 @@ function StudioCanvas() {
     mode: "replace" | "append";
   } | null>(null);
   const [theme, setTheme] = useState<ThemeName>(() => readStoredTheme());
+  const [gridSnap, setGridSnap] = useState<GridSnap>(() => readStoredSnap());
+  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(() =>
+    readStoredEdgeStyle(),
+  );
   const [plan, setPlan] = useState<GraphInputs>({});
   const [maxRefs, setMaxRefs] = useState(0);
   const sourceAccept = sourceAcceptFor(studioMode, plan);
@@ -285,23 +312,59 @@ function StudioCanvas() {
     const ac = new AbortController();
     fetch("/settings", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
-      .then((body: { preferences?: { theme?: string } } | null) => {
+      .then((body: {
+          preferences?: {
+            theme?: string;
+            grid_snap?: string;
+            edge_style?: string;
+          };
+        } | null) => {
         if (!body) return;
         setTheme(normalizeTheme(body.preferences?.theme ?? readStoredTheme()));
+        if (body.preferences?.grid_snap) {
+          setGridSnap(normalizeSnap(body.preferences.grid_snap));
+        }
+        if (body.preferences?.edge_style) {
+          setEdgeStyle(normalizeEdgeStyle(body.preferences.edge_style));
+        }
       })
       .catch(() => undefined);
     return () => ac.abort();
   }, []);
 
-  const setThemePref = useCallback((next: ThemeName) => {
-    setTheme(next);
-    applyTheme(next);
+  const persistPrefs = useCallback((patch: Record<string, string>) => {
     void fetch("/settings/preferences", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: next }),
+      body: JSON.stringify(patch),
     }).catch(() => undefined);
   }, []);
+
+  const setThemePref = useCallback((next: ThemeName) => {
+    setTheme(next);
+    applyTheme(next);
+    persistPrefs({ theme: next });
+  }, [persistPrefs]);
+
+  const setGridSnapPref = useCallback(
+    (next: GridSnap) => {
+      setGridSnap(next);
+      storeSnap(next);
+      persistPrefs({ grid_snap: next });
+    },
+    [persistPrefs],
+  );
+
+  const setEdgeStylePref = useCallback(
+    (next: EdgeStyle) => {
+      setEdgeStyle(next);
+      storeEdgeStyle(next);
+      persistPrefs({ edge_style: next });
+    },
+    [persistPrefs],
+  );
+
+  const edgeType = edgeStyle === "straight" ? "straight" : "default";
 
   const applyBuilderPrompt = useCallback((text: string) => {
     setAppliedPrompt((cur) => ({
@@ -327,6 +390,13 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  useEffect(() => {
+    setEdges((current) =>
+      current.map((e) => (e.type === edgeType ? e : { ...e, type: edgeType })),
+    );
+  }, [edgeType, setEdges]);
+
   const { screenToFlowPosition, getNodes, fitView, setCenter } = useReactFlow();
   const nodesReady = useNodesInitialized();
   const didCenterPrompt = useRef(false);
@@ -1324,9 +1394,7 @@ function StudioCanvas() {
       }
       const shot = shots.find((s) => s.id === target);
       setActiveShotId(target);
-      const who = [...characters, ...scenes, ...props]
-        .map((r) => r.label || r.item?.name || "")
-        .filter(Boolean);
+      const who = assetNames(characters, hubIds);
       setNodes((current) => {
         const parent = current.find((n) => n.id === target);
         const existing = current.find((n) => n.id === SHOT_BUILDER_ID);
@@ -1342,6 +1410,9 @@ function StudioCanvas() {
             shotId: target,
             shotLabel: shot?.label || "Shot",
             whoChoices: who,
+            characters: who,
+            scenes: assetNames(scenes, hubIds),
+            props: assetNames(props, hubIds),
             onClose: () => closeNode(SHOT_BUILDER_ID),
             onApply: () => undefined,
           },
@@ -1370,6 +1441,7 @@ function StudioCanvas() {
       activeShotId,
       characters,
       closeNode,
+      hubIds,
       props,
       scenes,
       setEdges,
@@ -2172,9 +2244,7 @@ function StudioCanvas() {
         if (n.id === SHOT_BUILDER_ID) {
           const targetId = activeShotId || shots[shots.length - 1]?.id || "";
           const shot = shots.find((s) => s.id === targetId);
-          const who = [...characters, ...scenes, ...props]
-            .map((r) => r.label || r.item?.name || "")
-            .filter(Boolean);
+          const who = assetNames(characters, hubIds);
           return {
             ...n,
             type: "shot-builder",
@@ -2182,6 +2252,9 @@ function StudioCanvas() {
               shotId: targetId,
               shotLabel: shot?.label || "Shot",
               whoChoices: who,
+              characters: who,
+              scenes: assetNames(scenes, hubIds),
+              props: assetNames(props, hubIds),
               onClose: () => closeNode(SHOT_BUILDER_ID),
               onApply: (patch) => {
                 if (targetId) applyShotBuilder(targetId, patch);
@@ -2492,6 +2565,10 @@ function StudioCanvas() {
         onClose={() => setSettingsOpen(false)}
         theme={theme}
         onTheme={setThemePref}
+        gridSnap={gridSnap}
+        onGridSnap={setGridSnapPref}
+        edgeStyle={edgeStyle}
+        onEdgeStyle={setEdgeStylePref}
       />
       <ReactFlow
         nodes={nodes}
@@ -2502,6 +2579,17 @@ function StudioCanvas() {
         onDragOver={onFlowDragOver}
         onDrop={onFlowDrop}
         nodeTypes={nodeTypes}
+        snapToGrid={gridSnap !== "off"}
+        snapGrid={snapGridFor(gridSnap) ?? [22, 22]}
+        defaultEdgeOptions={{
+          type: edgeType,
+          style: { stroke: "#8aa4c2", strokeWidth: 2 },
+        }}
+        connectionLineType={
+          edgeStyle === "straight"
+            ? ConnectionLineType.Straight
+            : ConnectionLineType.Bezier
+        }
         colorMode={theme === "night" ? "dark" : "light"}
         proOptions={{ hideAttribution: true }}
         panOnDrag={[1]}
