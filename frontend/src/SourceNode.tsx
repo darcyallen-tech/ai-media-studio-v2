@@ -31,6 +31,7 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
   }
 
   function allowDrop(event: DragEvent) {
+    if (data.locked) return false;
     if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
       event.preventDefault();
       event.stopPropagation();
@@ -141,9 +142,13 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
             <p className="hint" title={item.path}>
               {item.name}
             </p>
-            <button type="button" className="ghost nodrag" onClick={data.onClear}>
-              Clear
-            </button>
+            {data.locked ? (
+              <p className="hint">Locked to this pin still</p>
+            ) : (
+              <button type="button" className="ghost nodrag" onClick={data.onClear}>
+                Clear
+              </button>
+            )}
           </>
         ) : (
           <div

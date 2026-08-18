@@ -10,6 +10,7 @@ import { readJson } from "./http";
 import { toast } from "./toast";
 import {
   hasLibraryPayload,
+  type FramePin,
   type LibraryItem,
 } from "./types";
 
@@ -17,12 +18,7 @@ export const ALEPH_MIN_S = 2;
 export const ALEPH_MAX_S = 30;
 export const ALEPH_MAX_PINS = 5;
 
-export type FramePin = {
-  id: string;
-  timestamp_s: number;
-  pin: "first" | "last" | "timestamp";
-  image: LibraryItem;
-};
+export type { FramePin };
 
 type Props = {
   source: LibraryItem | null;
@@ -33,6 +29,8 @@ type Props = {
   onOpenSettings?: () => void;
   onAddSource: () => void;
   onAttachSource?: (item: LibraryItem) => void;
+  onEditPin?: (pin: FramePin) => void;
+  editingPinId?: string | null;
   preparing?: boolean;
 };
 
@@ -82,6 +80,8 @@ export default function FrameEdit({
   onOpenSettings,
   onAddSource,
   onAttachSource,
+  onEditPin,
+  editingPinId,
   preparing,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -272,6 +272,12 @@ export default function FrameEdit({
       {preparing ? (
         <p className="hint">Preparing clip for Aleph…</p>
       ) : null}
+      {editingPinId ? (
+        <p className="hint pin-edit-banner">
+          Editing pin @ t=
+          {pins.find((p) => p.id === editingPinId)?.timestamp_s.toFixed(2) ?? "—"}s
+        </p>
+      ) : null}
 
       {hasVideo ? (
         <>
@@ -404,9 +410,11 @@ export default function FrameEdit({
             <PinRow
               key={p.id}
               pin={p}
+              editing={editingPinId === p.id}
               onClear={() => onPinsChange(pins.filter((x) => x.id !== p.id))}
               onReplace={(item) => replacePin(p.id, item)}
               onSeek={() => seekTo(p.timestamp_s)}
+              onEdit={onEditPin ? () => onEditPin(p) : undefined}
             />
           ))}
         </ul>
@@ -419,14 +427,18 @@ export default function FrameEdit({
 
 function PinRow({
   pin,
+  editing,
   onClear,
   onReplace,
   onSeek,
+  onEdit,
 }: {
   pin: FramePin;
+  editing?: boolean;
   onClear: () => void;
   onReplace: (item: LibraryItem) => void;
   onSeek: () => void;
+  onEdit?: () => void;
 }) {
   const [hover, setHover] = useState<"ok" | "bad" | null>(null);
   const thumb = pin.image.thumb_url || pin.image.url;
@@ -448,7 +460,9 @@ function PinRow({
           ? "pin-row drop-hot"
           : hover === "bad"
             ? "pin-row drop-bad"
-            : "pin-row"
+            : editing
+              ? "pin-row editing"
+              : "pin-row"
       }
       onDragEnter={(e) => {
         if (!allow(e)) return;
@@ -487,6 +501,11 @@ function PinRow({
         </span>
         <span className="hint">Drop a Library still to replace</span>
       </div>
+      {onEdit ? (
+        <button type="button" className="ghost nodrag" onClick={onEdit}>
+          Edit
+        </button>
+      ) : null}
       <button type="button" className="ghost nodrag" onClick={onClear}>
         Clear
       </button>

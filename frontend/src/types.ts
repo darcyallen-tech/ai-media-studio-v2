@@ -109,6 +109,20 @@ export type RefRolePayload = {
   note?: string | null;
 };
 
+export type FramePin = {
+  id: string;
+  timestamp_s: number;
+  pin: "first" | "last" | "timestamp";
+  image: LibraryItem;
+};
+
+export type PromptLock = {
+  mode: Mode;
+  modality: string;
+  title?: string;
+  preferModel?: string;
+};
+
 export type PromptNodeData = {
   onGenerated: (result: GenerateResponse) => void;
   onAddSource: () => void;
@@ -124,6 +138,12 @@ export type PromptNodeData = {
   onOpenSettings?: () => void;
   onOpenLibrary?: () => void;
   onAttachSource?: (item: LibraryItem) => void;
+  onClose?: () => void;
+  lockTo?: PromptLock | null;
+  pins?: FramePin[];
+  onPinsChange?: (pins: FramePin[]) => void;
+  onEditPin?: (pin: FramePin) => void;
+  editingPinId?: string | null;
   source: LibraryItem | null;
   first: LibraryItem | null;
   last: LibraryItem | null;
@@ -143,6 +163,8 @@ export type ResultNodeData = {
   result: GenerateResponse;
   onClose?: () => void;
   onTool?: (kind: ToolKind) => void;
+  onApplyToPin?: () => void;
+  applyLabel?: string;
 };
 
 export type ToolModelRow = {
@@ -178,6 +200,7 @@ export type SourceNodeData = {
   onAttach: (item: LibraryItem) => void;
   onOsFiles?: (files: File[]) => void;
   onClose?: () => void;
+  locked?: boolean;
 };
 
 export type RefNodeData = {

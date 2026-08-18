@@ -105,6 +105,16 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           </div>
         ) : null}
         <div className="result-actions">
+          {data.onApplyToPin && !isVid && !isAud ? (
+            <button
+              type="button"
+              className="generate nodrag apply-pin"
+              disabled={!copyPath}
+              onClick={data.onApplyToPin}
+            >
+              {data.applyLabel || "Apply to pin"}
+            </button>
+          ) : null}
           <button type="button" className="ghost nodrag" disabled={!copyPath} onClick={showInFolder}>
             Show in folder
           </button>

@@ -43,6 +43,7 @@ import {
   maxRefImages,
   parseLibraryPayload,
   sourceAcceptFor,
+  type FramePin,
   type GenerateResponse,
   type GraphInputs,
   type LibraryItem,
@@ -123,6 +124,19 @@ const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
+const PIN_EDIT_SOURCE = "pin-edit-source";
+const PIN_EDIT_PROMPT = "pin-edit-prompt";
+const PIN_EDIT_RESULT = "pin-edit-result";
+
+function isPinEditId(id: string) {
+  return id.startsWith("pin-edit");
+}
+
+type PinEditSession = {
+  pinId: string;
+  timestamp_s: number;
+  still: LibraryItem;
+};
 
 const initialEdges: Edge[] = [];
 
@@ -167,6 +181,8 @@ function StudioCanvas() {
   const [plan, setPlan] = useState<GraphInputs>({});
   const [maxRefs, setMaxRefs] = useState(0);
   const sourceAccept = sourceAcceptFor(studioMode, plan);
+  const [framePins, setFramePins] = useState<FramePin[]>([]);
+  const [pinEdit, setPinEdit] = useState<PinEditSession | null>(null);
   const [toolSources, setToolSources] = useState<Record<string, LibraryItem>>(
     {},
   );
@@ -191,9 +207,21 @@ function StudioCanvas() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const { screenToFlowPosition, getNodes } = useReactFlow();
 
+  const closePinEdit = useCallback(() => {
+    setPinEdit(null);
+    setNodes((current) => current.filter((n) => !isPinEditId(n.id)));
+    setEdges((current) =>
+      current.filter((e) => !isPinEditId(e.source) && !isPinEditId(e.target)),
+    );
+  }, [setEdges, setNodes]);
+
   const closeNode = useCallback(
     (id: string) => {
       if (id === "prompt") return;
+      if (isPinEditId(id)) {
+        closePinEdit();
+        return;
+      }
       if (id === SOURCE_ID) setSourceItem(null);
       if (id === FIRST_ID) setFirstItem(null);
       if (id === LAST_ID) setLastItem(null);
@@ -215,7 +243,7 @@ function StudioCanvas() {
         current.filter((e) => e.source !== id && e.target !== id),
       );
     },
-    [setEdges, setNodes],
+    [closePinEdit, setEdges, setNodes],
   );
 
   const spawnResult = useCallback(
@@ -257,6 +285,155 @@ function StudioCanvas() {
       });
     },
     [closeNode, setEdges, setNodes],
+  );
+
+  const spawnPinResult = useCallback(
+    (result: GenerateResponse) => {
+      setNodes((current) => {
+        const parent = current.find((n) => n.id === PIN_EDIT_PROMPT);
+        const existing = current.find((n) => n.id === PIN_EDIT_RESULT);
+        const node: StudioNode = {
+          id: PIN_EDIT_RESULT,
+          type: "result",
+          position: existing?.position ?? {
+            x: (parent?.position.x ?? PROMPT_POS.x) + 360,
+            y: parent?.position.y ?? PROMPT_POS.y,
+          },
+          dragHandle: ".node-header",
+          data: {
+            result,
+            onClose: () => closeNode(PIN_EDIT_RESULT),
+            onTool: () => undefined,
+            onApplyToPin: () => undefined,
+            applyLabel: "Apply to pin",
+          },
+        };
+        if (existing) {
+          return current.map((n) => (n.id === PIN_EDIT_RESULT ? node : n));
+        }
+        return [...current, node];
+      });
+      setEdges((current) => {
+        if (current.some((e) => e.id === "e-pin-edit-result")) return current;
+        return addEdge(
+          {
+            id: "e-pin-edit-result",
+            source: PIN_EDIT_PROMPT,
+            target: PIN_EDIT_RESULT,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [closeNode, setEdges, setNodes],
+  );
+
+  const spawnPinEdit = useCallback(
+    (pin: FramePin) => {
+      if (!pin.image?.path) {
+        toast("This pin has no still to edit.", true);
+        return;
+      }
+      setPinEdit({
+        pinId: pin.id,
+        timestamp_s: pin.timestamp_s,
+        still: pin.image,
+      });
+      setNodes((current) => {
+        const without = current.filter((n) => !isPinEditId(n.id));
+        const prompt = without.find((n) => n.id === "prompt");
+        const px = prompt?.position.x ?? PROMPT_POS.x;
+        const py = prompt?.position.y ?? PROMPT_POS.y;
+        const srcNode: StudioNode = {
+          id: PIN_EDIT_SOURCE,
+          type: "source",
+          position: { x: px + 480, y: py + 80 },
+          dragHandle: ".node-header",
+          data: {
+            title: `Pin @ t=${pin.timestamp_s.toFixed(2)}s`,
+            accept: "image",
+            item: pin.image,
+            locked: true,
+            onClear: () => undefined,
+            onOpenLibrary: () => undefined,
+            onAttach: () => undefined,
+            onClose: () => closePinEdit(),
+          },
+        };
+        const prNode: StudioNode = {
+          id: PIN_EDIT_PROMPT,
+          type: "prompt",
+          position: { x: px + 760, y: py + 40 },
+          dragHandle: ".node-header",
+          data: {
+            onGenerated: spawnPinResult,
+            onAddSource: () => undefined,
+            onAddFirst: () => undefined,
+            onAddLast: () => undefined,
+            onAddCharacter: () => undefined,
+            onAddScene: () => undefined,
+            onModalityChange: () => undefined,
+            onClose: () => closePinEdit(),
+            lockTo: {
+              mode: "image",
+              modality: "i2i",
+              title: `Editing pin @ t=${pin.timestamp_s.toFixed(2)}s`,
+              preferModel: "flux 2 pro",
+            },
+            source: pin.image,
+            first: null,
+            last: null,
+            characters: [],
+            scenes: [],
+            maxRefs: 0,
+          },
+        };
+        return [...without, srcNode, prNode];
+      });
+      setEdges((current) => {
+        const without = current.filter(
+          (e) => !isPinEditId(e.source) && !isPinEditId(e.target),
+        );
+        return addEdge(
+          {
+            id: "e-pin-edit-src-prompt",
+            source: PIN_EDIT_SOURCE,
+            target: PIN_EDIT_PROMPT,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          without,
+        );
+      });
+    },
+    [closePinEdit, setEdges, setNodes, spawnPinResult],
+  );
+
+  const applyPinStill = useCallback(
+    (result: GenerateResponse) => {
+      if (!pinEdit) {
+        toast("No pin is being edited.", true);
+        return;
+      }
+      const item = itemFromResult(result);
+      if (!item || item.kind !== "image" || !item.path) {
+        toast("Apply to pin needs an image result.", true);
+        return;
+      }
+      const bust = item.url.includes("?") ? "&" : "?";
+      const url = item.url ? `${item.url}${bust}v=${Date.now()}` : item.url;
+      const still: LibraryItem = {
+        ...item,
+        url,
+        thumb_url: url || item.thumb_url,
+      };
+      setFramePins((cur) =>
+        cur.map((p) => (p.id === pinEdit.pinId ? { ...p, image: still } : p)),
+      );
+      toast(`Applied still to pin @ t=${pinEdit.timestamp_s.toFixed(2)}s`);
+      closePinEdit();
+    },
+    [closePinEdit, pinEdit],
   );
 
   const spawnResultNear = useCallback(
@@ -701,6 +878,19 @@ function StudioCanvas() {
   );
 
   useEffect(() => {
+    if (studioMode !== "frame") {
+      closePinEdit();
+      setFramePins([]);
+    }
+  }, [studioMode, closePinEdit]);
+
+  useEffect(() => {
+    if (pinEdit && !framePins.some((p) => p.id === pinEdit.pinId)) {
+      closePinEdit();
+    }
+  }, [closePinEdit, framePins, pinEdit]);
+
+  useEffect(() => {
     const kind = itemMediaKind(sourceItem);
     if (sourceAccept === "image" && kind === "video") {
       setSourceItem(null);
@@ -730,12 +920,60 @@ function StudioCanvas() {
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttachSource: (item) => tryAttachSlot(SOURCE_ID, item),
+              pins: framePins,
+              onPinsChange: setFramePins,
+              onEditPin: spawnPinEdit,
+              editingPinId: pinEdit?.pinId ?? null,
               source: sourceItem,
               first: firstItem,
               last: lastItem,
               characters,
               scenes,
               maxRefs,
+            },
+          };
+        }
+        if (n.id === PIN_EDIT_SOURCE && pinEdit) {
+          return {
+            ...n,
+            type: "source",
+            data: {
+              title: `Pin @ t=${pinEdit.timestamp_s.toFixed(2)}s`,
+              accept: "image",
+              item: pinEdit.still,
+              locked: true,
+              onClear: () => undefined,
+              onOpenLibrary: () => undefined,
+              onAttach: () => undefined,
+              onClose: () => closePinEdit(),
+            },
+          };
+        }
+        if (n.id === PIN_EDIT_PROMPT && pinEdit) {
+          return {
+            ...n,
+            type: "prompt",
+            data: {
+              onGenerated: spawnPinResult,
+              onAddSource: () => undefined,
+              onAddFirst: () => undefined,
+              onAddLast: () => undefined,
+              onAddCharacter: () => undefined,
+              onAddScene: () => undefined,
+              onModalityChange: () => undefined,
+              onClose: () => closePinEdit(),
+              lockTo: {
+                mode: "image",
+                modality: "i2i",
+                title: `Editing pin @ t=${pinEdit.timestamp_s.toFixed(2)}s`,
+                preferModel: "flux 2 pro",
+              },
+              source: pinEdit.still,
+              first: null,
+              last: null,
+              characters: [],
+              scenes: [],
+              maxRefs: 0,
             },
           };
         }
@@ -826,6 +1064,10 @@ function StudioCanvas() {
         if (n.type === "result") {
           const result = "result" in n.data ? n.data.result : undefined;
           if (!result) return n;
+          const pinApply =
+            n.id === PIN_EDIT_RESULT && pinEdit
+              ? () => applyPinStill(result)
+              : undefined;
           return {
             ...n,
             type: "result",
@@ -833,6 +1075,8 @@ function StudioCanvas() {
               result,
               onClose: () => closeNode(n.id),
               onTool: (kind) => spawnTool(n.id, kind, result),
+              onApplyToPin: pinApply,
+              applyLabel: pinApply ? "Apply to pin" : undefined,
             },
           };
         }
@@ -939,19 +1183,25 @@ function StudioCanvas() {
     addLastNode,
     addSceneNode,
     addSourceNode,
+    applyPinStill,
+    closePinEdit,
     charCatalog,
     characters,
     firstItem,
+    framePins,
     lastItem,
     maxRefs,
     onModalityChange,
     pickCatalog,
+    pinEdit,
     plan.source,
     sourceAccept,
     sceneCatalog,
     scenes,
     setNodes,
     sourceItem,
+    spawnPinEdit,
+    spawnPinResult,
     spawnResult,
     spawnResultNear,
     spawnTool,
@@ -1114,6 +1364,8 @@ function StudioCanvas() {
       const tgt = connection.target || "";
       const ok =
         (src === SOURCE_ID && tgt === "prompt") ||
+        (src === PIN_EDIT_SOURCE && tgt === PIN_EDIT_PROMPT) ||
+        (src === PIN_EDIT_PROMPT && tgt === PIN_EDIT_RESULT) ||
         (src === FIRST_ID && tgt === "prompt") ||
         (src === LAST_ID && tgt === "prompt") ||
         (src.startsWith("char-") && tgt === "prompt") ||

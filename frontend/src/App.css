@@ -217,6 +217,20 @@
   box-shadow: 0 0 0 2px #f08a8a;
 }
 
+.pin-row.editing {
+  border-color: #4cae08;
+  box-shadow: 0 0 0 2px #8fe83a;
+}
+
+.pin-edit-banner {
+  color: #2a5a08;
+  font-weight: 650;
+}
+
+.apply-pin:not(:disabled) {
+  box-shadow: 0 0 0 1px #8fe83a inset;
+}
+
 .pin-thumb {
   padding: 0;
   border: none;
@@ -241,7 +255,7 @@
 }
 
 .pin-row .ghost {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .result-node {

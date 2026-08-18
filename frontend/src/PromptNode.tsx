@@ -3,8 +3,8 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import FrameEdit, {
   ALEPH_MAX_PINS,
   ALEPH_MIN_S,
-  type FramePin,
 } from "./FrameEdit";
+import NodeClose from "./NodeClose";
 import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
 import {
@@ -13,6 +13,7 @@ import {
   inputPlan,
   maxRefImages,
   resolutionOptions,
+  type FramePin,
   type GenerateResponse,
   type LibraryItem,
   type Mode,
@@ -79,9 +80,27 @@ export default function PromptNode(props: NodeProps<PromptFlowNode>) {
   );
 }
 
+function pickPreferredModel(
+  rows: ModelRow[],
+  hint: string | undefined,
+  defaultId: string | undefined,
+): string {
+  if (hint) {
+    const h = hint.toLowerCase();
+    const byLabel = rows.find((r) => {
+      const blob = `${r.id} ${r.label}`.toLowerCase();
+      return blob.includes(h) && !blob.includes("t2i");
+    });
+    if (byLabel) return byLabel.id;
+  }
+  if (defaultId && rows.some((r) => r.id === defaultId)) return defaultId;
+  return rows[0]?.id || "";
+}
+
 function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
-  const [mode, setMode] = useState<Mode>("image");
-  const [modality, setModality] = useState("t2i");
+  const lock = data.lockTo;
+  const [mode, setMode] = useState<Mode>(lock?.mode ?? "image");
+  const [modality, setModality] = useState(lock?.modality ?? "t2i");
   const [models, setModels] = useState<ModelRow[]>([]);
   const [modelId, setModelId] = useState("");
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -97,9 +116,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "preparing" | "generating">("idle");
-  const [pins, setPins] = useState<FramePin[]>([]);
+  const [localPins, setLocalPins] = useState<FramePin[]>([]);
+  const pins = data.pins ?? localPins;
+  const setPins = data.onPinsChange ?? setLocalPins;
   const [clipDuration, setClipDuration] = useState(0);
   const [hasRunwareKey, setHasRunwareKey] = useState(true);
+  const isLocked = Boolean(lock);
 
   const modalityOptions = modesFor(mode);
   const selectedModel = useMemo(
@@ -163,16 +185,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading && phase === "idle";
 
   useEffect(() => {
+    if (isLocked) return;
     setModality(modesFor(mode)[0]?.id ?? "");
     setError(null);
     setPins([]);
     setClipDuration(0);
-  }, [mode]);
+  }, [mode, isLocked, setPins]);
 
   const addSourceRef = useRef(data.onAddSource);
   addSourceRef.current = data.onAddSource;
   useEffect(() => {
-    if (mode !== "frame") return;
+    if (isLocked || mode !== "frame") return;
     const id = window.setTimeout(() => {
       try {
         addSourceRef.current?.();
@@ -181,7 +204,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       }
     }, 0);
     return () => window.clearTimeout(id);
-  }, [mode]);
+  }, [mode, isLocked]);
 
   useEffect(() => {
     setPins([]);
@@ -209,12 +232,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
 
   const onModalityChange = data.onModalityChange;
   useEffect(() => {
+    if (isLocked) return;
     try {
       onModalityChange?.(mode, modality, selectedModel);
     } catch (err) {
       console.error("onModalityChange failed", err);
     }
-  }, [mode, modality, selectedModel, onModalityChange]);
+  }, [mode, modality, selectedModel, onModalityChange, isLocked]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -236,11 +260,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           return;
         }
         setModels(rows);
-        const next =
-          (body.default_id && rows.some((r) => r.id === body.default_id)
-            ? body.default_id
-            : rows[0]?.id) || "";
-        setModelId(next);
+        setModelId(
+          pickPreferredModel(rows, lock?.preferModel, body.default_id),
+        );
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
@@ -433,8 +455,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   return (
     <div className={isFrame ? "studio-node prompt-node frame-wide" : "studio-node prompt-node"}>
       <Handle type="target" position={Position.Left} className="node-handle" />
-      <div className="node-header">Prompt</div>
+      <div className="node-header">
+        <span>{lock?.title || "Prompt"}</span>
+        <NodeClose onClose={data.onClose} />
+      </div>
       <div className="node-body nodrag">
+        {!isLocked ? (
         <div className="pills" role="tablist" aria-label="Mode">
           {MODES.map((item) => (
             <button
@@ -461,8 +487,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             </button>
           ))}
         </div>
+        ) : (
+          <p className="hint pin-edit-banner">{lock?.title || "Image · I2I"}</p>
+        )}
 
-        {!isFrame ? (
+        {!isLocked && !isFrame ? (
         <div className="pills chips" role="tablist" aria-label="Modality">
           {modalityOptions.map((item) => (
             <button
@@ -548,6 +577,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                   console.error("Frame attach Source failed", err);
                 }
               }}
+              onEditPin={data.onEditPin}
+              editingPinId={data.editingPinId}
               preparing={phase === "preparing"}
             />
           </PromptErrorBoundary>
@@ -726,7 +757,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               </span>
             ) : null}
           </div>
-        ) : !isFrame && plan.source ? (
+        ) : !isLocked && !isFrame && plan.source ? (
           <div className="source-row">
             <button type="button" className="ghost nodrag" onClick={data.onAddSource}>
               {data.source ? "Source attached" : "Add Source"}
