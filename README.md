@@ -4,7 +4,7 @@ Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
 
 **V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
 
-Phase 4: Resolve receive (From Resolve inbox) + Send to Resolve.
+Phase 5: I2V + Bridge First/Last nodes, video duration/aspect/audio params.
 
 ## Layout
 
@@ -84,9 +84,18 @@ npm run dev
 
 Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/library`, `/resolve`, `/outputs` to the backend.
 
-Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** when the modality needs a still/clip. Library (right drawer): From Resolve (V1 `data/resolve_handoff` if present), Uploads, Generated. Import or drag OS files into Uploads; click/drag onto a Source node. Result node: preview, cost, time, Show in folder, Copy path.
+Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / audio only when the catalog model supports them. Library unchanged.
 
-Smoke: T2I still works with Prompt only. Import an image → attach to Source → I2I Generate → Result.
+| Modality | Inputs |
+|----------|--------|
+| T2I / T2V | Prompt only |
+| I2I / I2V | Source still |
+| V2V / Extend | Source video |
+| Bridge | First Frame + Last Frame |
+
+Smoke: I2V still → video Result. Bridge two stills at 3s → video Result. T2I / I2I still work.
+
+Follow-up (not this phase): Character / Scene nodes (Phase 6), Upscale node.
 
 ## Resolve handoff
 

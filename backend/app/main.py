@@ -57,7 +57,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase4"
+APP_VERSION = "2.0.0-phase5"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -347,13 +347,19 @@ def estimate_get(
     duration: str | None = Query(default=None),
     aspect: str | None = Query(default=None),
     resolution: str | None = Query(default=None),
+    generate_audio: bool | None = Query(default=None),
 ) -> dict[str, Any]:
     """Cost-only estimate from catalog helpers (query form)."""
     body = CreateStateIn(
         mode=mode,
         modality=modality,
         model_id=model_id,
-        params=ParamsIn(duration=duration, aspect=aspect, resolution=resolution),
+        params=ParamsIn(
+            duration=duration,
+            aspect=aspect,
+            resolution=resolution,
+            audio_on=generate_audio,
+        ),
     )
     return _estimate_payload(body)
 

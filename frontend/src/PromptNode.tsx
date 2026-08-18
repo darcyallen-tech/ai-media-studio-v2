@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
-  SOURCE_MODALITIES,
+  durationOptions,
+  formatDurationToken,
+  inputPlan,
   type GenerateResponse,
   type LibraryItem,
   type Mode,
@@ -49,6 +51,9 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [modelId, setModelId] = useState("");
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [duration, setDuration] = useState("");
+  const [aspect, setAspect] = useState("");
+  const [audioOn, setAudioOn] = useState<boolean | null>(null);
   const [estimate, setEstimate] = useState("Est. cost: —");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,18 +63,42 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     () => models.find((m) => m.id === modelId) ?? null,
     [models, modelId],
   );
-  const needsSource = SOURCE_MODALITIES.has(modality);
-  const source = data.source;
+  const plan = inputPlan(modality, selectedModel);
+  const durs = durationOptions(selectedModel);
+  const aspects = selectedModel?.aspect_choices ?? [];
+  const showAudio = Boolean(selectedModel?.supports_audio);
+  const promptRequired = modality !== "i2v";
+
+  const missing: string[] = [];
+  if (plan.first && !data.first?.path) missing.push("First Frame");
+  if (plan.last && !data.last?.path) missing.push("Last Frame");
+  if (plan.source && !data.source?.path) {
+    missing.push(plan.source === "video" ? "Source video" : "Source still");
+  } else if (plan.source === "video" && data.source && data.source.kind !== "video") {
+    missing.push("Source video (clip, not a still)");
+  } else if (
+    plan.source === "image" &&
+    data.source &&
+    data.source.kind === "video"
+  ) {
+    missing.push("Source still (not a clip)");
+  }
+
   const canGenerate =
-    prompt.trim().length > 0 &&
     Boolean(modelId) &&
     !loading &&
-    (!needsSource || Boolean(source?.path));
+    missing.length === 0 &&
+    (!promptRequired || prompt.trim().length > 0);
 
   useEffect(() => {
     setModality(MODALITIES[mode][0]?.id ?? "");
     setError(null);
   }, [mode]);
+
+  const onModalityChange = data.onModalityChange;
+  useEffect(() => {
+    onModalityChange(mode, modality);
+  }, [mode, modality, onModalityChange]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -101,12 +130,30 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   }, [mode, modality]);
 
   useEffect(() => {
+    if (!selectedModel) {
+      setDuration("");
+      setAspect("");
+      setAudioOn(null);
+      return;
+    }
+    const opts = durationOptions(selectedModel);
+    const def = selectedModel.default_duration || opts[0] || "";
+    setDuration(def);
+    const as = selectedModel.aspect_choices ?? [];
+    setAspect(selectedModel.default_aspect || as[0] || "");
+    setAudioOn(selectedModel.supports_audio ? true : null);
+  }, [selectedModel]);
+
+  useEffect(() => {
     if (!modelId) {
       setEstimate("Est. cost: —");
       return;
     }
     const ac = new AbortController();
     const qs = new URLSearchParams({ mode, modality, model_id: modelId });
+    if (duration) qs.set("duration", duration);
+    if (aspect) qs.set("aspect", aspect);
+    if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Estimate ${res.status}`);
@@ -120,17 +167,14 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [mode, modality, modelId]);
+  }, [mode, modality, modelId, duration, aspect, audioOn]);
 
   async function onGenerate() {
     if (!canGenerate) return;
     setLoading(true);
     setError(null);
     try {
-      if (needsSource && !source?.path) {
-        setError("This modality needs a Source still or clip.");
-        return;
-      }
+      const slots = slotsFromGraph(modality, data.source, data.first, data.last);
       const res = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,8 +184,12 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           model_id: modelId,
           prompt: prompt.trim(),
           surface: "studio",
-          params: {},
-          slots: slotsFromSource(source, modality),
+          params: {
+            duration: duration || null,
+            aspect: aspect || null,
+            audio_on: audioOn,
+          },
+          slots,
         }),
       });
       const body = (await res.json()) as GenerateResponse & { detail?: string };
@@ -232,33 +280,104 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">{selectedModel.notes}</p>
         ) : null}
 
+        {durs.length > 0 || aspects.length > 0 || showAudio ? (
+          <div className="params">
+            {durs.length > 0 ? (
+              <label className="param">
+                <span>Duration</span>
+                <select
+                  className="model nodrag"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                >
+                  {durs.map((tok) => (
+                    <option key={tok} value={tok}>
+                      {formatDurationToken(tok)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {aspects.length > 0 ? (
+              <label className="param">
+                <span>Aspect</span>
+                <select
+                  className="model nodrag"
+                  value={aspect}
+                  onChange={(e) => setAspect(e.target.value)}
+                >
+                  {aspects.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {showAudio ? (
+              <label className="param check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(audioOn)}
+                  onChange={(e) => setAudioOn(e.target.checked)}
+                />
+                Audio
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="field-label" htmlFor="prompt">
           Prompt
         </label>
         <textarea
           id="prompt"
           className="prompt nodrag nowheel"
-          rows={6}
+          rows={5}
           placeholder="Describe the still, clip, or track…"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
 
         <p className="estimate">{estimate}</p>
-        {needsSource ? (
+
+        {plan.source ? (
           <div className="source-row">
             <button type="button" className="ghost nodrag" onClick={data.onAddSource}>
-              {source ? "Source attached" : "Add Source"}
+              {data.source ? "Source attached" : "Add Source"}
             </button>
-            {source ? (
-              <span className="hint" title={source.path}>
-                {source.name}
+            {data.source ? (
+              <span className="hint" title={data.source.path}>
+                {data.source.name}
               </span>
             ) : (
-              <span className="hint warn">Needs a Source still or clip</span>
+              <span className="hint warn">
+                {plan.source === "video"
+                  ? "Needs a Source clip"
+                  : "Needs a Source still"}
+              </span>
             )}
           </div>
         ) : null}
+
+        {plan.first || plan.last ? (
+          <div className="source-row">
+            {plan.first ? (
+              <button type="button" className="ghost nodrag" onClick={data.onAddFirst}>
+                {data.first ? "First Frame attached" : "Add First Frame"}
+              </button>
+            ) : null}
+            {plan.last ? (
+              <button type="button" className="ghost nodrag" onClick={data.onAddLast}>
+                {data.last ? "Last Frame attached" : "Add Last Frame"}
+              </button>
+            ) : null}
+            {missing.length ? (
+              <span className="hint warn">Needs {missing.join(" + ")}</span>
+            ) : null}
+          </div>
+        ) : null}
+
         {mode === "audio" ? (
           <p className="hint">Audio generate is Phase 7 — models list only.</p>
         ) : null}
@@ -283,11 +402,21 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   );
 }
 
-function slotsFromSource(item: LibraryItem | null, modality: string) {
-  if (!item?.path) return {};
-  const videoMods = new Set(["v2v", "extend"]);
-  if (item.kind === "video" || videoMods.has(modality)) {
-    return { source_video: item.path };
+function slotsFromGraph(
+  modality: string,
+  source: LibraryItem | null,
+  first: LibraryItem | null,
+  last: LibraryItem | null,
+) {
+  const slots: Record<string, string> = {};
+  if (first?.path) slots.start_still = first.path;
+  if (last?.path) slots.end_still = last.path;
+  if (source?.path) {
+    if (modality === "v2v" || modality === "extend" || source.kind === "video") {
+      slots.source_video = source.path;
+    } else if (!slots.start_still) {
+      slots.start_still = source.path;
+    }
   }
-  return { start_still: item.path };
+  return slots;
 }

@@ -18,24 +18,32 @@ import PromptNode from "./PromptNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
 import { bindToast } from "./toast";
-import type {
-  GenerateResponse,
-  LibraryItem,
-  PromptNodeData,
-  ResultNodeData,
-  SourceNodeData,
+import {
+  inputPlan,
+  type GenerateResponse,
+  type GraphInputs,
+  type LibraryItem,
+  type Mode,
+  type PromptNodeData,
+  type ResultNodeData,
+  type SlotAccept,
+  type SourceNodeData,
 } from "./types";
 import "./App.css";
 
 type StudioNode =
   | Node<PromptNodeData, "prompt">
   | Node<ResultNodeData, "result">
-  | Node<SourceNodeData, "source">;
+  | Node<SourceNodeData, "source">
+  | Node<SourceNodeData, "first">
+  | Node<SourceNodeData, "last">;
 
 const nodeTypes: NodeTypes = {
   prompt: PromptNode,
   result: ResultNode,
   source: SourceNode,
+  first: SourceNode,
+  last: SourceNode,
 };
 
 const WORLD: [[number, number], [number, number]] = [
@@ -45,6 +53,8 @@ const WORLD: [[number, number], [number, number]] = [
 
 const PROMPT_POS = { x: 420, y: 90 };
 const SOURCE_ID = "source";
+const FIRST_ID = "first";
+const LAST_ID = "last";
 const RESULT_ID = "result";
 
 const initialEdges: Edge[] = [];
@@ -58,7 +68,12 @@ const initialNodes: StudioNode[] = [
     data: {
       onGenerated: () => undefined,
       onAddSource: () => undefined,
+      onAddFirst: () => undefined,
+      onAddLast: () => undefined,
+      onModalityChange: () => undefined,
       source: null,
+      first: null,
+      last: null,
     },
   },
 ];
@@ -66,6 +81,9 @@ const initialNodes: StudioNode[] = [
 function StudioCanvas() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
+  const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
+  const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
+  const [plan, setPlan] = useState<GraphInputs>({});
   const [toastMsg, setToastMsg] = useState<{ text: string; error: boolean } | null>(
     null,
   );
@@ -82,6 +100,7 @@ function StudioCanvas() {
     const id = window.setTimeout(() => setToastMsg(null), 6000);
     return () => window.clearTimeout(id);
   }, [toastMsg]);
+
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
@@ -122,47 +141,93 @@ function StudioCanvas() {
     [setEdges, setNodes],
   );
 
-  const addSourceNode = useCallback(() => {
-    setNodes((current) => {
-      if (current.some((n) => n.id === SOURCE_ID)) return current;
-      const prompt = current.find((n) => n.id === "prompt");
-      const src: StudioNode = {
-        id: SOURCE_ID,
-        type: "source",
-        position: {
-          x: Math.max(-160, (prompt?.position.x ?? PROMPT_POS.x) - 300),
-          y: (prompt?.position.y ?? PROMPT_POS.y) + 36,
-        },
-        dragHandle: ".node-header",
-        data: {
-          item: sourceItem,
-          onClear: () => setSourceItem(null),
-          onOpenLibrary: () => setLibraryOpen(true),
-          onAttach: (item) => setSourceItem(item),
-        },
-      };
-      return [...current, src];
-    });
-    setEdges((current) => {
-      if (current.some((e) => e.id === "e-source-prompt")) return current;
-      return addEdge(
-        {
-          id: "e-source-prompt",
-          source: SOURCE_ID,
-          target: "prompt",
-          style: { stroke: "#8aa4c2", strokeWidth: 2 },
-        },
-        current,
-      );
-    });
-  }, [setEdges, setNodes, sourceItem]);
+  const ensureSlot = useCallback(
+    (
+      id: "source" | "first" | "last",
+      title: string,
+      accept: SlotAccept,
+      yOff: number,
+    ) => {
+      setNodes((current) => {
+        if (current.some((n) => n.id === id)) return current;
+        const prompt = current.find((n) => n.id === "prompt");
+        const node: StudioNode = {
+          id,
+          type: id,
+          position: {
+            x: Math.max(-160, (prompt?.position.x ?? PROMPT_POS.x) - 300),
+            y: (prompt?.position.y ?? PROMPT_POS.y) + yOff,
+          },
+          dragHandle: ".node-header",
+          data: {
+            title,
+            accept,
+            item: null,
+            onClear: () => undefined,
+            onOpenLibrary: () => setLibraryOpen(true),
+            onAttach: () => undefined,
+          },
+        };
+        return [...current, node];
+      });
+      const edgeId = `e-${id}-prompt`;
+      setEdges((current) => {
+        if (current.some((e) => e.id === edgeId)) return current;
+        return addEdge(
+          {
+            id: edgeId,
+            source: id,
+            target: "prompt",
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [setEdges, setNodes],
+  );
 
-  const attachSource = useCallback(
+  const addSourceNode = useCallback(() => {
+    const accept = plan.source ?? "any";
+    ensureSlot(SOURCE_ID, "Source", accept, 36);
+  }, [ensureSlot, plan.source]);
+
+  const addFirstNode = useCallback(() => {
+    ensureSlot(FIRST_ID, "First Frame", "image", -10);
+  }, [ensureSlot]);
+
+  const addLastNode = useCallback(() => {
+    ensureSlot(LAST_ID, "Last Frame", "image", 170);
+  }, [ensureSlot]);
+
+  const onModalityChange = useCallback((_mode: Mode, modality: string) => {
+    setPlan(inputPlan(modality));
+  }, []);
+
+  const attachMedia = useCallback(
     (item: LibraryItem) => {
+      const kind = item.kind;
+      if (plan.first || plan.last) {
+        if (kind === "video") return;
+        if (!firstItem) {
+          setFirstItem(item);
+          addFirstNode();
+          return;
+        }
+        if (!lastItem) {
+          setLastItem(item);
+          addLastNode();
+          return;
+        }
+        setLastItem(item);
+        return;
+      }
+      if (plan.source === "video" && kind !== "video") return;
+      if (plan.source === "image" && kind === "video") return;
       setSourceItem(item);
       addSourceNode();
     },
-    [addSourceNode],
+    [addFirstNode, addLastNode, addSourceNode, firstItem, lastItem, plan],
   );
 
   useEffect(() => {
@@ -175,7 +240,12 @@ function StudioCanvas() {
             data: {
               onGenerated: spawnResult,
               onAddSource: addSourceNode,
+              onAddFirst: addFirstNode,
+              onAddLast: addLastNode,
+              onModalityChange,
               source: sourceItem,
+              first: firstItem,
+              last: lastItem,
             },
           };
         }
@@ -184,6 +254,8 @@ function StudioCanvas() {
             ...n,
             type: "source",
             data: {
+              title: "Source",
+              accept: plan.source ?? "any",
               item: sourceItem,
               onClear: () => setSourceItem(null),
               onOpenLibrary: () => setLibraryOpen(true),
@@ -191,15 +263,56 @@ function StudioCanvas() {
             },
           };
         }
+        if (n.id === FIRST_ID) {
+          return {
+            ...n,
+            type: "first",
+            data: {
+              title: "First Frame",
+              accept: "image",
+              item: firstItem,
+              onClear: () => setFirstItem(null),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onAttach: (item) => setFirstItem(item),
+            },
+          };
+        }
+        if (n.id === LAST_ID) {
+          return {
+            ...n,
+            type: "last",
+            data: {
+              title: "Last Frame",
+              accept: "image",
+              item: lastItem,
+              onClear: () => setLastItem(null),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onAttach: (item) => setLastItem(item),
+            },
+          };
+        }
         return n;
       }),
     );
-  }, [addSourceNode, setNodes, sourceItem, spawnResult]);
+  }, [
+    addFirstNode,
+    addLastNode,
+    addSourceNode,
+    firstItem,
+    lastItem,
+    onModalityChange,
+    plan.source,
+    setNodes,
+    sourceItem,
+    spawnResult,
+  ]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
       const ok =
         (connection.source === SOURCE_ID && connection.target === "prompt") ||
+        (connection.source === FIRST_ID && connection.target === "prompt") ||
+        (connection.source === LAST_ID && connection.target === "prompt") ||
         (connection.source === "prompt" && connection.target === RESULT_ID);
       if (!ok) return;
       setEdges((eds) =>
@@ -248,6 +361,8 @@ function StudioCanvas() {
         nodesConnectable
         isValidConnection={(c) =>
           (c.source === SOURCE_ID && c.target === "prompt") ||
+          (c.source === FIRST_ID && c.target === "prompt") ||
+          (c.source === LAST_ID && c.target === "prompt") ||
           (c.source === "prompt" && c.target === RESULT_ID)
         }
         nodesDraggable
@@ -267,7 +382,7 @@ function StudioCanvas() {
       <LibraryPanel
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
-        onPick={attachSource}
+        onPick={attachMedia}
       />
       {toastMsg ? (
         <div

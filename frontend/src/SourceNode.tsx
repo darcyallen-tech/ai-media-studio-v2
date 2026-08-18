@@ -1,9 +1,14 @@
 import type { DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
-import { LIBRARY_DRAG_MIME, type LibraryItem, type SourceNodeData } from "./types";
+import {
+  LIBRARY_DRAG_MIME,
+  type LibraryItem,
+  type SlotAccept,
+  type SourceNodeData,
+} from "./types";
 
-export type SourceFlowNode = Node<SourceNodeData, "source">;
+export type SourceFlowNode = Node<SourceNodeData, "source" | "first" | "last">;
 
 function parseLibraryDrag(event: DragEvent): LibraryItem | null {
   const raw = event.dataTransfer.getData(LIBRARY_DRAG_MIME);
@@ -15,8 +20,17 @@ function parseLibraryDrag(event: DragEvent): LibraryItem | null {
   }
 }
 
+function accepts(accept: SlotAccept, item: LibraryItem): boolean {
+  if (accept === "any") return true;
+  if (accept === "image") return item.kind !== "video" && item.kind !== "audio";
+  if (accept === "video") return item.kind === "video";
+  return true;
+}
+
 export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
   const item = data.item;
+  const title = data.title || "Source";
+  const accept = data.accept || "any";
 
   function onDragOver(event: DragEvent) {
     event.preventDefault();
@@ -26,10 +40,17 @@ export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
   function onDrop(event: DragEvent) {
     event.preventDefault();
     const dragged = parseLibraryDrag(event);
-    if (dragged) {
+    if (dragged && accepts(accept, dragged)) {
       data.onAttach(dragged);
     }
   }
+
+  const hint =
+    accept === "video"
+      ? "Drop a video or open Library"
+      : accept === "image"
+        ? "Drop a still or open Library"
+        : "Drop media or open Library";
 
   return (
     <div
@@ -37,17 +58,17 @@ export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="node-header">Source</div>
+      <div className="node-header">{title}</div>
       <div className="node-body nodrag">
         {item ? (
           <>
             <div className="source-preview">
-              {item.kind === "image" || (!isVideoPath(item.url) && !isAudioPath(item.url)) ? (
-                <img src={item.thumb_url || item.url} alt={item.name} />
-              ) : item.kind === "video" || isVideoPath(item.url) ? (
+              {item.kind === "video" || isVideoPath(item.url) ? (
                 <video src={item.url} muted />
-              ) : (
+              ) : item.kind === "audio" || isAudioPath(item.url) ? (
                 <div className="source-empty">{item.name}</div>
+              ) : (
+                <img src={item.thumb_url || item.url} alt={item.name} />
               )}
             </div>
             <p className="hint" title={item.path}>
@@ -64,7 +85,7 @@ export default function SourceNode({ data }: NodeProps<SourceFlowNode>) {
               className="source-empty nodrag"
               onClick={data.onOpenLibrary}
             >
-              Drop media or open Library
+              {hint}
             </button>
             <button type="button" className="ghost nodrag" onClick={data.onOpenLibrary}>
               Open Library

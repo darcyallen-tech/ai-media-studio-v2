@@ -312,7 +312,7 @@ def _dispatch_studio(
         extras = [p for p in extras if Path(p).resolve() != Path(image_file).resolve()]
     result = studio_generate(
         prompt=state.prompt,
-        model_choice=state.model_id or entry.label,
+        model_choice=entry.source_key or entry.label or state.model_id,
         image_file=image_file,
         video_file=video_file,
         output_dir=state.output_dir,
@@ -375,7 +375,7 @@ def _dispatch_vision(
     result = run_vision(
         mode=vmode,  # type: ignore[arg-type]
         prompt=state.prompt,
-        model_label=state.model_id or entry.label,
+        model_label=entry.source_key or entry.label or state.model_id,
         image_path=image_path,
         first_frame_path=first_frame,
         last_frame_path=last_frame,
