@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -185,6 +185,8 @@ function StudioCanvas() {
   const sourceAccept = sourceAcceptFor(studioMode, plan);
   const [framePins, setFramePins] = useState<FramePin[]>([]);
   const [pinEdit, setPinEdit] = useState<PinEditSession | null>(null);
+  const pinEditRef = useRef(pinEdit);
+  pinEditRef.current = pinEdit;
   const [toolSources, setToolSources] = useState<Record<string, LibraryItem>>(
     {},
   );
@@ -289,8 +291,29 @@ function StudioCanvas() {
     [closeNode, setEdges, setNodes],
   );
 
+  const applyStillToPinRef = useRef<
+    (pinId: string, item: LibraryItem, timestampS?: number) => Promise<boolean>
+  >(async () => false);
+
   const spawnPinResult = useCallback(
     (result: GenerateResponse) => {
+      const mapped = itemFromResult(result);
+      const applyNow = () => {
+        const session = pinEditRef.current;
+        if (!session?.pinId) {
+          toast("Pin id is missing.", true);
+          return;
+        }
+        if (!mapped || mapped.kind === "video" || mapped.kind === "audio") {
+          toast("Apply to pin needs an image result.", true);
+          return;
+        }
+        void applyStillToPinRef.current(
+          session.pinId,
+          mapped,
+          session.timestamp_s,
+        );
+      };
       setNodes((current) => {
         const parent = current.find((n) => n.id === PIN_EDIT_PROMPT);
         const existing = current.find((n) => n.id === PIN_EDIT_RESULT);
@@ -306,8 +329,9 @@ function StudioCanvas() {
             result,
             onClose: () => closeNode(PIN_EDIT_RESULT),
             onTool: () => undefined,
-            onApplyToPin: () => undefined,
+            onApplyToPin: applyNow,
             applyLabel: "Apply to pin",
+            dragItem: mapped && mapped.kind === "image" ? mapped : null,
           },
         };
         if (existing) {
@@ -482,6 +506,7 @@ function StudioCanvas() {
     },
     [framePins, pinEdit],
   );
+  applyStillToPinRef.current = applyStillToPin;
 
   const applyPinStill = useCallback(
     (result: GenerateResponse) => {
@@ -1346,6 +1371,15 @@ function StudioCanvas() {
       if (!item) return;
       const slotEl = el?.closest("[data-drop-slot]") as HTMLElement | null;
       const slot = slotEl?.dataset.dropSlot;
+      if (slot?.startsWith("pin:")) {
+        event.preventDefault();
+        event.stopPropagation();
+        consumeLibraryDrag();
+        const pinId = slot.slice(4);
+        const pin = framePins.find((p) => p.id === pinId);
+        void applyStillToPin(pinId, item, pin?.timestamp_s);
+        return;
+      }
       if (
         slot !== "source" &&
         slot !== "first" &&
@@ -1365,7 +1399,7 @@ function StudioCanvas() {
       window.removeEventListener("dragover", onWinOver, true);
       window.removeEventListener("drop", onWinDrop, true);
     };
-  }, [tryAttachSlot]);
+  }, [applyStillToPin, framePins, tryAttachSlot]);
 
   const onFlowDragOver = useCallback((event: DragEvent) => {
     if (

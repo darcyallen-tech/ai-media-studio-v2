@@ -79,23 +79,36 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : isAudioPath(src) ? (
               <audio key={src} src={src} controls />
             ) : (
-              <ResizableMedia key={src} id={`result-img-${src}`} minHeight={120} defaultHeight={220}>
-              <img
-                src={src}
-                alt="Generated result"
+              <div
+                key={src}
+                className="nodrag result-drag"
                 draggable={Boolean(data.dragItem)}
+                onPointerDown={() => {
+                  if (data.dragItem) beginLibraryDrag(data.dragItem);
+                }}
                 onDragStart={(event) => {
-                  if (!data.dragItem) return;
+                  if (!data.dragItem) {
+                    event.preventDefault();
+                    return;
+                  }
                   event.stopPropagation();
                   beginLibraryDrag(data.dragItem);
                   writeLibraryPayload(event.dataTransfer, data.dragItem);
+                  event.dataTransfer.effectAllowed = "copy";
                 }}
                 onDragEnd={() => endLibraryDrag()}
+              >
+              <ResizableMedia id={`result-img-${src}`} minHeight={120} defaultHeight={220}>
+              <img
+                src={src}
+                alt="Generated result"
+                draggable={false}
                 onDoubleClick={() =>
                   openLightbox({ src, kind: "image" })
                 }
               />
               </ResizableMedia>
+              </div>
             ),
           )}
           {paths.length === 0 ? (

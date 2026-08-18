@@ -824,6 +824,14 @@
   font-size: 0.88rem;
 }
 
+.result-drag {
+  cursor: grab;
+}
+
+.result-drag:active {
+  cursor: grabbing;
+}
+
 .media img,
 .media video {
   width: 100%;

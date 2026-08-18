@@ -11,6 +11,7 @@ import ResizableMedia from "./ResizableMedia";
 import { toast } from "./toast";
 import {
   hasLibraryPayload,
+  parseLibraryPayload,
   type FramePin,
   type LibraryItem,
 } from "./types";
@@ -465,6 +466,8 @@ function PinRow({
 
   return (
     <li
+      data-drop-slot={`pin:${pin.id}`}
+      data-drop-accept="image"
       className={
         hover === "ok"
           ? "pin-row drop-hot"
@@ -493,7 +496,10 @@ function PinRow({
         e.preventDefault();
         e.stopPropagation();
         setHover(null);
-        const item = consumeLibraryDrag() || peekLibraryDrag();
+        const item =
+          consumeLibraryDrag() ||
+          peekLibraryDrag() ||
+          parseLibraryPayload(e.dataTransfer);
         if (!item) return;
         if (!slotAccepts("image", item)) {
           toast(slotNeedLabel("image"), true);
