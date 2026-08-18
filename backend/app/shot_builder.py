@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_INTO_TAIL = re.compile(r"\s+(into|to|toward)\s*$", re.I)
 
 BEATS = [
     "Establish",
@@ -132,7 +135,7 @@ def list_shot_builder_fields(who_choices: list[str] | None = None) -> dict[str, 
             _field("beat", "Beat type", choices=BEATS, value="Establish"),
             _field("who", "Who", kind="chips", choices=people, value=""),
             _field("where", "Where", kind="chips", choices=[], value=""),
-            _field("where_to", "Into (optional)", kind="chips", choices=[], value=""),
+            _field("where_from", "From (optional)", kind="chips", choices=[], value=""),
             _field("props", "With prop", kind="chips", choices=[], value=""),
             _field("emotion", "Emotion / mood", choices=EMOTIONS, value="Calm"),
             _field(
@@ -189,9 +192,10 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
     people = _split_names(vals.get("who") or "")
     props = _split_names(vals.get("props") or "")
     where = (vals.get("where") or "").strip()
-    where_to = (vals.get("where_to") or "").strip()
-    if where_to and where_to == where:
-        where_to = ""
+    where_from = (vals.get("where_from") or "").strip()
+    if where_from and where and where_from.lower() == where.lower():
+        where_from = ""
+    prep = "to" if beat == "Exit" else "into"
     emotion = vals.get("emotion") or "Calm"
     if emotion == "Custom":
         emotion = (vals.get("emotion_custom") or "Neutral").strip() or "Neutral"
@@ -210,7 +214,7 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
         who_s,
         prop_s,
         where,
-        where_to,
+        where_from,
         people=people,
         preset_action=preset_action,
         sequence=sequence,
@@ -218,6 +222,7 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
         react_to=react_to,
         speaker=speaker,
         speech=speech,
+        prep=prep,
     )
     if beat in ("Action", "Entrance", "Reaction"):
         extra = _speech_clause(speaker, speech, dialogue)
@@ -254,26 +259,42 @@ def apply_shot_builder(fields: dict[str, Any] | None) -> dict[str, str]:
     }
 
 
-def _place(verb: str, where: str, where_to: str) -> str:
+def _direction(where: str, where_from: str, *, prep: str = "into") -> str:
+    """'from X into/to Where' when From is set; otherwise just Where."""
+    dest = (where or "").strip()
+    origin = (where_from or "").strip()
+    if origin and dest and origin.lower() == dest.lower():
+        origin = ""
+    if origin and dest:
+        return f"from {origin} {prep} {dest}"
+    return dest
+
+
+def _place(verb: str, where: str, where_from: str, *, prep: str = "into") -> str:
     """Attach location without doubling prepositions (no 'walks into in X')."""
     v = (verb or "").strip()
+    dest = (where or "").strip()
+    origin = (where_from or "").strip()
+    if origin and dest and origin.lower() == dest.lower():
+        origin = ""
     if not v:
-        return _place_only(where, where_to)
+        return _place_only(dest, origin, prep=prep)
     low = f" {v.lower()} "
-    if where and where.lower() in v.lower() and (
-        not where_to or where_to.lower() in v.lower()
+    if dest and dest.lower() in v.lower() and (
+        not origin or origin.lower() in v.lower()
     ):
         return v
-    if where and where_to:
-        return f"{v} from {where} into {where_to}"
-    if not where:
+    if origin and dest:
+        core = _INTO_TAIL.sub("", v).rstrip()
+        return f"{core} from {origin} {prep} {dest}"
+    if not dest:
         return v
     if any(f" {p} " in low or low.strip().endswith(p) for p in _PLACE_VERBS):
         # "Alice walks into" + bar → "Alice walks into Classy bar"
         if any(v.lower().endswith(p) or v.lower() == p for p in _PLACE_VERBS):
-            return f"{v} {where}"
+            return f"{v} {dest}"
         return v
-    return f"{v} in {where}"
+    return f"{v} in {dest}"
 
 
 def _third_person(verb: str) -> str:
@@ -287,18 +308,20 @@ def _third_person(verb: str) -> str:
     return f"{v}s"
 
 
-def _place_only(where: str, where_to: str) -> str:
-    if where and where_to:
-        return f"from {where} into {where_to}"
-    if where:
-        return f"in {where}"
-    return ""
+def _place_only(where: str, where_from: str, *, prep: str = "into") -> str:
+    directed = _direction(where, where_from, prep=prep)
+    if not directed:
+        return ""
+    if where_from and where and where_from.lower() != where.lower():
+        return directed
+    return f"in {where}"
 
 
 def _compose_dialogue(
     present: list[str],
     dialogue: list[tuple[str, str]],
     where: str,
+    where_from: str = "",
 ) -> str:
     spoken = [(n, line) for n, line in dialogue if (line or "").strip()]
     parts: list[str] = []
@@ -311,8 +334,9 @@ def _compose_dialogue(
         extra = _join_names(silent)
         verb = "is" if len(silent) == 1 else "are"
         parts.append(f"{extra} {verb} in frame.")
-    if where:
-        parts.append(f"Location: {where}.")
+    directed = _direction(where, where_from, prep="to")
+    if directed:
+        parts.append(f"Location: {directed}.")
     return " ".join(parts).strip() or "They talk."
 
 
@@ -338,7 +362,7 @@ def _compose_body(
     who: str,
     prop: str,
     where: str,
-    where_to: str,
+    where_from: str,
     *,
     people: list[str] | None = None,
     preset_action: str = "",
@@ -347,14 +371,16 @@ def _compose_body(
     react_to: str = "",
     speaker: str = "",
     speech: str = "",
+    prep: str = "into",
 ) -> str:
     lines = dialogue or []
     if beat == "Dialogue":
-        return _compose_dialogue(people or [], lines, where)
+        return _compose_dialogue(people or [], lines, where, where_from)
 
     if beat == "Establish":
-        if where and where_to:
-            return f"Wide look from {where} into {where_to} so we know both spaces"
+        directed = _direction(where, where_from, prep="into")
+        if where_from and where and directed.startswith("from "):
+            return f"Wide look {directed} so we know both spaces"
         if where:
             return f"Wide look at {where} so we know where we are"
         if who:
@@ -362,21 +388,19 @@ def _compose_body(
         return "Wide look at the space so we know where we are"
 
     if beat == "Entrance":
-        if who and where_to:
-            extra = f" from {where}" if where else ""
-            return f"{who} enters {where_to}{extra}"
-        if who and where:
-            return f"{who} enters {where}"
+        directed = _direction(where, where_from, prep="into")
+        subject = who or "Someone"
+        if directed:
+            return f"{subject} enters {directed}"
         if who:
             return f"{who} enters the frame"
         return "Someone enters the frame"
 
     if beat == "Exit":
-        if who and where_to:
-            extra = f" from {where}" if where else ""
-            return f"{who} exits toward {where_to}{extra}"
-        if who and where:
-            return f"{who} exits {where}"
+        directed = _direction(where, where_from, prep="to")
+        subject = who or "Someone"
+        if directed:
+            return f"{subject} exits {directed}"
         if who:
             return f"{who} exits the frame"
         return "Someone exits the frame"
@@ -384,13 +408,18 @@ def _compose_body(
     if beat == "Reaction":
         target = react_to or prop
         if who and target:
-            return f"{who} reacts to {target}"
-        if who:
-            return f"{who} reacts"
-        return "A reaction beat"
+            core = f"{who} reacts to {target}"
+        elif who:
+            core = f"{who} reacts"
+        else:
+            core = "A reaction beat"
+        return _place(core, where, where_from, prep=prep) if (where or where_from) else core
 
     if beat in ("Insert / Detail", "Insert", "Detail"):
         focus = prop or react_to
+        directed = _direction(where, where_from, prep="to")
+        if focus and where_from and where and directed.startswith("from "):
+            return f"Insert detail on {focus} {directed}"
         if focus and where:
             return f"Insert detail on {focus} in {where}"
         if focus:
@@ -414,8 +443,7 @@ def _compose_body(
         core = f"{who} {seq}".strip() if who else seq
         if prop and prop.lower() not in core.lower():
             core = f"{core} with {prop}"
-        placed = _place(core, where, where_to)
-        return placed
+        return _place(core, where, where_from, prep=prep)
 
     verb = ""
     if custom:
@@ -442,15 +470,16 @@ def _compose_body(
             verb = f"{who} picks up {prop}"
             prop = ""
         elif beat == "Entrance":
-            if who and where_to:
-                extra = f" from {where}" if where else ""
-                return f"{who} enters {where_to}{extra}"
+            directed = _direction(where, where_from, prep="into")
+            if who and directed:
+                return f"{who} enters {directed}"
             if who and where:
                 return f"{who} enters {where}"
             verb = f"{who} {helper}".strip() if who else helper
         elif beat == "Establish":
-            if where and where_to:
-                return f"wide look from {where} into {where_to} so we know both spaces"
+            directed = _direction(where, where_from, prep="into")
+            if where_from and where and directed.startswith("from "):
+                return f"wide look {directed} so we know both spaces"
             if where:
                 return f"wide look at {where} so we know where we are"
             return helper
@@ -460,4 +489,4 @@ def _compose_body(
     if prop and prop.lower() not in verb.lower():
         if "pick" not in verb.lower() and "throw" not in verb.lower():
             verb = f"{verb} with {prop}"
-    return _place(verb, where, where_to)
+    return _place(verb, where, where_from, prep=prep)

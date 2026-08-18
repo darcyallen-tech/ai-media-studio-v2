@@ -98,7 +98,7 @@ export default function ShotBuilderNode({
   const [rotation, setRotation] = useState("clockwise");
   const [who, setWho] = useState<string[]>([]);
   const [where, setWhere] = useState("");
-  const [whereTo, setWhereTo] = useState("");
+  const [whereFrom, setWhereFrom] = useState("");
   const [pickedProps, setPickedProps] = useState<string[]>([]);
   const [actionPreset, setActionPreset] = useState("walks into");
   const [actionLine, setActionLine] = useState("");
@@ -113,8 +113,11 @@ export default function ShotBuilderNode({
 
   const showWho = beat !== "Hold";
   const whoOptional = beat === "Establish" || beat === "Insert / Detail";
-  const showFromTo =
-    beat === "Entrance" || beat === "Exit" || beat === "Establish";
+  const showFrom =
+    beat === "Entrance" ||
+    beat === "Exit" ||
+    beat === "Establish" ||
+    beat === "Action";
   const showDialogue = beat === "Dialogue";
   const showOptionalSpeech =
     beat === "Action" || beat === "Entrance" || beat === "Reaction";
@@ -163,7 +166,7 @@ export default function ShotBuilderNode({
             rotation,
             who: who.join("|"),
             where,
-            where_to: whereTo,
+            where_from: showFrom ? whereFrom : "",
             props: pickedProps.join("|"),
             action_preset: actionPreset,
             action_line: actionLine,
@@ -282,35 +285,30 @@ export default function ShotBuilderNode({
           </>
         ) : null}
 
-        {showFromTo || beat === "Action" || beat === "Insert / Detail" ? (
-          <>
-            <span className="field-label">
-              {beat === "Entrance" || beat === "Exit" ? "From" : "Where"}
-            </span>
-            {scenes.length ? (
-              <div className="chip-row">
-                {scenes.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={where === name ? "pill modality on" : "pill modality"}
-                    onClick={() => setWhere((cur) => (cur === name ? "" : name))}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="hint">Add a Hub scene to set location.</p>
-            )}
-          </>
-        ) : null}
+        <span className="field-label">Where</span>
+        {scenes.length ? (
+          <div className="chip-row">
+            {scenes.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={where === name ? "pill modality on" : "pill modality"}
+                onClick={() => {
+                  setWhere((cur) => (cur === name ? "" : name));
+                  setWhereFrom((origin) => (origin === name ? "" : origin));
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Add a Hub scene to set the beat location.</p>
+        )}
 
-        {showFromTo ? (
+        {showFrom ? (
           <>
-            <span className="field-label">
-              {beat === "Exit" ? "Toward" : "Into"}
-            </span>
+            <span className="field-label">From (optional)</span>
             {scenes.length ? (
               <div className="chip-row">
                 {scenes.map((name) => (
@@ -318,15 +316,21 @@ export default function ShotBuilderNode({
                     key={name}
                     type="button"
                     className={
-                      whereTo === name ? "pill modality on" : "pill modality"
+                      whereFrom === name ? "pill modality on" : "pill modality"
                     }
-                    onClick={() => setWhereTo((cur) => (cur === name ? "" : name))}
+                    onClick={() =>
+                      setWhereFrom((cur) =>
+                        cur === name || name === where ? "" : name,
+                      )
+                    }
                   >
                     {name}
                   </button>
                 ))}
               </div>
-            ) : null}
+            ) : (
+              <p className="hint">Add a Hub scene to set an origin.</p>
+            )}
           </>
         ) : null}
 
