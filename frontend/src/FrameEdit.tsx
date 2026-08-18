@@ -7,6 +7,7 @@ import {
   slotNeedLabel,
 } from "./libraryDrag";
 import { readJson } from "./http";
+import ResizableMedia from "./ResizableMedia";
 import { toast } from "./toast";
 import {
   hasLibraryPayload,
@@ -315,6 +316,7 @@ export default function FrameEdit({
             }}
             onDrop={onVideoDrop}
           >
+            <ResizableMedia id="frame-video" minHeight={140} defaultHeight={180}>
             <video
               ref={videoRef}
               src={src}
@@ -329,6 +331,7 @@ export default function FrameEdit({
               onPause={() => setPlaying(false)}
               onClick={togglePlay}
             />
+            </ResizableMedia>
           </div>
           {duration > 0 ? (
           <input
@@ -500,7 +503,13 @@ function PinRow({
       }}
     >
       <button type="button" className="pin-thumb nodrag" onClick={onSeek} title="Jump to pin">
-        {thumb ? <img src={thumb} alt="" draggable={false} /> : <span />}
+        {thumb ? (
+          <ResizableMedia id={`pin-thumb-${pin.id}`} minHeight={32} maxHeight={160} defaultHeight={48}>
+            <img src={thumb} alt="" draggable={false} />
+          </ResizableMedia>
+        ) : (
+          <span />
+        )}
       </button>
       <div className="pin-meta">
         <span>

@@ -3,6 +3,7 @@ import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
+import ResizableMedia from "./ResizableMedia";
 import { sendToResolve } from "./toast";
 import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types";
 
@@ -65,8 +66,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         <div className="media">
           {paths.map((src) =>
             isVideoPath(src) ? (
+              <ResizableMedia key={src} id={`result-vid-${src}`} minHeight={140} defaultHeight={220}>
               <video
-                key={src}
                 src={src}
                 controls
                 playsInline
@@ -74,11 +75,12 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   openLightbox({ src, kind: "video" })
                 }
               />
+              </ResizableMedia>
             ) : isAudioPath(src) ? (
               <audio key={src} src={src} controls />
             ) : (
+              <ResizableMedia key={src} id={`result-img-${src}`} minHeight={120} defaultHeight={220}>
               <img
-                key={src}
                 src={src}
                 alt="Generated result"
                 draggable={Boolean(data.dragItem)}
@@ -93,6 +95,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   openLightbox({ src, kind: "image" })
                 }
               />
+              </ResizableMedia>
             ),
           )}
           {paths.length === 0 ? (

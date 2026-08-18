@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from app.create_catalog import resolve_model
-from app.xai_client import XAIConfigError, chat_json, chat_json_vision
+from app.xai_client import XAIConfigError, chat_json, chat_json_vision, still_data_url
 
 SYSTEM = """You rewrite image/video generation prompts.
 
@@ -21,9 +21,10 @@ Rules:
 - If character / scene / source references are listed, mention them by role
   (character, scene, source) so the rewrite stays consistent with those
   identities and locations. Do not drop them.
-- When a source still is attached, look at it. Ground the rewrite in what is
-  visibly there (objects, people, sky, architecture, lighting). Name those
-  visible elements so the edit stays on the same frame.
+- When a source still is attached, look at it. First briefly note what is
+  visible (sky, house, smoke, people, furniture, lighting). Then rewrite the
+  user's prompt for the selected edit model, keeping their intent, grounded
+  in that same frame. Do not invent a different scene.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -87,10 +88,11 @@ def enhance_prompt_text(
     label = (entry.label if entry else "") or model_id or "default model"
     extra = _refs_block(refs)
     images = [p for p in (image_urls or []) if str(p).strip()]
+    readable = [p for p in images if still_data_url(p)]
     vision_note = (
-        f"Source stills attached ({len(images)}). Describe visible content "
-        "and keep the rewrite on that same frame.\n\n"
-        if images
+        f"Source stills attached ({len(readable)}). Briefly note what is visible, "
+        "then rewrite the user prompt for this edit model on that same frame.\n\n"
+        if readable
         else ""
     )
     user = (
@@ -101,25 +103,45 @@ def enhance_prompt_text(
         + (f"{extra}\n\n" if extra else "")
         + f"User prompt:\n{original}"
     )
+    vision_used = False
     try:
-        if images:
-            raw = chat_json_vision(
-                system=SYSTEM,
-                user_text=user,
-                image_paths=images,
-                temperature=0.35,
-                max_tokens=1200,
-            )
+        if readable:
+            try:
+                raw = chat_json_vision(
+                    system=SYSTEM,
+                    user_text=user,
+                    image_paths=readable,
+                    temperature=0.35,
+                    max_tokens=1200,
+                )
+                vision_used = True
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).exception(
+                    "Enhance vision failed; falling back to text-only"
+                )
+                raw = chat_json(
+                    system=SYSTEM, user=user, temperature=0.35, max_tokens=1200
+                )
+                vision_used = False
         else:
             raw = chat_json(system=SYSTEM, user=user, temperature=0.35, max_tokens=1200)
     except XAIConfigError as exc:
-        return {"ok": False, "prompt": original, "original": original, "error": str(exc)}
+        return {"ok": False, "prompt": original, "original": original, "error": str(exc), "vision": False}
     except Exception as exc:
         return {
             "ok": False,
             "prompt": original,
             "original": original,
             "error": f"Enhance failed: {exc}",
+            "vision": False,
         }
     rewritten = _parse_prompt(raw, original)
-    return {"ok": True, "prompt": rewritten, "original": original, "error": None}
+    return {
+        "ok": True,
+        "prompt": rewritten,
+        "original": original,
+        "error": None,
+        "vision": vision_used,
+    }

@@ -48,7 +48,7 @@ def get_client() -> OpenAI:
     return OpenAI(api_key=get_api_key(), base_url=XAI_BASE_URL)
 
 
-def _image_data_url(path: str | Path, *, max_side: int = 1280) -> str | None:
+def still_data_url(path: str | Path, *, max_side: int = 1280) -> str | None:
     """
     Encode a local still as a compressed data URL for vision requests.
 
@@ -127,7 +127,7 @@ def chat_json_vision(
     paths = [Path(p) for p in (image_paths or []) if p]
     data_urls: list[str] = []
     for p in paths[:3]:
-        url = _image_data_url(p)
+        url = still_data_url(p)
         if url:
             data_urls.append(url)
 

@@ -1,6 +1,7 @@
 import { useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { isAudioPath, isVideoPath } from "./media";
+import ResizableMedia from "./ResizableMedia";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
 import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
@@ -117,8 +118,8 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
       <div className="node-body nodrag nopan">
         {item ? (
           <>
+            <ResizableMedia id={`source-${id}`} minHeight={100} defaultHeight={140} className="source-preview">
             <div
-              className="source-preview"
               onDoubleClick={() => {
                 const src = item.url || item.thumb_url;
                 if (!src) return;
@@ -139,6 +140,7 @@ export default function SourceNode({ id, data }: NodeProps<SourceFlowNode>) {
                 <img src={item.thumb_url || item.url} alt={item.name} draggable={false} />
               )}
             </div>
+            </ResizableMedia>
             <p className="hint" title={item.path}>
               {item.name}
             </p>

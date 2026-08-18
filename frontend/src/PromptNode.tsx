@@ -7,6 +7,7 @@ import FrameEdit, {
 import NodeClose from "./NodeClose";
 import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
+import { toast } from "./toast";
 import {
   durationOptions,
   formatDurationToken,
@@ -436,6 +437,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         prompt?: string;
         error?: string;
         detail?: string;
+        vision?: boolean;
       };
       if (!res.ok || !body.ok) {
         setError(
@@ -446,6 +448,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         return;
       }
       if (body.prompt) setPrompt(body.prompt);
+      const sent = enhanceImagePaths(data);
+      if (sent.length && body.vision === false) {
+        toast("Enhance ran without image context", true);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Enhance failed.");
     } finally {
