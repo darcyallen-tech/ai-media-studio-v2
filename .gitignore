@@ -1,0 +1,44 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg
+dist/
+build/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Generated media & job receipts
+outputs/*
+!outputs/.gitkeep
+
+# Local env / secrets — never commit real keys
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+*.code-workspace
+*.log
+*.tmp
+*.partial
