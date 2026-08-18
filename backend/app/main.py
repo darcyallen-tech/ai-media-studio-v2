@@ -58,6 +58,7 @@ from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E4
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
 from app.runware_client import has_runware_key  # noqa: E402
 from app.library import (  # noqa: E402
+    delete_library_item,
     ensure_library_dirs,
     import_upload,
     inbox_status,
@@ -65,13 +66,16 @@ from app.library import (  # noqa: E402
     kind_for,
     list_library,
     list_source,
+    purge_expired,
     record_generated,
     resolve_handoff_dir,
     resolve_library_file,
     reveal_in_folder,
+    set_pinned,
     thumb_path,
     write_upload,
 )
+from app.prefs import load_prefs, save_prefs  # noqa: E402
 from app.resolve_export import send_file_to_resolve  # noqa: E402
 from app.billing import (  # noqa: E402
     dashboard_urls,
@@ -92,6 +96,10 @@ from app.spend_ledger import export_csv, log_spend, spend_summary  # noqa: E402
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
+try:
+    purge_expired()
+except Exception:
+    pass
 
 APP_VERSION = "2.0.0-phase10"
 
@@ -206,6 +214,15 @@ class SettingsKeysIn(BaseModel):
 
 class SettingsOpenIn(BaseModel):
     which: str
+
+
+class SettingsPrefsIn(BaseModel):
+    retention_days: int | None = None
+
+
+class LibraryPinIn(BaseModel):
+    pinned: bool = True
+    id: str | None = None
 
 
 class EnhanceIn(BaseModel):
@@ -904,7 +921,7 @@ def settings_get() -> dict[str, Any]:
         },
         "preferences": {
             "theme": "day",
-            "retention": "later",
+            **load_prefs(),
         },
     }
 
@@ -1104,6 +1121,44 @@ def library_reveal(body: RevealIn) -> dict[str, Any]:
     except (OSError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@app.delete("/library/{item_id:path}")
+def library_delete(
+    item_id: str,
+    delete_file: bool = Query(default=False),
+) -> dict[str, Any]:
+    """Remove from Library index. Uploads/Generated may also delete the file."""
+    try:
+        return delete_library_item(item_id, delete_file=bool(delete_file))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/library/{item_id:path}/pin")
+def library_pin(item_id: str, body: LibraryPinIn | None = None) -> dict[str, Any]:
+    want = True if body is None else bool(body.pinned)
+    try:
+        return set_pinned(item_id, want)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/settings/preferences")
+def settings_prefs(body: SettingsPrefsIn) -> dict[str, Any]:
+    prefs = save_prefs(retention_days=body.retention_days)
+    purged = {"purged": 0}
+    try:
+        purged = purge_expired()
+    except Exception:
+        pass
+    return {"ok": True, "preferences": {"theme": "day", **prefs}, "purge": purged}
 
 
 @app.get("/resolve/status")

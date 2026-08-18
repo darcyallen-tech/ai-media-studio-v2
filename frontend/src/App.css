@@ -523,6 +523,7 @@
 }
 
 .library-card {
+  position: relative;
   align-self: start;
   border: 1px solid #b4c2d2;
   background: #eef2f6;
@@ -531,6 +532,36 @@
   text-align: left;
   cursor: grab;
   color: inherit;
+}
+
+.library-card.pinned {
+  border-color: #d4a24a;
+}
+
+.library-x,
+.library-pin {
+  position: absolute;
+  top: 6px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.library-x {
+  right: 6px;
+}
+
+.library-pin {
+  left: 6px;
+}
+
+.library-pin.on {
+  background: #f3d9a8;
+  border-color: #d4a24a;
 }
 
 .library-card:active {

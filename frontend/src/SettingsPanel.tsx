@@ -12,6 +12,7 @@ type SettingsBody = {
     resolve_inbox_note?: string | null;
     resolve_outbox?: string;
   };
+  preferences?: { theme?: string; retention_days?: number };
 };
 
 type BalanceRow = {
@@ -59,12 +60,25 @@ export default function SettingsPanel({ open, onClose }: Props) {
   const [balBusy, setBalBusy] = useState(false);
   const [spend, setSpend] = useState<SpendBody | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retention, setRetention] = useState(90);
+  const [retentionNever, setRetentionNever] = useState(false);
 
   async function loadSettings() {
     const res = await fetch("/settings");
     if (!res.ok) throw new Error(`Settings ${res.status}`);
     const body = (await res.json()) as SettingsBody;
     setSettings(body);
+    const days = body.preferences?.retention_days;
+    if (days == null) {
+      setRetention(90);
+      setRetentionNever(false);
+    } else if (days <= 0) {
+      setRetention(0);
+      setRetentionNever(true);
+    } else {
+      setRetention(days);
+      setRetentionNever(false);
+    }
   }
 
   async function loadSpend() {
@@ -148,6 +162,35 @@ export default function SettingsPanel({ open, onClose }: Props) {
       if (!res.ok) throw new Error(body.detail || "Could not open folder.");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not open folder.", true);
+    }
+  }
+
+  async function saveRetention() {
+    try {
+      const days = retentionNever ? 0 : Math.max(0, Number(retention) || 0);
+      const res = await fetch("/settings/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retention_days: days }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        detail?: string;
+        preferences?: { retention_days?: number };
+      };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || "Could not save preferences.");
+      }
+      const saved = body.preferences?.retention_days ?? days;
+      setRetention(saved);
+      setRetentionNever(saved <= 0);
+      toast(
+        saved <= 0
+          ? "Auto-delete off."
+          : `Auto-delete unpinned Uploads/Generated after ${saved} days.`,
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Save failed.", true);
     }
   }
 
@@ -287,7 +330,34 @@ export default function SettingsPanel({ open, onClose }: Props) {
 
       <section className="settings-sec">
         <h3>Preferences</h3>
-        <p className="hint">Theme and retention come later. Day theme only.</p>
+        <p className="hint">Day theme only. Retention applies to unpinned Uploads and Generated.</p>
+        <label className="settings-field">
+          <span>Auto-delete after (days)</span>
+          <input
+            className="model"
+            type="number"
+            min={0}
+            step={1}
+            disabled={retentionNever}
+            value={retentionNever ? 0 : retention}
+            onChange={(e) => setRetention(Math.max(0, Number(e.target.value) || 0))}
+          />
+        </label>
+        <label className="param check">
+          <input
+            type="checkbox"
+            checked={retentionNever}
+            onChange={(e) => setRetentionNever(e.target.checked)}
+          />
+          Never
+        </label>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => void saveRetention()}
+        >
+          Save retention
+        </button>
       </section>
     </aside>
   );

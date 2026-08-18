@@ -99,6 +99,49 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
     }
   }
 
+  async function removeItem(item: LibraryItem) {
+    if (!window.confirm(`Remove “${item.name}” from Library?`)) return;
+    const resolve = (item.source || "").toLowerCase() === "resolve";
+    let deleteFile = false;
+    if (!resolve) {
+      deleteFile = window.confirm(
+        "Also delete the file from disk? Resolve inbox files are never deleted.",
+      );
+    }
+    try {
+      const qs = new URLSearchParams({ delete_file: deleteFile ? "true" : "false" });
+      const res = await fetch(`/library/${encodeURIComponent(item.id)}?${qs}`, {
+        method: "DELETE",
+      });
+      const body = (await res.json()) as { ok?: boolean; detail?: string; error?: string };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || body.error || "Could not remove item.");
+      }
+      toast(deleteFile ? "Removed and deleted from disk." : "Removed from Library.");
+      await reload();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Remove failed.";
+      toast(msg, true);
+    }
+  }
+
+  async function togglePin(item: LibraryItem) {
+    try {
+      const res = await fetch(`/library/${encodeURIComponent(item.id)}/pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: !item.pinned }),
+      });
+      const body = (await res.json()) as { ok?: boolean; detail?: string };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || "Could not update pin.");
+      }
+      await reload();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Pin failed.", true);
+    }
+  }
+
   function onDragStart(event: DragEvent, item: LibraryItem) {
     event.stopPropagation();
     beginLibraryDrag(item);
@@ -234,7 +277,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
           items.map((item) => (
             <div
               key={item.id}
-              className="library-card"
+              className={item.pinned ? "library-card pinned" : "library-card"}
               draggable
               title={item.path}
               onDragStart={(e) => onDragStart(e, item)}
@@ -246,6 +289,32 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
               role="button"
               tabIndex={0}
             >
+              <button
+                type="button"
+                className="library-x nodrag"
+                aria-label="Remove from Library"
+                title="Remove from Library"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void removeItem(item);
+                }}
+              >
+                ×
+              </button>
+              <button
+                type="button"
+                className={item.pinned ? "library-pin on nodrag" : "library-pin nodrag"}
+                aria-label={item.pinned ? "Unpin" : "Pin"}
+                title={item.pinned ? "Unpin (allow auto-delete)" : "Pin (skip auto-delete)"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void togglePin(item);
+                }}
+              >
+                {item.pinned ? "📌" : "📍"}
+              </button>
               <div
                 className="library-thumb"
                 onDoubleClick={(e) => {
@@ -267,7 +336,10 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
                   <span>{item.kind}</span>
                 )}
               </div>
-              <span className="library-name">{item.name}</span>
+              <span className="library-name">
+                {item.pinned ? "📌 " : ""}
+                {item.name}
+              </span>
               <button
                 type="button"
                 className="ghost library-send"

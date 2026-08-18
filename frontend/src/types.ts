@@ -64,6 +64,7 @@ export type LibraryItem = {
   cost?: string;
   duration_sec?: number;
   model?: string;
+  pinned?: boolean;
 };
 
 export type LibraryBucket = {

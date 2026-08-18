@@ -46,6 +46,7 @@ UPLOADS_DIR = PROJECT_ROOT / "data" / "uploads"
 LIBRARY_DIR = PROJECT_ROOT / "data" / "library"
 THUMBS_DIR = LIBRARY_DIR / "thumbs"
 GENERATED_INDEX = LIBRARY_DIR / "generated.json"
+FLAGS_PATH = LIBRARY_DIR / "flags.json"
 
 SKIP_DIR_NAMES = {"_smoke", "__pycache__", "thumbs", "_aleph_proxies"}
 
@@ -414,8 +415,18 @@ def list_source(source: str, media_type: str | None = None) -> dict[str, Any]:
             if want and row["kind"] != want:
                 continue
             items.append(row)
-    items.sort(key=lambda r: float(r.get("mtime") or 0), reverse=True)
-    return {"source": src, "note": note, "items": items}
+    flags = load_flags()
+    hidden = flags["hidden"]
+    pinned = flags["pinned"]
+    visible: list[dict[str, Any]] = []
+    for row in items:
+        iid = str(row.get("id") or "")
+        if iid in hidden:
+            continue
+        row["pinned"] = iid in pinned
+        visible.append(row)
+    visible.sort(key=lambda r: float(r.get("mtime") or 0), reverse=True)
+    return {"source": src, "note": note, "items": visible}
 
 
 def list_library(media_type: str | None = None) -> dict[str, Any]:
@@ -548,3 +559,165 @@ def reveal_in_folder(path: str | Path) -> None:
         return
     folder = str(p.parent if p.is_file() else p)
     subprocess.Popen(["xdg-open", folder])
+
+
+def item_id_for(source: str, rel: str) -> str:
+    return f"{source}:{rel}"
+
+
+def parse_item_id(item_id: str) -> tuple[str, str]:
+    raw = (item_id or "").strip()
+    if ":" not in raw:
+        raise ValueError("Invalid library id.")
+    source, rel = raw.split(":", 1)
+    src = source.strip().lower()
+    if src not in ("resolve", "uploads", "generated"):
+        raise ValueError("Invalid library source.")
+    if not rel.strip():
+        raise ValueError("Invalid library path.")
+    return src, rel.strip()
+
+
+def load_flags() -> dict[str, set[str]]:
+    if not FLAGS_PATH.is_file():
+        return {"pinned": set(), "hidden": set()}
+    try:
+        raw = json.loads(FLAGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"pinned": set(), "hidden": set()}
+    if not isinstance(raw, dict):
+        return {"pinned": set(), "hidden": set()}
+
+    def _set(key: str) -> set[str]:
+        vals = raw.get(key) or []
+        if not isinstance(vals, list):
+            return set()
+        return {str(v) for v in vals if str(v).strip()}
+
+    return {"pinned": _set("pinned"), "hidden": _set("hidden")}
+
+
+def save_flags(*, pinned: set[str] | None = None, hidden: set[str] | None = None) -> dict[str, set[str]]:
+    current = load_flags()
+    if pinned is not None:
+        current["pinned"] = set(pinned)
+    if hidden is not None:
+        current["hidden"] = set(hidden)
+    ensure_library_dirs()
+    FLAGS_PATH.write_text(
+        json.dumps(
+            {
+                "pinned": sorted(current["pinned"]),
+                "hidden": sorted(current["hidden"]),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return current
+
+
+def _remove_generated_meta(path: Path) -> None:
+    try:
+        key = str(path.resolve())
+    except OSError:
+        key = str(path)
+    rows = [r for r in _load_generated_meta().values() if str(r.get("path")) != key]
+    try:
+        GENERATED_INDEX.write_text(json.dumps(rows[:400], indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def delete_library_item(item_id: str, *, delete_file: bool = False) -> dict[str, Any]:
+    source, rel = parse_item_id(item_id)
+    flags = load_flags()
+    flags["hidden"].add(item_id)
+    flags["pinned"].discard(item_id)
+    deleted_file = False
+    if source == "resolve":
+        save_flags(pinned=flags["pinned"], hidden=flags["hidden"])
+        return {
+            "ok": True,
+            "id": item_id,
+            "deleted_file": False,
+            "index_only": True,
+        }
+    path: Path | None = None
+    try:
+        path = resolve_library_file(source, rel)
+    except FileNotFoundError:
+        path = None
+    if delete_file and path is not None and path.is_file():
+        try:
+            path.unlink()
+            deleted_file = True
+            flags["hidden"].discard(item_id)
+        except OSError as exc:
+            save_flags(pinned=flags["pinned"], hidden=flags["hidden"])
+            raise OSError(f"Could not delete file: {exc}") from exc
+        if source == "generated":
+            _remove_generated_meta(path)
+    save_flags(pinned=flags["pinned"], hidden=flags["hidden"])
+    return {
+        "ok": True,
+        "id": item_id,
+        "deleted_file": deleted_file,
+        "index_only": not deleted_file,
+    }
+
+
+def set_pinned(item_id: str, pinned: bool) -> dict[str, Any]:
+    source, rel = parse_item_id(item_id)
+    try:
+        resolve_library_file(source, rel)
+    except FileNotFoundError:
+        # Resolve ext tokens and hidden-but-present ids still pin
+        if source != "resolve":
+            raise
+    flags = load_flags()
+    if pinned:
+        flags["pinned"].add(item_id)
+        flags["hidden"].discard(item_id)
+    else:
+        flags["pinned"].discard(item_id)
+    save_flags(pinned=flags["pinned"], hidden=flags["hidden"])
+    return {"ok": True, "id": item_id, "pinned": bool(pinned)}
+
+
+def purge_expired(*, now: float | None = None) -> dict[str, Any]:
+    """Delete unpinned Uploads + Generated older than retention_days. Never Resolve."""
+    from app.prefs import retention_days
+
+    days = retention_days()
+    if days <= 0:
+        return {"ok": True, "purged": 0, "retention_days": 0, "skipped": "off"}
+    import time as _time
+
+    cutoff = (now if now is not None else _time.time()) - days * 86400
+    pinned = load_flags()["pinned"]
+    removed = 0
+    for src in ("uploads", "generated"):
+        listed = list_source(src)
+        for row in listed.get("items") or []:
+            iid = str(row.get("id") or "")
+            if not iid or iid in pinned or row.get("pinned"):
+                continue
+            try:
+                mtime = float(row.get("mtime") or 0)
+            except (TypeError, ValueError):
+                continue
+            if mtime >= cutoff:
+                continue
+            path = Path(str(row.get("path") or ""))
+            if not path.is_file():
+                continue
+            try:
+                path.unlink()
+                removed += 1
+                if src == "generated":
+                    _remove_generated_meta(path)
+            except OSError:
+                continue
+    return {"ok": True, "purged": removed, "retention_days": days}
