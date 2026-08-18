@@ -21,6 +21,7 @@ export default defineConfig({
       "/frame": "http://127.0.0.1:8000",
       "/extract-frame": "http://127.0.0.1:8000",
       "/prepare-aleph": "http://127.0.0.1:8000",
+      "/builder": "http://127.0.0.1:8000",
     },
   },
 });

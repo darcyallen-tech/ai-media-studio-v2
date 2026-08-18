@@ -816,6 +816,26 @@
   cursor: not-allowed;
 }
 
+.builder-node {
+  width: 380px;
+}
+
+.builder-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.builder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.builder-node .prompt {
+  min-height: 72px;
+}
+
 .meta {
   display: flex;
   gap: 14px;
@@ -851,4 +871,200 @@
   height: 10px;
   background: #8fb0d4;
   border: 2px solid #d5dde6;
+}
+
+/* Night — colors only, same layout */
+html[data-theme="night"] {
+  color-scheme: dark;
+}
+
+html[data-theme="night"] .app,
+html[data-theme="night"] .react-flow {
+  background: #1a222c;
+}
+
+html[data-theme="night"] .studio-node {
+  background: #2a3340;
+  border-color: #4a5a6e;
+  color: #e6ebf2;
+  box-shadow: 0 10px 28px rgba(8, 12, 18, 0.35);
+}
+
+html[data-theme="night"] .node-header {
+  background: #323c4c;
+  border-bottom-color: #445266;
+  color: #c5d0dc;
+}
+
+html[data-theme="night"] .node-close {
+  color: #c5d0dc;
+}
+
+html[data-theme="night"] .node-close:hover {
+  background: #445266;
+}
+
+html[data-theme="night"] .node-handle {
+  background: #6a7e96;
+  border-color: #2a3340;
+}
+
+html[data-theme="night"] .pill.mode {
+  background: #2e4a18;
+  border-color: #5a8a22;
+  color: #d4f0a0;
+}
+
+html[data-theme="night"] .pill.mode.on {
+  background: #6fdc12;
+  border-color: #8fe83a;
+  color: #163008;
+  box-shadow: 0 0 0 1px #8fe83a inset;
+}
+
+html[data-theme="night"] .pill.modality {
+  background: #2a4060;
+  border-color: #4a6a94;
+  color: #c8daf0;
+}
+
+html[data-theme="night"] .pill.modality.on {
+  background: #3b7ed4;
+  border-color: #6aa0e4;
+  color: #fff;
+}
+
+html[data-theme="night"] .prompt,
+html[data-theme="night"] .ref-note,
+html[data-theme="night"] textarea.prompt {
+  background: #1c2430;
+  border-color: #445266;
+  color: #eef2f6;
+}
+
+html[data-theme="night"] .model,
+html[data-theme="night"] .settings-field input,
+html[data-theme="night"] select,
+html[data-theme="night"] input.model {
+  background: #1c2430;
+  border-color: #445266;
+  color: #eef2f6;
+}
+
+html[data-theme="night"] .ghost {
+  background: #323c4c;
+  border-color: #4a5a6e;
+  color: #e6ebf2;
+}
+
+html[data-theme="night"] .enhance:not(:disabled) {
+  background: #3a5a18;
+  border-color: #6fdc12;
+  color: #d4f0a0;
+}
+
+html[data-theme="night"] .generate {
+  background: #6fdc12;
+  border-color: #8fe83a;
+  color: #163008;
+}
+
+html[data-theme="night"] .library,
+html[data-theme="night"] .settings {
+  background: #222b36;
+  border-color: #3a4554;
+  color: #e6ebf2;
+  box-shadow: none;
+}
+
+html[data-theme="night"] .library-card {
+  background: #2a3340;
+  border-color: #4a5a6e;
+}
+
+html[data-theme="night"] .library-thumb {
+  background: #1c2430;
+  color: #8a96a6;
+}
+
+html[data-theme="night"] .library-toggle {
+  background: #2a3340;
+  border-color: #4a5a6e;
+  color: #e6ebf2;
+  box-shadow: 0 6px 16px rgba(8, 12, 18, 0.28);
+}
+
+html[data-theme="night"] .topbar h1 {
+  color: #e6ebf2;
+}
+
+html[data-theme="night"] .topbar p,
+html[data-theme="night"] .hint,
+html[data-theme="night"] .field-label,
+html[data-theme="night"] .param,
+html[data-theme="night"] .estimate,
+html[data-theme="night"] .settings-sec h3,
+html[data-theme="night"] .settings-field,
+html[data-theme="night"] .meta {
+  color: #9aa8b8;
+}
+
+html[data-theme="night"] .hint.warn {
+  color: #e07070;
+}
+
+html[data-theme="night"] .toast {
+  background: #2a3340;
+  border-color: #4a5a6e;
+  color: #e6ebf2;
+}
+
+html[data-theme="night"] .pin-row,
+html[data-theme="night"] .frame-jumps button {
+  background: #1c2430;
+  border-color: #445266;
+}
+
+html[data-theme="night"] .source-empty {
+  background: #1c2430;
+  border-color: #4a5a6e;
+  color: #9aa8b8;
+}
+
+html[data-theme="night"] .source-preview img,
+html[data-theme="night"] .source-preview video,
+html[data-theme="night"] .media img,
+html[data-theme="night"] .media video {
+  background: #1c2430;
+  border-color: #445266;
+}
+
+html[data-theme="night"] .settings-table th,
+html[data-theme="night"] .settings-table td {
+  border-bottom-color: #3a4554;
+}
+
+html[data-theme="night"] .settings-field a,
+html[data-theme="night"] .settings-sec a {
+  color: #7ab4f0;
+}
+
+html[data-theme="night"] .crash-log {
+  background: #3a2222;
+  border-color: #6a3a3a;
+  color: #f0c0c0;
+}
+
+html[data-theme="night"] .react-flow__edge-path {
+  stroke: #6a7e96;
+}
+
+html[data-theme="night"] .pin-edit-banner {
+  color: #8fe83a;
+}
+
+html[data-theme="night"] .req-badge {
+  color: #f3d9a8;
+  background: #4a3818;
+  border-color: #d4a24a;
 }

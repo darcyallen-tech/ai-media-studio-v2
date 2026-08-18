@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ThemeName } from "./theme";
 import { toast } from "./toast";
 
 type KeyRow = { set: boolean; mask: string };
@@ -43,6 +44,8 @@ type SpendBody = {
 type Props = {
   open: boolean;
   onClose: () => void;
+  theme: ThemeName;
+  onTheme: (theme: ThemeName) => void;
 };
 
 function money(n: number | undefined) {
@@ -50,7 +53,12 @@ function money(n: number | undefined) {
   return `$${n.toFixed(2)}`;
 }
 
-export default function SettingsPanel({ open, onClose }: Props) {
+export default function SettingsPanel({
+  open,
+  onClose,
+  theme,
+  onTheme,
+}: Props) {
   const [settings, setSettings] = useState<SettingsBody | null>(null);
   const [falDraft, setFalDraft] = useState("");
   const [xaiDraft, setXaiDraft] = useState("");
@@ -330,7 +338,27 @@ export default function SettingsPanel({ open, onClose }: Props) {
 
       <section className="settings-sec">
         <h3>Preferences</h3>
-        <p className="hint">Day theme only. Retention applies to unpinned Uploads and Generated.</p>
+        <p className="hint">Theme is colors only. Retention applies to unpinned Uploads and Generated.</p>
+        <div className="pills" role="tablist" aria-label="Theme">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={theme === "day"}
+            className={theme === "day" ? "pill mode on" : "pill mode"}
+            onClick={() => onTheme("day")}
+          >
+            Day
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={theme === "night"}
+            className={theme === "night" ? "pill mode on" : "pill mode"}
+            onClick={() => onTheme("night")}
+          >
+            Night
+          </button>
+        </div>
         <label className="settings-field">
           <span>Auto-delete after (days)</span>
           <input

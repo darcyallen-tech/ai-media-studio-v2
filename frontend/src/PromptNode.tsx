@@ -106,6 +106,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [modelId, setModelId] = useState("");
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  const incomingToken = data.incomingPromptToken ?? 0;
   const [duration, setDuration] = useState("");
   const [aspect, setAspect] = useState("");
   const [resolution, setResolution] = useState("");
@@ -192,6 +193,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setPins([]);
     setClipDuration(0);
   }, [mode, isLocked, setPins]);
+
+  useEffect(() => {
+    if (!incomingToken) return;
+    if (data.incomingPrompt == null) return;
+    setPrompt(data.incomingPrompt);
+  }, [incomingToken, data.incomingPrompt]);
 
   const addSourceRef = useRef(data.onAddSource);
   addSourceRef.current = data.onAddSource;
@@ -704,6 +711,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         />
 
         <div className="prompt-actions">
+          {!isLocked && data.onAddPromptBuilder ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              onClick={data.onAddPromptBuilder}
+            >
+              Add Prompt Builder
+            </button>
+          ) : null}
           <button
             type="button"
             className="ghost nodrag enhance"

@@ -76,6 +76,7 @@ from app.library import (  # noqa: E402
     write_upload,
 )
 from app.prefs import load_prefs, save_prefs  # noqa: E402
+from app.prompt_builder import apply_builder, list_builder_scenarios  # noqa: E402
 from app.resolve_export import send_file_to_resolve  # noqa: E402
 from app.billing import (  # noqa: E402
     dashboard_urls,
@@ -101,7 +102,7 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase10"
+APP_VERSION = "2.0.0-phase11"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -218,6 +219,14 @@ class SettingsOpenIn(BaseModel):
 
 class SettingsPrefsIn(BaseModel):
     retention_days: int | None = None
+    theme: str | None = None
+
+
+class BuilderApplyIn(BaseModel):
+    scenario_key: str
+    fields: dict[str, Any] = Field(default_factory=dict)
+    mode: str = "image"
+    modality: str = ""
 
 
 class LibraryPinIn(BaseModel):
@@ -919,10 +928,7 @@ def settings_get() -> dict[str, Any]:
             "resolve_inbox_note": inbox_note,
             "resolve_outbox": str(outbox_path),
         },
-        "preferences": {
-            "theme": "day",
-            **load_prefs(),
-        },
+        "preferences": load_prefs(),
     }
 
 
@@ -1152,13 +1158,32 @@ def library_pin(item_id: str, body: LibraryPinIn | None = None) -> dict[str, Any
 
 @app.post("/settings/preferences")
 def settings_prefs(body: SettingsPrefsIn) -> dict[str, Any]:
-    prefs = save_prefs(retention_days=body.retention_days)
+    prefs = save_prefs(retention_days=body.retention_days, theme=body.theme)
     purged = {"purged": 0}
     try:
         purged = purge_expired()
     except Exception:
         pass
-    return {"ok": True, "preferences": {"theme": "day", **prefs}, "purge": purged}
+    return {"ok": True, "preferences": prefs, "purge": purged}
+
+
+@app.get("/builder/scenarios")
+def builder_scenarios(
+    mode: str = Query(default="image"),
+    modality: str = Query(default=""),
+) -> dict[str, Any]:
+    return {"ok": True, **list_builder_scenarios(mode, modality)}
+
+
+@app.post("/builder/apply")
+def builder_apply(body: BuilderApplyIn) -> dict[str, Any]:
+    text = apply_builder(
+        body.scenario_key,
+        body.fields,
+        mode=body.mode,
+        modality=body.modality,
+    )
+    return {"ok": True, "prompt": text}
 
 
 @app.get("/resolve/status")

@@ -140,6 +140,9 @@ export type PromptNodeData = {
   onOpenLibrary?: () => void;
   onAttachSource?: (item: LibraryItem) => void;
   onClose?: () => void;
+  onAddPromptBuilder?: () => void;
+  incomingPrompt?: string | null;
+  incomingPromptToken?: number;
   lockTo?: PromptLock | null;
   pins?: FramePin[];
   onPinsChange?: (pins: FramePin[]) => void;
@@ -152,6 +155,13 @@ export type PromptNodeData = {
   characters: RefSlotState[];
   scenes: RefSlotState[];
   maxRefs: number;
+};
+
+export type PromptBuilderNodeData = {
+  mode: Mode;
+  modality: string;
+  onClose?: () => void;
+  onApply: (text: string) => void;
 };
 
 export type ToolKind =

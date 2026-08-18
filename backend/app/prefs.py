@@ -1,4 +1,4 @@
-"""User preferences (retention, etc.) — stored in app-data, not the repo."""
+"""User preferences (retention, theme) — stored in app-data, not the repo."""
 
 from __future__ import annotations
 
@@ -9,34 +9,51 @@ from app.secrets_store import app_data_dir
 
 PREFS_NAME = "preferences.json"
 DEFAULT_RETENTION_DAYS = 90
+DEFAULT_THEME = "day"
+VALID_THEMES = frozenset({"day", "night"})
 
 
 def prefs_path():
     return app_data_dir() / PREFS_NAME
 
 
+def _theme(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    return value if value in VALID_THEMES else DEFAULT_THEME
+
+
+def _defaults() -> dict[str, Any]:
+    return {"retention_days": DEFAULT_RETENTION_DAYS, "theme": DEFAULT_THEME}
+
+
 def load_prefs() -> dict[str, Any]:
     path = prefs_path()
     if not path.is_file():
-        return {"retention_days": DEFAULT_RETENTION_DAYS}
+        return _defaults()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeError):
-        return {"retention_days": DEFAULT_RETENTION_DAYS}
+        return _defaults()
     if not isinstance(raw, dict):
-        return {"retention_days": DEFAULT_RETENTION_DAYS}
+        return _defaults()
     days = raw.get("retention_days", DEFAULT_RETENTION_DAYS)
     try:
         days_i = int(days)
     except (TypeError, ValueError):
         days_i = DEFAULT_RETENTION_DAYS
-    return {"retention_days": max(0, days_i)}
+    return {"retention_days": max(0, days_i), "theme": _theme(raw.get("theme"))}
 
 
-def save_prefs(*, retention_days: int | None = None) -> dict[str, Any]:
+def save_prefs(
+    *,
+    retention_days: int | None = None,
+    theme: str | None = None,
+) -> dict[str, Any]:
     current = load_prefs()
     if retention_days is not None:
         current["retention_days"] = max(0, int(retention_days))
+    if theme is not None:
+        current["theme"] = _theme(theme)
     folder = app_data_dir()
     folder.mkdir(parents=True, exist_ok=True)
     prefs_path().write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")

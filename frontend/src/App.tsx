@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import LibraryPanel from "./LibraryPanel";
 import MediaLightbox from "./MediaLightbox";
 import SettingsPanel from "./SettingsPanel";
+import PromptBuilderNode from "./PromptBuilderNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
 import ResultNode from "./ResultNode";
@@ -36,6 +37,7 @@ import {
   isOsFileDrag,
 } from "./osImport";
 import { readJson } from "./http";
+import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
 import { bindToast, toast } from "./toast";
 import {
   catalogToItem,
@@ -50,6 +52,7 @@ import {
   type LibraryItem,
   type Mode,
   type ModelRow,
+  type PromptBuilderNodeData,
   type PromptNodeData,
   type RefCatalogEntry,
   type RefNodeData,
@@ -64,6 +67,7 @@ import "./App.css";
 
 type StudioNode =
   | Node<PromptNodeData, "prompt">
+  | Node<PromptBuilderNodeData, "builder">
   | Node<ResultNodeData, "result">
   | Node<SourceNodeData, "source">
   | Node<SourceNodeData, "first">
@@ -80,6 +84,7 @@ const TOOL_TYPES = ["upscale", "denoise", "restore", "deblur", "interpolate"] as
 
 const nodeTypes: NodeTypes = {
   prompt: PromptNode,
+  builder: PromptBuilderNode,
   result: ResultNode,
   source: SourceNode,
   first: SourceNode,
@@ -126,6 +131,7 @@ const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
+const BUILDER_ID = "prompt-builder";
 const PIN_EDIT_SOURCE = "pin-edit-source";
 const PIN_EDIT_PROMPT = "pin-edit-prompt";
 const PIN_EDIT_RESULT = "pin-edit-result";
@@ -180,6 +186,12 @@ function StudioCanvas() {
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [studioMode, setStudioMode] = useState<Mode>("image");
+  const [studioModality, setStudioModality] = useState("t2i");
+  const [appliedPrompt, setAppliedPrompt] = useState<{
+    text: string;
+    token: number;
+  } | null>(null);
+  const [theme, setTheme] = useState<ThemeName>(() => readStoredTheme());
   const [plan, setPlan] = useState<GraphInputs>({});
   const [maxRefs, setMaxRefs] = useState(0);
   const sourceAccept = sourceAcceptFor(studioMode, plan);
@@ -199,6 +211,36 @@ function StudioCanvas() {
       setToastMsg({ text: message, error: Boolean(error) });
     });
     return () => bindToast(null);
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch("/settings", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { preferences?: { theme?: string } } | null) => {
+        if (!body) return;
+        setTheme(normalizeTheme(body.preferences?.theme ?? readStoredTheme()));
+      })
+      .catch(() => undefined);
+    return () => ac.abort();
+  }, []);
+
+  const setThemePref = useCallback((next: ThemeName) => {
+    setTheme(next);
+    applyTheme(next);
+    void fetch("/settings/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: next }),
+    }).catch(() => undefined);
+  }, []);
+
+  const applyBuilderPrompt = useCallback((text: string) => {
+    setAppliedPrompt((cur) => ({ text, token: (cur?.token ?? 0) + 1 }));
   }, []);
 
   useEffect(() => {
@@ -680,9 +722,52 @@ function StudioCanvas() {
     ensureSlot(LAST_ID, "Last Frame", "image", 170);
   }, [ensureSlot]);
 
+  const addPromptBuilder = useCallback(() => {
+    setNodes((current) => {
+      if (current.some((n) => n.id === BUILDER_ID)) return current;
+      const prompt = current.find((n) => n.id === "prompt");
+      const node: StudioNode = {
+        id: BUILDER_ID,
+        type: "builder",
+        position: {
+          x: Math.max(-180, (prompt?.position.x ?? PROMPT_POS.x) - 440),
+          y: (prompt?.position.y ?? PROMPT_POS.y) - 40,
+        },
+        dragHandle: ".node-header",
+        data: {
+          mode: studioMode,
+          modality: studioModality,
+          onClose: () => closeNode(BUILDER_ID),
+          onApply: applyBuilderPrompt,
+        },
+      };
+      return [...current, node];
+    });
+    setEdges((current) => {
+      if (current.some((e) => e.id === "e-builder-prompt")) return current;
+      return addEdge(
+        {
+          id: "e-builder-prompt",
+          source: BUILDER_ID,
+          target: "prompt",
+          style: { stroke: "#8aa4c2", strokeWidth: 2 },
+        },
+        current,
+      );
+    });
+  }, [
+    applyBuilderPrompt,
+    closeNode,
+    setEdges,
+    setNodes,
+    studioMode,
+    studioModality,
+  ]);
+
   const onModalityChange = useCallback(
     (mode: Mode, modality: string, model?: ModelRow | null) => {
       setStudioMode(mode);
+      setStudioModality(modality);
       setPlan((prev) => {
         const next = inputPlan(modality, model, mode);
         if (
@@ -1007,6 +1092,9 @@ function StudioCanvas() {
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
+              onAddPromptBuilder: addPromptBuilder,
+              incomingPrompt: appliedPrompt?.text ?? null,
+              incomingPromptToken: appliedPrompt?.token ?? 0,
               onAttachSource: (item) => tryAttachSlot(SOURCE_ID, item),
               pins: framePins,
               onPinsChange: setFramePins,
@@ -1037,6 +1125,18 @@ function StudioCanvas() {
               onOpenLibrary: () => undefined,
               onAttach: () => undefined,
               onClose: () => closePinEdit(),
+            },
+          };
+        }
+        if (n.id === BUILDER_ID) {
+          return {
+            ...n,
+            type: "builder",
+            data: {
+              mode: studioMode,
+              modality: studioModality,
+              onClose: () => closeNode(BUILDER_ID),
+              onApply: applyBuilderPrompt,
             },
           };
         }
@@ -1276,6 +1376,9 @@ function StudioCanvas() {
   }, [
     addCharacterNode,
     addFirstNode,
+    addPromptBuilder,
+    applyBuilderPrompt,
+    appliedPrompt,
     closeNode,
     addLastNode,
     addSceneNode,
@@ -1303,6 +1406,8 @@ function StudioCanvas() {
     spawnResult,
     spawnResultNear,
     spawnTool,
+    studioMode,
+    studioModality,
     toolSources,
     tryAttachSlot,
   ]);
@@ -1477,6 +1582,7 @@ function StudioCanvas() {
         (src === LAST_ID && tgt === "prompt") ||
         (src.startsWith("char-") && tgt === "prompt") ||
         (src.startsWith("scene-") && tgt === "prompt") ||
+        (src === BUILDER_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
         (src.startsWith("result") &&
           TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
@@ -1522,6 +1628,8 @@ function StudioCanvas() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        theme={theme}
+        onTheme={setThemePref}
       />
       <ReactFlow
         nodes={nodes}
@@ -1532,7 +1640,7 @@ function StudioCanvas() {
         onDragOver={onFlowDragOver}
         onDrop={onFlowDrop}
         nodeTypes={nodeTypes}
-        colorMode="light"
+        colorMode={theme === "night" ? "dark" : "light"}
         proOptions={{ hideAttribution: true }}
         panOnDrag={[1]}
         panOnScroll={false}
@@ -1553,6 +1661,7 @@ function StudioCanvas() {
             (src === LAST_ID && tgt === "prompt") ||
             (src.startsWith("char-") && tgt === "prompt") ||
             (src.startsWith("scene-") && tgt === "prompt") ||
+            (src === BUILDER_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||
             (src.startsWith("result") &&
               TOOL_TYPES.some((t) => tgt.startsWith(`${t}-`))) ||
@@ -1571,7 +1680,7 @@ function StudioCanvas() {
           variant={BackgroundVariant.Dots}
           gap={22}
           size={1.5}
-          color="#c5c9d1"
+          color={theme === "night" ? "#3a4554" : "#c5c9d1"}
         />
       </ReactFlow>
       <LibraryPanel

@@ -18,6 +18,14 @@ body,
   color: #1c2530;
 }
 
+html[data-theme="night"],
+html[data-theme="night"] body,
+html[data-theme="night"] #root {
+  color-scheme: dark;
+  background: #1a222c;
+  color: #e6ebf2;
+}
+
 button,
 select,
 textarea {
