@@ -8,10 +8,13 @@ import NodeClose from "./NodeClose";
 import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
 import {
+  allocatedSeconds,
   composeStoryboardPrompt,
   distributeShotSeconds,
+  evenSplitSeconds,
+  formatHold,
+  parseSeconds,
   storyboardDurationChoices,
-  storyboardDurationToken,
   storyboardRefItems,
 } from "./storyboard";
 import { toast } from "./toast";
@@ -201,6 +204,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   if (isStoryboard && maxRefs > 0 && storyRefs.length > maxRefs) {
     missing.push(`Too many refs (${storyRefs.length} / ${maxRefs})`);
   }
+  if (isStoryboard) {
+    const budget = parseSeconds(duration);
+    const { allocated } = allocatedSeconds(storyShots);
+    if (budget > 0 && allocated > budget + 0.05) {
+      missing.push(`Duration over budget (${allocated}s / ${budget}s)`);
+    }
+  }
 
   const canGenerate =
     Boolean(modelId) &&
@@ -328,9 +338,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       setAudioOn(null);
       return;
     }
-    const opts = durationOptions(selectedModel);
+    const opts = isStoryboard
+      ? storyboardDurationChoices(selectedModel)
+      : durationOptions(selectedModel);
     const def = selectedModel.default_duration || opts[0] || "";
-    setDuration(def);
+    setDuration((cur) => {
+      if (cur && (!opts.length || opts.includes(cur))) return cur;
+      return def;
+    });
     const as = selectedModel.aspect_choices ?? [];
     setAspect(selectedModel.default_aspect || as[0] || "");
     const resOpts = resolutionOptions(selectedModel);
@@ -341,7 +356,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setAudioOn(selectedModel.supports_audio ? true : null);
     setVoice(selectedModel.default_voice || selectedModel.voices?.[0] || "");
     setInstrumental(true);
-  }, [selectedModel]);
+  }, [selectedModel, isStoryboard]);
 
   useEffect(() => {
     if (!modelId) {
@@ -355,7 +370,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       model_id: modelId,
     });
     const durTok = isStoryboard
-      ? duration || storyboardDurationToken(data.shots ?? [], selectedModel)
+      ? duration || storyboardDurationChoices(selectedModel)[0] || ""
       : duration;
     if (durTok) qs.set("duration", durTok);
     if (aspect) qs.set("aspect", aspect);
@@ -409,7 +424,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             isFrame ? pins : undefined,
           );
       const sbDuration =
-        duration || storyboardDurationToken(storyShots, selectedModel);
+        duration || storyboardDurationChoices(selectedModel)[0] || "";
       const composed = isStoryboard
         ? composeStoryboardPrompt(
             data.hubTitle || "",
@@ -1024,11 +1039,11 @@ function StoryboardPrompt({
   const durs = storyboardDurationChoices(selectedModel);
   const aspects = selectedModel?.aspect_choices ?? [];
   const resolutions = resolutionOptions(selectedModel);
-  const holds = distributeShotSeconds(shots, duration);
-  const overrideHint = shots
-    .filter((s) => s.duration.trim())
-    .map((s) => `${s.label || `Shot ${s.order}`} ${s.duration.trim()}`)
-    .join(" · ");
+  const budget = parseSeconds(duration);
+  const { allocated, empty } = allocatedSeconds(shots);
+  const over = budget > 0 && allocated > budget + 0.05;
+  const exact = budget > 0 && empty === 0 && Math.abs(allocated - budget) < 0.05;
+  if (over) missing.push(`Duration over budget (${allocated}s / ${budget}s)`);
 
   return (
     <>
@@ -1143,16 +1158,30 @@ function StoryboardPrompt({
           ) : null}
         </div>
       ) : null}
-      {overrideHint ? (
-        <p className="hint">Shot overrides: {overrideHint}. Empty shots split the rest.</p>
-      ) : duration && shots.length > 1 ? (
-        <p className="hint">
-          {formatDurationToken(duration)} split across {shots.length} shots
-          {holds.size
-            ? ` (~${[...holds.values()][0]?.toFixed?.(1) ?? ""}s each)`
-            : ""}
-          .
-        </p>
+      {shots.length ? (
+        <div className="budget-row">
+          <p
+            className={over ? "hint warn" : exact ? "hint budget-ok" : "hint"}
+          >
+            Allocated {formatHold(allocated) || "0"}s /{" "}
+            {formatHold(budget) || duration || "—"}s
+            {over ? " — over" : ""}
+            {empty && !over
+              ? ` · ${empty} unallocated`
+              : ""}
+          </p>
+          <button
+            type="button"
+            className="ghost nodrag"
+            disabled={!budget || !shots.length}
+            onClick={() => {
+              const parts = evenSplitSeconds(budget, shots.length);
+              data.onAutoBalanceShots?.(parts.map((n) => formatHold(n)));
+            }}
+          >
+            Auto-balance
+          </button>
+        </div>
       ) : null}
       <label className="field-label" htmlFor="sb-notes">
         Global notes

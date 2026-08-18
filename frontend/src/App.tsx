@@ -1801,6 +1801,14 @@ function StudioCanvas() {
               onAddHub: addHub,
               onAddShot: addShot,
               onAddShotBuilder: () => addShotBuilder(),
+              onAutoBalanceShots: (seconds) => {
+                setShots((cur) =>
+                  cur.map((s, i) => ({
+                    ...s,
+                    duration: seconds[i] ?? s.duration,
+                  })),
+                );
+              },
               shots,
               hubAssets: hubIds
                 .map((id) => {

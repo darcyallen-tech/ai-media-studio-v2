@@ -136,6 +136,7 @@ export type PromptNodeData = {
   onAddHub?: () => void;
   onAddShot?: () => void;
   onAddShotBuilder?: () => void;
+  onAutoBalanceShots?: (seconds: string[]) => void;
   shots?: ShotState[];
   hubAssets?: HubAsset[];
   hubTitle?: string;

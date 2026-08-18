@@ -85,6 +85,39 @@ export function storyboardDurationChoices(model?: ModelRow | null): string[] {
   });
 }
 
+export function allocatedSeconds(shots: ShotState[]): {
+  allocated: number;
+  empty: number;
+  filled: number;
+} {
+  let allocated = 0;
+  let empty = 0;
+  let filled = 0;
+  for (const shot of shots) {
+    const n = parseSeconds(shot.duration);
+    if (n) {
+      allocated += n;
+      filled += 1;
+    } else {
+      empty += 1;
+    }
+  }
+  return { allocated, empty, filled };
+}
+
+export function evenSplitSeconds(total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const tenths = Math.round(total * 10);
+  const base = Math.floor(tenths / count);
+  const rem = tenths - base * count;
+  return Array.from({ length: count }, (_, i) => (base + (i < rem ? 1 : 0)) / 10);
+}
+
+export function formatHold(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+}
+
 export function distributeShotSeconds(
   shots: ShotState[],
   totalTok: string,

@@ -853,6 +853,22 @@
   gap: 6px;
 }
 
+.budget-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hint.budget-ok {
+  color: #2a5a08;
+  font-weight: 650;
+}
+
+html[data-theme="night"] .hint.budget-ok {
+  color: #8fe83a;
+}
+
 .shot-node .prompt {
   min-height: 64px;
 }
