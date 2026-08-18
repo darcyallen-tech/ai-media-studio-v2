@@ -79,6 +79,23 @@
   width: 240px;
 }
 
+.ref-node {
+  width: 260px;
+}
+
+.ref-note {
+  width: 100%;
+  resize: vertical;
+  min-height: 44px;
+  border: 1px solid #c5d0dc;
+  border-radius: 8px;
+  background: #eef2f6;
+  color: #1c2530;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
 .source-node.drop-hot {
   border-color: #6fdc12;
   box-shadow: 0 0 0 2px #8fe83a, 0 10px 28px rgba(60, 80, 110, 0.14);

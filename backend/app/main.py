@@ -33,6 +33,12 @@ from app.audio_registry import (  # noqa: E402
     format_audio_cost,
 )
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
+from app.character_scene import (  # noqa: E402
+    list_characters,
+    list_scenes,
+    resolve_still_file,
+    v1_root,
+)
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
 from app.enhance import enhance_prompt_text  # noqa: E402
 from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
@@ -58,7 +64,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase5c"
+APP_VERSION = "2.0.0-phase6"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -86,6 +92,14 @@ _AUDIO_REGISTRIES = {
 _AUDIO_NOOP = "Audio generate is not wired yet (Phase 7)."
 
 
+class RefRoleIn(BaseModel):
+    path: str
+    role: str
+    id: str | None = None
+    name: str | None = None
+    note: str | None = None
+
+
 class SlotsIn(BaseModel):
     start_still: str | None = None
     end_still: str | None = None
@@ -95,6 +109,7 @@ class SlotsIn(BaseModel):
     ref_audios: list[str] = Field(default_factory=list)
     character_ids: list[str] = Field(default_factory=list)
     scene_ids: list[str] = Field(default_factory=list)
+    ref_roles: list[RefRoleIn] = Field(default_factory=list)
     mask: str | None = None
 
 
@@ -128,6 +143,7 @@ class EnhanceIn(BaseModel):
     model_id: str = ""
     modality: str = "t2i"
     mode: str = "image"
+    refs: list[RefRoleIn] = Field(default_factory=list)
 
 
 class CreateStateIn(BaseModel):
@@ -176,12 +192,20 @@ def _params_from_body(raw: ParamsIn) -> CreateParams:
 
 def _state_from_body(body: CreateStateIn) -> CreateState:
     out_dir: str | Path | None = body.output_dir or OUTPUT_DIR
+    params = _params_from_body(body.params)
+    roles = [
+        r.model_dump()
+        for r in (body.slots.ref_roles or [])
+        if (r.path or "").strip() and (r.role or "").strip()
+    ]
+    if roles:
+        params.extra.setdefault("ref_roles", roles)
     return CreateState(
         mode=body.mode,  # type: ignore[arg-type]
         modality=body.modality,
         model_id=body.model_id,
         slots=_slots_from_body(body.slots),
-        params=_params_from_body(body.params),
+        params=params,
         prompt=body.prompt,
         enhance_direction=body.enhance_direction,
         surface=body.surface,  # type: ignore[arg-type]
@@ -311,6 +335,7 @@ def health() -> dict[str, Any]:
                 os.environ.get("RUNWARE_API_KEY") or os.environ.get("RUNWARE_KEY")
             ),
         },
+        "v1_root": str(v1_root()) if v1_root() else None,
     }
 
 
@@ -380,6 +405,7 @@ def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
         model_id=body.model_id,
         modality=body.modality,
         mode=body.mode,
+        refs=[r.model_dump() for r in (body.refs or [])],
     )
 
 
@@ -451,6 +477,42 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "estimate": estimate_create_cost(state) if not result.ok else cost,
         },
     )
+
+
+@app.get("/characters")
+def characters_get() -> dict[str, Any]:
+    rows = list_characters()
+    return {
+        "ok": True,
+        "source": "v1" if v1_root() else None,
+        "items": rows,
+    }
+
+
+@app.get("/scenes")
+def scenes_get() -> dict[str, Any]:
+    rows = list_scenes()
+    return {
+        "ok": True,
+        "source": "v1" if v1_root() else None,
+        "items": rows,
+    }
+
+
+@app.get("/characters/{char_id}/still")
+def character_still(char_id: str) -> FileResponse:
+    path = resolve_still_file("character", char_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Character still not found.")
+    return FileResponse(path, filename=path.name)
+
+
+@app.get("/scenes/{scene_id}/still")
+def scene_still(scene_id: str) -> FileResponse:
+    path = resolve_still_file("scene", scene_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Scene still not found.")
+    return FileResponse(path, filename=path.name)
 
 
 @app.get("/library")

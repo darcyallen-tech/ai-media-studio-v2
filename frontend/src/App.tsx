@@ -15,7 +15,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import LibraryPanel from "./LibraryPanel";
-import PromptNode from "./PromptNode";
+import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
+import RefNode from "./RefNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
 import {
@@ -26,14 +27,20 @@ import {
 } from "./libraryDrag";
 import { bindToast, toast } from "./toast";
 import {
+  catalogToItem,
   hasLibraryPayload,
   inputPlan,
+  maxRefImages,
   parseLibraryPayload,
   type GenerateResponse,
   type GraphInputs,
   type LibraryItem,
   type Mode,
+  type ModelRow,
   type PromptNodeData,
+  type RefCatalogEntry,
+  type RefNodeData,
+  type RefSlotState,
   type ResultNodeData,
   type SlotAccept,
   type SourceNodeData,
@@ -45,7 +52,9 @@ type StudioNode =
   | Node<ResultNodeData, "result">
   | Node<SourceNodeData, "source">
   | Node<SourceNodeData, "first">
-  | Node<SourceNodeData, "last">;
+  | Node<SourceNodeData, "last">
+  | Node<RefNodeData, "character">
+  | Node<RefNodeData, "scene">;
 
 const nodeTypes: NodeTypes = {
   prompt: PromptNode,
@@ -53,6 +62,8 @@ const nodeTypes: NodeTypes = {
   source: SourceNode,
   first: SourceNode,
   last: SourceNode,
+  character: RefNode,
+  scene: RefNode,
 };
 
 const WORLD: [[number, number], [number, number]] = [
@@ -79,10 +90,15 @@ const initialNodes: StudioNode[] = [
       onAddSource: () => undefined,
       onAddFirst: () => undefined,
       onAddLast: () => undefined,
+      onAddCharacter: () => undefined,
+      onAddScene: () => undefined,
       onModalityChange: () => undefined,
       source: null,
       first: null,
       last: null,
+      characters: [],
+      scenes: [],
+      maxRefs: 0,
     },
   },
 ];
@@ -92,7 +108,12 @@ function StudioCanvas() {
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
   const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
   const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
+  const [characters, setCharacters] = useState<RefSlotState[]>([]);
+  const [scenes, setScenes] = useState<RefSlotState[]>([]);
+  const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
+  const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [plan, setPlan] = useState<GraphInputs>({});
+  const [maxRefs, setMaxRefs] = useState(0);
   const [toastMsg, setToastMsg] = useState<{ text: string; error: boolean } | null>(
     null,
   );
@@ -210,12 +231,156 @@ function StudioCanvas() {
     ensureSlot(LAST_ID, "Last Frame", "image", 170);
   }, [ensureSlot]);
 
-  const onModalityChange = useCallback((_mode: Mode, modality: string) => {
-    setPlan(inputPlan(modality));
-  }, []);
+  const onModalityChange = useCallback(
+    (_mode: Mode, modality: string, model?: ModelRow | null) => {
+      setPlan(inputPlan(modality, model));
+      setMaxRefs(maxRefImages(model, modality));
+    },
+    [],
+  );
+
+  const atRefLimit = useCallback(
+    (nextFilled?: number) => {
+      if (maxRefs <= 0) return false;
+      const n =
+        nextFilled ?? countFilledRefs(sourceItem, characters, scenes);
+      return n >= maxRefs;
+    },
+    [characters, maxRefs, scenes, sourceItem],
+  );
+
+  const addRefNode = useCallback(
+    (role: "character" | "scene") => {
+      const reserved = reservedRefNodes(sourceItem, characters, scenes);
+      if (maxRefs > 0 && reserved >= maxRefs) {
+        toast(`This model allows at most ${maxRefs} reference images.`, true);
+        return;
+      }
+      const id = `${role === "character" ? "char" : "scene"}-${Date.now().toString(36)}`;
+      const row: RefSlotState = { id, catalogId: "", note: "", item: null };
+      if (role === "character") setCharacters((cur) => [...cur, row]);
+      else setScenes((cur) => [...cur, row]);
+      setNodes((current) => {
+        if (current.some((n) => n.id === id)) return current;
+        const prompt = current.find((n) => n.id === "prompt");
+        const siblings = current.filter((n) =>
+          ["source", "character", "scene"].includes(n.type || ""),
+        );
+        const y = siblings.length
+          ? Math.max(...siblings.map((n) => n.position.y)) + 250
+          : (prompt?.position.y ?? PROMPT_POS.y) + 36;
+        const node: StudioNode = {
+          id,
+          type: role,
+          position: {
+            x: Math.max(-160, (prompt?.position.x ?? PROMPT_POS.x) - 300),
+            y,
+          },
+          dragHandle: ".node-header",
+          data: {
+            title: role === "character" ? "Character" : "Scene",
+            role,
+            item: null,
+            catalogId: "",
+            note: "",
+            catalog: role === "character" ? charCatalog : sceneCatalog,
+            onClear: () => undefined,
+            onOpenLibrary: () => setLibraryOpen(true),
+            onAttach: () => undefined,
+            onPickCatalog: () => undefined,
+            onNote: () => undefined,
+          },
+        };
+        return [...current, node];
+      });
+      const edgeId = `e-${id}-prompt`;
+      setEdges((current) => {
+        if (current.some((e) => e.id === edgeId)) return current;
+        return addEdge(
+          {
+            id: edgeId,
+            source: id,
+            target: "prompt",
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [
+      charCatalog,
+      characters,
+      maxRefs,
+      sceneCatalog,
+      scenes,
+      setEdges,
+      setNodes,
+      sourceItem,
+    ],
+  );
+
+  const addCharacterNode = useCallback(
+    () => addRefNode("character"),
+    [addRefNode],
+  );
+  const addSceneNode = useCallback(() => addRefNode("scene"), [addRefNode]);
+
+  useEffect(() => {
+    if (!plan.characters && !plan.scenes) {
+      setCharacters([]);
+      setScenes([]);
+      setNodes((current) =>
+        current.filter((n) => n.type !== "character" && n.type !== "scene"),
+      );
+      setEdges((current) =>
+        current.filter(
+          (e) =>
+            !String(e.source).startsWith("char-") &&
+            !String(e.source).startsWith("scene-"),
+        ),
+      );
+    }
+  }, [plan.characters, plan.scenes, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (!plan.characters && !plan.scenes) return;
+    const ac = new AbortController();
+    fetch("/characters", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((body: { items?: RefCatalogEntry[] }) => {
+        setCharCatalog(body.items ?? []);
+      })
+      .catch(() => undefined);
+    fetch("/scenes", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((body: { items?: RefCatalogEntry[] }) => {
+        setSceneCatalog(body.items ?? []);
+      })
+      .catch(() => undefined);
+    return () => ac.abort();
+  }, [plan.characters, plan.scenes]);
 
   const tryAttachSlot = useCallback(
-    (slot: "source" | "first" | "last", item: LibraryItem) => {
+    (slot: string, item: LibraryItem) => {
+      if (slot.startsWith("char-") || slot.startsWith("scene-")) {
+        if (!slotAccepts("image", item)) {
+          toast(slotNeedLabel("image"), true);
+          return false;
+        }
+        const isChar = slot.startsWith("char-");
+        const rows = isChar ? characters : scenes;
+        const setter = isChar ? setCharacters : setScenes;
+        const existing = rows.find((r) => r.id === slot);
+        const replacing = Boolean(existing?.item?.path);
+        if (!replacing && atRefLimit()) {
+          toast(`This model allows at most ${maxRefs} reference images.`, true);
+          return false;
+        }
+        setter((cur) =>
+          cur.map((r) => (r.id === slot ? { ...r, item } : r)),
+        );
+        return true;
+      }
       const accept: SlotAccept =
         slot === "source" ? (plan.source ?? "image") : "image";
       if (!slotAccepts(accept, item)) {
@@ -232,11 +397,25 @@ function StudioCanvas() {
         addLastNode();
         return true;
       }
+      if (!sourceItem?.path && atRefLimit()) {
+        toast(`This model allows at most ${maxRefs} reference images.`, true);
+        return false;
+      }
       setSourceItem(item);
       addSourceNode();
       return true;
     },
-    [addFirstNode, addLastNode, addSourceNode, plan.source],
+    [
+      addFirstNode,
+      addLastNode,
+      addSourceNode,
+      atRefLimit,
+      characters,
+      maxRefs,
+      plan.source,
+      scenes,
+      sourceItem,
+    ],
   );
 
   const attachMedia = useCallback(
@@ -253,11 +432,64 @@ function StudioCanvas() {
         tryAttachSlot("last", item);
         return;
       }
+      if (plan.characters || plan.scenes) {
+        const emptyChar = characters.find((r) => !r.item);
+        if (emptyChar) {
+          tryAttachSlot(emptyChar.id, item);
+          return;
+        }
+        const emptyScene = scenes.find((r) => !r.item);
+        if (emptyScene) {
+          tryAttachSlot(emptyScene.id, item);
+          return;
+        }
+        if (plan.source && !sourceItem) {
+          tryAttachSlot("source", item);
+          return;
+        }
+        toast("Add a Character or Scene node first, or drop onto one.", true);
+        return;
+      }
       if (plan.source) {
         tryAttachSlot("source", item);
       }
     },
-    [firstItem, lastItem, plan, tryAttachSlot],
+    [
+      characters,
+      firstItem,
+      lastItem,
+      plan,
+      scenes,
+      sourceItem,
+      tryAttachSlot,
+    ],
+  );
+
+  const pickCatalog = useCallback(
+    (slotId: string, role: "character" | "scene", catalogId: string) => {
+      const catalog = role === "character" ? charCatalog : sceneCatalog;
+      const setter = role === "character" ? setCharacters : setScenes;
+      const entry = catalog.find((r) => r.id === catalogId) ?? null;
+      const mapped = entry ? catalogToItem(entry) : null;
+      setter((cur) =>
+        cur.map((r) => {
+          if (r.id !== slotId) return r;
+          if (catalogId && mapped && !r.item?.path && atRefLimit()) {
+            toast(
+              `This model allows at most ${maxRefs} reference images.`,
+              true,
+            );
+            return r;
+          }
+          return {
+            ...r,
+            catalogId,
+            item: catalogId ? mapped || r.item : r.item,
+          };
+        }),
+      );
+    },
+    [atRefLimit, charCatalog, maxRefs, sceneCatalog],
   );
 
   useEffect(() => {
@@ -283,10 +515,15 @@ function StudioCanvas() {
               onAddSource: addSourceNode,
               onAddFirst: addFirstNode,
               onAddLast: addLastNode,
+              onAddCharacter: addCharacterNode,
+              onAddScene: addSceneNode,
               onModalityChange,
               source: sourceItem,
               first: firstItem,
               last: lastItem,
+              characters,
+              scenes,
+              maxRefs,
             },
           };
         }
@@ -332,20 +569,91 @@ function StudioCanvas() {
             },
           };
         }
+        if (n.type === "character") {
+          const row = characters.find((r) => r.id === n.id);
+          if (!row) return n;
+          return {
+            ...n,
+            type: "character",
+            data: {
+              title: "Character",
+              role: "character",
+              item: row.item,
+              catalogId: row.catalogId,
+              note: row.note,
+              catalog: charCatalog,
+              onClear: () =>
+                setCharacters((cur) =>
+                  cur.map((r) =>
+                    r.id === n.id
+                      ? { ...r, item: null, catalogId: "", note: "" }
+                      : r,
+                  ),
+                ),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onAttach: (item) => tryAttachSlot(n.id, item),
+              onPickCatalog: (id) => pickCatalog(n.id, "character", id),
+              onNote: (note) =>
+                setCharacters((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
+                ),
+            },
+          };
+        }
+        if (n.type === "scene") {
+          const row = scenes.find((r) => r.id === n.id);
+          if (!row) return n;
+          return {
+            ...n,
+            type: "scene",
+            data: {
+              title: "Scene",
+              role: "scene",
+              item: row.item,
+              catalogId: row.catalogId,
+              note: row.note,
+              catalog: sceneCatalog,
+              onClear: () =>
+                setScenes((cur) =>
+                  cur.map((r) =>
+                    r.id === n.id
+                      ? { ...r, item: null, catalogId: "", note: "" }
+                      : r,
+                  ),
+                ),
+              onOpenLibrary: () => setLibraryOpen(true),
+              onAttach: (item) => tryAttachSlot(n.id, item),
+              onPickCatalog: (id) => pickCatalog(n.id, "scene", id),
+              onNote: (note) =>
+                setScenes((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
+                ),
+            },
+          };
+        }
         return n;
       }),
     );
   }, [
+    addCharacterNode,
     addFirstNode,
     addLastNode,
+    addSceneNode,
     addSourceNode,
+    charCatalog,
+    characters,
     firstItem,
     lastItem,
+    maxRefs,
     onModalityChange,
+    pickCatalog,
     plan.source,
+    sceneCatalog,
+    scenes,
     setNodes,
     sourceItem,
     spawnResult,
+    tryAttachSlot,
   ]);
 
   useEffect(() => {
@@ -364,7 +672,14 @@ function StudioCanvas() {
       const el = document.elementFromPoint(event.clientX, event.clientY);
       const slotEl = el?.closest("[data-drop-slot]") as HTMLElement | null;
       const slot = slotEl?.dataset.dropSlot;
-      if (slot !== "source" && slot !== "first" && slot !== "last") return;
+      if (
+        slot !== "source" &&
+        slot !== "first" &&
+        slot !== "last" &&
+        !slot?.startsWith("char-") &&
+        !slot?.startsWith("scene-")
+      )
+        return;
       event.preventDefault();
       event.stopPropagation();
       consumeLibraryDrag();
@@ -392,7 +707,11 @@ function StudioCanvas() {
       event.preventDefault();
       const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const hit = getNodes().find((n) => {
-        if (!n.type || !["source", "first", "last"].includes(n.type)) return false;
+        if (
+          !n.type ||
+          !["source", "first", "last", "character", "scene"].includes(n.type)
+        )
+          return false;
         const w = n.measured?.width ?? 240;
         const h = n.measured?.height ?? 220;
         return (
@@ -404,7 +723,13 @@ function StudioCanvas() {
       });
       if (!hit) return;
       consumeLibraryDrag();
-      if (hit.id === SOURCE_ID || hit.id === FIRST_ID || hit.id === LAST_ID) {
+      if (
+        hit.id === SOURCE_ID ||
+        hit.id === FIRST_ID ||
+        hit.id === LAST_ID ||
+        hit.id.startsWith("char-") ||
+        hit.id.startsWith("scene-")
+      ) {
         tryAttachSlot(hit.id, item);
       }
     },
@@ -413,11 +738,14 @@ function StudioCanvas() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      const src = connection.source || "";
       const ok =
-        (connection.source === SOURCE_ID && connection.target === "prompt") ||
-        (connection.source === FIRST_ID && connection.target === "prompt") ||
-        (connection.source === LAST_ID && connection.target === "prompt") ||
-        (connection.source === "prompt" && connection.target === RESULT_ID);
+        (src === SOURCE_ID && connection.target === "prompt") ||
+        (src === FIRST_ID && connection.target === "prompt") ||
+        (src === LAST_ID && connection.target === "prompt") ||
+        (src.startsWith("char-") && connection.target === "prompt") ||
+        (src.startsWith("scene-") && connection.target === "prompt") ||
+        (src === "prompt" && connection.target === RESULT_ID);
       if (!ok) return;
       setEdges((eds) =>
         addEdge(
@@ -465,12 +793,17 @@ function StudioCanvas() {
         maxZoom={1.6}
         translateExtent={WORLD}
         nodesConnectable
-        isValidConnection={(c) =>
-          (c.source === SOURCE_ID && c.target === "prompt") ||
-          (c.source === FIRST_ID && c.target === "prompt") ||
-          (c.source === LAST_ID && c.target === "prompt") ||
-          (c.source === "prompt" && c.target === RESULT_ID)
-        }
+        isValidConnection={(c) => {
+          const src = c.source || "";
+          return (
+            (src === SOURCE_ID && c.target === "prompt") ||
+            (src === FIRST_ID && c.target === "prompt") ||
+            (src === LAST_ID && c.target === "prompt") ||
+            (src.startsWith("char-") && c.target === "prompt") ||
+            (src.startsWith("scene-") && c.target === "prompt") ||
+            (src === "prompt" && c.target === RESULT_ID)
+          );
+        }}
         nodesDraggable
         elementsSelectable
         deleteKeyCode={null}

@@ -185,7 +185,10 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
 
       {error ? <p className="hint warn">{error}</p> : null}
       {active?.note ? <p className="hint">{active.note}</p> : null}
-      <p className="hint">Click or drag onto a Source node. Drop OS files here to upload.</p>
+      <p className="hint">
+        Click or drag onto a Source, Character, or Scene node. Drop OS files
+        here to upload.
+      </p>
 
       <div className="library-grid">
         {items.length === 0 ? (

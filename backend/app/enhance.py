@@ -18,6 +18,9 @@ Rules:
   short descriptive visual equivalents (look, costume, setting) — never the name.
 - Do not add lectures, warnings, disclaimers, or meta commentary.
 - Do not invent a new concept. Do not refuse. Just rewrite.
+- If character / scene / source references are listed, mention them by role
+  (character, scene, source) so the rewrite stays consistent with those
+  identities and locations. Do not drop them.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -38,12 +41,35 @@ def _parse_prompt(raw: str, fallback: str) -> str:
     return text or fallback
 
 
+def _refs_block(refs: list[dict[str, Any]] | None) -> str:
+    lines: list[str] = []
+    for raw in refs or []:
+        if not isinstance(raw, dict):
+            continue
+        role = str(raw.get("role") or "").strip().lower()
+        if role not in ("character", "scene", "source"):
+            continue
+        name = str(raw.get("name") or raw.get("id") or role).strip() or role
+        note = str(raw.get("note") or "").strip()
+        if note:
+            lines.append(f"- {role}: {name} — {note}")
+        else:
+            lines.append(f"- {role}: {name}")
+    if not lines:
+        return ""
+    return (
+        "References (mention each by role so the rewrite stays consistent):\n"
+        + "\n".join(lines)
+    )
+
+
 def enhance_prompt_text(
     *,
     prompt: str,
     model_id: str = "",
     modality: str = "",
     mode: str = "",
+    refs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     original = (prompt or "").strip()
     if not original:
@@ -55,11 +81,13 @@ def enhance_prompt_text(
         }
     entry = resolve_model(model_id, mode=mode or None, modality=modality or None)
     label = (entry.label if entry else "") or model_id or "default model"
+    extra = _refs_block(refs)
     user = (
         f"Mode: {mode or 'image'}\n"
         f"Modality: {modality or 't2i'}\n"
         f"Model: {label}\n\n"
-        f"User prompt:\n{original}"
+        + (f"{extra}\n\n" if extra else "")
+        + f"User prompt:\n{original}"
     )
     try:
         raw = chat_json(system=SYSTEM, user=user, temperature=0.35, max_tokens=1200)

@@ -27,6 +27,11 @@ export type ModelRow = {
   requires_end_frame?: boolean;
   supports_end_frame?: boolean;
   required_slots?: string[];
+  optional_slots?: string[];
+  size_limits?: {
+    max_ref_images?: number;
+    max_refs?: number;
+  };
 };
 
 export type GenerateResponse = {
@@ -64,8 +69,39 @@ export type LibraryBucket = {
 
 export type GraphInputs = {
   source?: SlotAccept;
+  sourceOptional?: boolean;
   first?: boolean;
   last?: boolean;
+  characters?: boolean;
+  scenes?: boolean;
+};
+
+export type RefRole = "character" | "scene" | "source";
+
+export type RefCatalogEntry = {
+  id: string;
+  name: string;
+  label?: string;
+  notes?: string;
+  still_path?: string | null;
+  has_still?: boolean;
+  url?: string | null;
+  kind?: RefRole;
+};
+
+export type RefSlotState = {
+  id: string;
+  catalogId: string;
+  note: string;
+  item: LibraryItem | null;
+};
+
+export type RefRolePayload = {
+  path: string;
+  role: RefRole;
+  id?: string | null;
+  name?: string | null;
+  note?: string | null;
 };
 
 export type PromptNodeData = {
@@ -73,10 +109,19 @@ export type PromptNodeData = {
   onAddSource: () => void;
   onAddFirst: () => void;
   onAddLast: () => void;
-  onModalityChange: (mode: Mode, modality: string) => void;
+  onAddCharacter: () => void;
+  onAddScene: () => void;
+  onModalityChange: (
+    mode: Mode,
+    modality: string,
+    model?: ModelRow | null,
+  ) => void;
   source: LibraryItem | null;
   first: LibraryItem | null;
   last: LibraryItem | null;
+  characters: RefSlotState[];
+  scenes: RefSlotState[];
+  maxRefs: number;
 };
 
 export type ResultNodeData = {
@@ -90,6 +135,20 @@ export type SourceNodeData = {
   onClear: () => void;
   onOpenLibrary: () => void;
   onAttach: (item: LibraryItem) => void;
+};
+
+export type RefNodeData = {
+  title: string;
+  role: "character" | "scene";
+  item: LibraryItem | null;
+  catalogId: string;
+  note: string;
+  catalog: RefCatalogEntry[];
+  onClear: () => void;
+  onOpenLibrary: () => void;
+  onAttach: (item: LibraryItem) => void;
+  onPickCatalog: (id: string) => void;
+  onNote: (note: string) => void;
 };
 
 export const LIBRARY_DRAG_MIME = "application/x-ams-library";
@@ -136,16 +195,45 @@ export function inputPlan(
   if (modality === "i2v" || modality === "i2i" || modality === "region") {
     return { source: "image" };
   }
-  if (modality === "r2i") {
-    return { source: "image" };
+  if (modality === "r2i" || modality === "r2v") {
+    return {
+      source: "image",
+      sourceOptional: true,
+      characters: true,
+      scenes: true,
+    };
   }
   if (modality === "v2v" || modality === "extend") {
     return { source: "video" };
   }
-  if (modality === "r2v") {
-    return { source: "image" };
-  }
   return {};
+}
+
+export function maxRefImages(
+  model?: ModelRow | null,
+  modality?: string,
+): number {
+  const raw =
+    model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0;
+  const n = Number(raw) || 0;
+  if (n > 0) return n;
+  if (modality === "r2i" || modality === "r2v") return 4;
+  return 0;
+}
+
+export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
+  const path = (entry.still_path || "").trim();
+  if (!path) return null;
+  const url = entry.url || "";
+  return {
+    id: `${entry.kind || "ref"}:${entry.id}`,
+    name: entry.label || entry.name || entry.id,
+    source: "uploads",
+    kind: "image",
+    path,
+    url,
+    thumb_url: url || null,
+  };
 }
 
 export function durationOptions(model?: ModelRow | null): string[] {

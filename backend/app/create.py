@@ -142,11 +142,52 @@ def _file_ok(path: str | None) -> bool:
     return bool(path and Path(path).is_file())
 
 
+def _resolved_key(path: str) -> str:
+    try:
+        return str(Path(path).resolve())
+    except OSError:
+        return path
+
+
+def expand_identity_refs(state: CreateState) -> CreateState:
+    """Fill ref_images from V1 character/scene ids when the UI sent ids only."""
+    slots = state.slots or CreateSlots()
+    refs = [p for p in (slots.ref_images or []) if p]
+    seen = {_resolved_key(p) for p in refs}
+    try:
+        from app.character_scene import stills_for_ids
+    except Exception:
+        stills_for_ids = None  # type: ignore[assignment]
+    if stills_for_ids is not None:
+        for path in stills_for_ids("character", slots.character_ids) + stills_for_ids(
+            "scene", slots.scene_ids
+        ):
+            key = _resolved_key(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append(path)
+    slots.ref_images = refs
+    state.slots = slots
+    return state
+
+
+def _ref_image_count(slots: CreateSlots) -> int:
+    refs = slots.existing_files("ref_images")
+    seen = {_resolved_key(p) for p in refs}
+    n = len(seen)
+    start = slots.start_still
+    if start and _file_ok(start) and _resolved_key(start) not in seen:
+        n += 1
+    return n
+
+
 def validate(state: CreateState) -> list[str]:
     """Return human-readable errors; empty list means the state can generate."""
     errors: list[str] = []
     if not isinstance(state, CreateState):
         return ["Internal: generate() expected a CreateState."]
+    expand_identity_refs(state)
     modality = state.modality
     entry = resolve_model(
         state.model_id,
@@ -217,6 +258,19 @@ def validate(state: CreateState) -> list[str]:
         _need("end_still", "Bridge needs an end still (first→last).")
     elif modality == "extend":
         _need("source_video", "Extend needs a source video clip.")
+
+    max_refs = int(
+        (entry.size_limits or {}).get("max_ref_images")
+        or (entry.size_limits or {}).get("max_refs")
+        or 0
+    )
+    if max_refs > 0:
+        n_refs = _ref_image_count(slots)
+        if n_refs > max_refs:
+            errors.append(
+                f"{entry.label} allows at most {max_refs} reference images "
+                f"(got {n_refs})."
+            )
 
     dur = (state.params.duration if state.params else None) or ""
     dur_n = None
@@ -297,6 +351,22 @@ def _use_vision(state: CreateState, entry: ModelEntry) -> bool:
     return False
 
 
+def _primary_and_ref_stills(slots: CreateSlots) -> tuple[str | None, list[str]]:
+    """Source still if present; otherwise first Character/Scene ref as primary."""
+    image_file = slots.start_still if _file_ok(slots.start_still) else None
+    extras = slots.existing_files("ref_images")
+    if image_file:
+        extras = [
+            p
+            for p in extras
+            if _resolved_key(p) != _resolved_key(image_file)
+        ]
+        return image_file, extras
+    if extras:
+        return extras[0], extras[1:]
+    return None, []
+
+
 def _dispatch_studio(
     state: CreateState,
     entry: ModelEntry,
@@ -305,11 +375,8 @@ def _dispatch_studio(
     from app.services import generate as studio_generate
 
     slots = state.slots
-    image_file = slots.start_still if _file_ok(slots.start_still) else None
+    image_file, extras = _primary_and_ref_stills(slots)
     video_file = slots.source_video if _file_ok(slots.source_video) else None
-    extras = slots.existing_files("ref_images")
-    if image_file:
-        extras = [p for p in extras if Path(p).resolve() != Path(image_file).resolve()]
     result = studio_generate(
         prompt=state.prompt,
         model_choice=entry.source_key or entry.label or state.model_id,
@@ -338,10 +405,9 @@ def _dispatch_vision(
     vmode = entry.vision_mode or vision_mode_from_modality(modality)
     still = is_still_mode(vmode) or modality in IMAGE_MODALITIES
 
-    start = slots.start_still if _file_ok(slots.start_still) else None
+    start, refs = _primary_and_ref_stills(slots)
     end = slots.end_still if _file_ok(slots.end_still) else None
     src_vid = slots.source_video if _file_ok(slots.source_video) else None
-    refs = slots.existing_files("ref_images")
     ref_vids = slots.existing_files("ref_videos")
     ref_auds = slots.existing_files("ref_audios")
 
@@ -408,6 +474,7 @@ def generate(
     Studio I2I / R2I / Region / I2V / R2V / V2V → ``services.generate``.
     Studio T2I / T2V and all Creative Vision modes → ``run_vision``.
     """
+    expand_identity_refs(state)
     errors = validate(state)
     if errors:
         return _fail(errors[0], errors, model=state.model_id)
