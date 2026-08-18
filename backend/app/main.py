@@ -78,6 +78,8 @@ from app.library import (  # noqa: E402
 from app.prefs import load_prefs, save_prefs  # noqa: E402
 from app.prompt_builder import apply_builder, list_builder_scenarios  # noqa: E402
 from app.director import apply_director, list_director_fields  # noqa: E402
+from app.storyboard import list_storyboard_models  # noqa: E402
+from app.shot_builder import apply_shot_builder, list_shot_builder_fields  # noqa: E402
 from app.resolve_export import send_file_to_resolve  # noqa: E402
 from app.billing import (  # noqa: E402
     dashboard_urls,
@@ -103,7 +105,7 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase15"
+APP_VERSION = "2.0.0-phase16"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -485,10 +487,20 @@ def list_models_endpoint(
             "default_id": default_id,
             "models": models,
         }
+    if want_mode == "storyboard":
+        pack = list_storyboard_models()
+        return {
+            "mode": "storyboard",
+            "modality": "r2v",
+            "default_id": pack.get("default_id"),
+            "primary": pack.get("primary"),
+            "notes": pack.get("notes"),
+            "models": [_jsonable(e) for e in pack.get("models") or []],
+        }
     if want_mode and want_mode not in ("image", "video"):
         raise HTTPException(
             status_code=400,
-            detail="mode must be image, video, frame, or audio",
+            detail="mode must be image, video, frame, storyboard, or audio",
         )
     entries = list_models_for_ui(want_mode, modality)
     default = default_model_for(want_mode, modality)
@@ -1199,6 +1211,24 @@ def director_fields() -> dict[str, Any]:
 @app.post("/director/apply")
 def director_apply(body: DirectorApplyIn) -> dict[str, Any]:
     return {"ok": True, "prompt": apply_director(body.fields)}
+
+
+class ShotBuilderApplyIn(BaseModel):
+    fields: dict[str, Any] = Field(default_factory=dict)
+    who_choices: list[str] = Field(default_factory=list)
+
+
+@app.get("/shot-builder/fields")
+def shot_builder_fields(
+    who: str = Query(default=""),
+) -> dict[str, Any]:
+    choices = [p.strip() for p in who.split("|") if p.strip()]
+    return list_shot_builder_fields(choices)
+
+
+@app.post("/shot-builder/apply")
+def shot_builder_apply(body: ShotBuilderApplyIn) -> dict[str, Any]:
+    return {"ok": True, **apply_shot_builder(body.fields)}
 
 
 @app.get("/resolve/status")

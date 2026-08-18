@@ -222,6 +222,15 @@ export default function ShotNode({ id, data }: NodeProps<ShotFlowNode>) {
               Attach still
             </button>
           )}
+          {data.onAddBuilder ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              onClick={data.onAddBuilder}
+            >
+              Add Shot Prompt Builder
+            </button>
+          ) : null}
         </div>
       </div>
       <Handle type="source" position={Position.Right} className="node-handle" />

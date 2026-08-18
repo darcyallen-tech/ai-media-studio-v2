@@ -7,6 +7,7 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useNodesInitialized,
   useReactFlow,
   type Connection,
   type Edge,
@@ -20,6 +21,7 @@ import SettingsPanel from "./SettingsPanel";
 import DirectorNode from "./DirectorNode";
 import HubNode from "./HubNode";
 import PromptBuilderNode from "./PromptBuilderNode";
+import ShotBuilderNode from "./ShotBuilderNode";
 import ShotNode from "./ShotNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
@@ -66,6 +68,7 @@ import {
   type RefNodeData,
   type RefSlotState,
   type ResultNodeData,
+  type ShotBuilderNodeData,
   type ShotNodeData,
   type ShotState,
   type SlotAccept,
@@ -88,6 +91,7 @@ type StudioNode =
   | Node<RefNodeData, "prop">
   | Node<HubNodeData, "hub">
   | Node<ShotNodeData, "shot">
+  | Node<ShotBuilderNodeData, "shot-builder">
   | Node<ToolNodeData, "upscale">
   | Node<ToolNodeData, "denoise">
   | Node<ToolNodeData, "restore">
@@ -109,6 +113,7 @@ const nodeTypes: NodeTypes = {
   prop: RefNode,
   hub: HubNode,
   shot: ShotNode,
+  "shot-builder": ShotBuilderNode,
   upscale: ToolNode,
   denoise: ToolNode,
   restore: ToolNode,
@@ -145,6 +150,17 @@ const WORLD: [[number, number], [number, number]] = [
 ];
 
 const PROMPT_POS = { x: 420, y: 90 };
+const PROMPT_FALLBACK = { w: 420, h: 480 };
+
+function viewportToCenterPrompt(width = PROMPT_FALLBACK.w, height = PROMPT_FALLBACK.h) {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  return {
+    x: vw / 2 - PROMPT_POS.x - width / 2,
+    y: vh / 2 - PROMPT_POS.y - height / 2,
+    zoom: 1,
+  };
+}
 const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
@@ -152,6 +168,7 @@ const RESULT_ID = "result";
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
 const HUB_ID = "asset-hub";
+const SHOT_BUILDER_ID = "shot-builder";
 const PIN_EDIT_SOURCE = "pin-edit-source";
 const PIN_EDIT_PROMPT = "pin-edit-prompt";
 const PIN_EDIT_RESULT = "pin-edit-result";
@@ -228,6 +245,7 @@ function StudioCanvas() {
   const [hubNotes, setHubNotes] = useState("");
   const [hubIds, setHubIds] = useState<string[]>([]);
   const [shots, setShots] = useState<ShotState[]>([]);
+  const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [studioMode, setStudioMode] = useState<Mode>("image");
@@ -309,7 +327,21 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const { screenToFlowPosition, getNodes, fitView } = useReactFlow();
+  const { screenToFlowPosition, getNodes, fitView, setCenter } = useReactFlow();
+  const nodesReady = useNodesInitialized();
+  const didCenterPrompt = useRef(false);
+
+  useEffect(() => {
+    if (didCenterPrompt.current || !nodesReady) return;
+    const prompt = getNodes().find((n) => n.id === "prompt");
+    if (!prompt) return;
+    const w = prompt.measured?.width ?? PROMPT_FALLBACK.w;
+    const h = prompt.measured?.height ?? PROMPT_FALLBACK.h;
+    didCenterPrompt.current = true;
+    setCenter(prompt.position.x + w / 2, prompt.position.y + h / 2, {
+      zoom: 1,
+    });
+  }, [getNodes, nodesReady, setCenter]);
 
   const frameAll = useCallback(() => {
     if (!getNodes().length) return;
@@ -354,6 +386,10 @@ function StudioCanvas() {
       setHubIds((cur) => cur.filter((row) => row !== id));
       if (id.startsWith("shot-")) {
         setShots((cur) => renumberShots(cur.filter((s) => s.id !== id)));
+        setActiveShotId((cur) => (cur === id ? null : cur));
+      }
+      if (id === SHOT_BUILDER_ID) {
+        /* builder only */
       }
       if (TOOL_TYPES.includes(id.split("-")[0] as ToolKind)) {
         setToolSources((cur) => {
@@ -1142,6 +1178,41 @@ function StudioCanvas() {
               String(e.target).startsWith("shot-")
             ),
         );
+        const hasHubNow = getNodes().some((n) => n.id === HUB_ID);
+        if (hasHubNow && !next.some((e) => e.id === "e-hub-prompt")) {
+          next = addEdge(
+            {
+              id: "e-hub-prompt",
+              source: HUB_ID,
+              target: "prompt",
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            next,
+          );
+        }
+        if (ordered.length) {
+          const last = ordered[ordered.length - 1];
+          const lastEdge = `e-${last.id}-prompt`;
+          next = next.filter(
+            (e) =>
+              !(
+                String(e.source).startsWith("shot-") &&
+                e.target === "prompt" &&
+                e.id !== lastEdge
+              ),
+          );
+          if (!next.some((e) => e.id === lastEdge)) {
+            next = addEdge(
+              {
+                id: lastEdge,
+                source: last.id,
+                target: "prompt",
+                style: { stroke: "#8aa4c2", strokeWidth: 2 },
+              },
+              next,
+            );
+          }
+        }
         if (!ordered.length) return next;
         const first = ordered[0];
         const hasHub = getNodes().some((n) => n.id === HUB_ID);
@@ -1238,7 +1309,106 @@ function StudioCanvas() {
       };
       return [...current, node];
     });
+    setActiveShotId(id);
   }, [closeNode, getNodes, hubTitle, setNodes]);
+
+  const addShotBuilder = useCallback(
+    (shotId?: string) => {
+      const target =
+        shotId ||
+        activeShotId ||
+        [...shots].sort((a, b) => a.order - b.order).at(-1)?.id;
+      if (!target) {
+        toast("Add a Shot first.", true);
+        return;
+      }
+      const shot = shots.find((s) => s.id === target);
+      setActiveShotId(target);
+      const who = [...characters, ...scenes, ...props]
+        .map((r) => r.label || r.item?.name || "")
+        .filter(Boolean);
+      setNodes((current) => {
+        const parent = current.find((n) => n.id === target);
+        const existing = current.find((n) => n.id === SHOT_BUILDER_ID);
+        const node: StudioNode = {
+          id: SHOT_BUILDER_ID,
+          type: "shot-builder",
+          position: existing?.position ?? {
+            x: Math.max(-180, (parent?.position.x ?? PROMPT_POS.x) - 360),
+            y: parent?.position.y ?? PROMPT_POS.y,
+          },
+          dragHandle: ".node-header",
+          data: {
+            shotId: target,
+            shotLabel: shot?.label || "Shot",
+            whoChoices: who,
+            onClose: () => closeNode(SHOT_BUILDER_ID),
+            onApply: () => undefined,
+          },
+        };
+        if (existing) {
+          return current.map((n) => (n.id === SHOT_BUILDER_ID ? node : n));
+        }
+        return [...current, node];
+      });
+      setEdges((current) => {
+        const next = current.filter(
+          (e) => e.source !== SHOT_BUILDER_ID && e.target !== SHOT_BUILDER_ID,
+        );
+        return addEdge(
+          {
+            id: `e-shot-builder-${target}`,
+            source: SHOT_BUILDER_ID,
+            target,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          next,
+        );
+      });
+    },
+    [
+      activeShotId,
+      characters,
+      closeNode,
+      props,
+      scenes,
+      setEdges,
+      setNodes,
+      shots,
+    ],
+  );
+
+  const applyShotBuilder = useCallback(
+    (
+      shotId: string,
+      patch: {
+        action: string;
+        move: string;
+        speed: string;
+        ease: string;
+        framing: string;
+      },
+    ) => {
+      setShots((cur) =>
+        cur.map((s) => {
+          if (s.id !== shotId) return s;
+          const existing = (s.action || "").trim();
+          const nextAction = existing
+            ? `${existing}\n${patch.action}`
+            : patch.action;
+          return {
+            ...s,
+            action: nextAction,
+            move: patch.move || s.move,
+            speed: patch.speed || s.speed,
+            ease: patch.ease || s.ease,
+            framing: patch.framing || s.framing,
+          };
+        }),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!plan.characters && !plan.scenes) {
@@ -1496,9 +1666,14 @@ function StudioCanvas() {
     setProps([]);
     setHubIds([]);
     setShots([]);
+    setActiveShotId(null);
     setNodes((current) =>
       current.filter(
-        (n) => n.type !== "prop" && n.type !== "shot" && n.id !== HUB_ID,
+        (n) =>
+          n.type !== "prop" &&
+          n.type !== "shot" &&
+          n.type !== "shot-builder" &&
+          n.id !== HUB_ID,
       ),
     );
     setEdges((current) =>
@@ -1553,6 +1728,29 @@ function StudioCanvas() {
               onAddProp: addPropNode,
               onAddHub: addHub,
               onAddShot: addShot,
+              onAddShotBuilder: () => addShotBuilder(),
+              shots,
+              hubAssets: hubIds
+                .map((id) => {
+                  const row = [...characters, ...scenes, ...props].find(
+                    (r) => r.id === id,
+                  );
+                  if (!row) return null;
+                  return {
+                    id: row.id,
+                    role: row.id.startsWith("scene-")
+                      ? ("scene" as const)
+                      : row.id.startsWith("prop-")
+                        ? ("prop" as const)
+                        : ("character" as const),
+                    label: row.label || row.item?.name || "",
+                    item: row.item,
+                  };
+                })
+                .filter((row): row is HubAsset => Boolean(row)),
+              hubTitle,
+              sequenceLine: sequenceLine(shots),
+              hasHub: current.some((n) => n.id === HUB_ID),
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
@@ -1966,7 +2164,28 @@ function StudioCanvas() {
                   cur.map((s) => (s.id === n.id ? { ...s, still: null } : s)),
                 ),
               onOpenLibrary: () => setLibraryOpen(true),
+              onAddBuilder: () => addShotBuilder(n.id),
               onClose: () => closeNode(n.id),
+            },
+          };
+        }
+        if (n.id === SHOT_BUILDER_ID) {
+          const targetId = activeShotId || shots[shots.length - 1]?.id || "";
+          const shot = shots.find((s) => s.id === targetId);
+          const who = [...characters, ...scenes, ...props]
+            .map((r) => r.label || r.item?.name || "")
+            .filter(Boolean);
+          return {
+            ...n,
+            type: "shot-builder",
+            data: {
+              shotId: targetId,
+              shotLabel: shot?.label || "Shot",
+              whoChoices: who,
+              onClose: () => closeNode(SHOT_BUILDER_ID),
+              onApply: (patch) => {
+                if (targetId) applyShotBuilder(targetId, patch);
+              },
             },
           };
         }
@@ -1981,7 +2200,10 @@ function StudioCanvas() {
     addHub,
     addPropNode,
     addShot,
+    addShotBuilder,
     addPromptBuilder,
+    applyShotBuilder,
+    activeShotId,
     applyBuilderPrompt,
     applyDirectorPrompt,
     appliedPrompt,
@@ -2199,7 +2421,10 @@ function StudioCanvas() {
         (src.startsWith("scene-") && tgt === HUB_ID) ||
         (src.startsWith("prop-") && tgt === HUB_ID) ||
         (src === HUB_ID && tgt.startsWith("shot-")) ||
+        (src === HUB_ID && tgt === "prompt") ||
+        (src.startsWith("shot-") && tgt === "prompt") ||
         (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
+        (src === SHOT_BUILDER_ID && tgt.startsWith("shot-")) ||
         (src === BUILDER_ID && tgt === "prompt") ||
         (src === DIRECTOR_ID && tgt === "prompt") ||
         (src === "prompt" && tgt.startsWith("result")) ||
@@ -2302,7 +2527,10 @@ function StudioCanvas() {
             (src.startsWith("scene-") && tgt === HUB_ID) ||
             (src.startsWith("prop-") && tgt === HUB_ID) ||
             (src === HUB_ID && tgt.startsWith("shot-")) ||
+            (src === HUB_ID && tgt === "prompt") ||
+            (src.startsWith("shot-") && tgt === "prompt") ||
             (src.startsWith("shot-") && tgt.startsWith("shot-")) ||
+            (src === SHOT_BUILDER_ID && tgt.startsWith("shot-")) ||
             (src === BUILDER_ID && tgt === "prompt") ||
             (src === DIRECTOR_ID && tgt === "prompt") ||
             (src === "prompt" && tgt.startsWith("result")) ||
@@ -2315,7 +2543,7 @@ function StudioCanvas() {
         nodesDraggable
         elementsSelectable
         deleteKeyCode={null}
-        defaultViewport={{ x: 40, y: 36, zoom: 1 }}
+        defaultViewport={viewportToCenterPrompt()}
         preventScrolling
       >
         <Background

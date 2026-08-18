@@ -23,6 +23,7 @@ export default defineConfig({
       "/prepare-aleph": "http://127.0.0.1:8000",
       "/builder": "http://127.0.0.1:8000",
       "/director": "http://127.0.0.1:8000",
+      "/shot-builder": "http://127.0.0.1:8000",
     },
   },
 });

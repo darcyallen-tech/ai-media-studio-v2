@@ -843,6 +843,10 @@
   width: 320px;
 }
 
+.shot-builder-node {
+  width: 320px;
+}
+
 .shot-node .prompt {
   min-height: 64px;
 }

@@ -7,6 +7,11 @@ import FrameEdit, {
 import NodeClose from "./NodeClose";
 import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
+import {
+  composeStoryboardPrompt,
+  storyboardDurationToken,
+  storyboardRefItems,
+} from "./storyboard";
 import { toast } from "./toast";
 import {
   durationOptions,
@@ -181,13 +186,26 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   if (isFrame && clipDuration > 0 && clipDuration + 0.05 < ALEPH_MIN_S) {
     missing.push(`Source must be at least ${ALEPH_MIN_S}s`);
   }
+  const storyShots = data.shots ?? [];
+  const storyAssets = data.hubAssets ?? [];
+  const storyRefs = isStoryboard
+    ? storyboardRefItems(storyAssets, storyShots)
+    : [];
+  if (isStoryboard && !data.hasHub) missing.push("Asset Hub");
+  if (isStoryboard && storyShots.length === 0) missing.push("Shot");
+  if (isStoryboard && storyRefs.length === 0) {
+    missing.push("Hub still or Shot start still");
+  }
+  if (isStoryboard && maxRefs > 0 && storyRefs.length > maxRefs) {
+    missing.push(`Too many refs (${storyRefs.length} / ${maxRefs})`);
+  }
 
   const canGenerate =
     Boolean(modelId) &&
     !loading &&
     !enhancing &&
     missing.length === 0 &&
-    (!promptRequired || prompt.trim().length > 0) &&
+    (isStoryboard || !promptRequired || prompt.trim().length > 0) &&
     (!isFrame || hasRunwareKey);
   const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading && phase === "idle";
 
@@ -258,17 +276,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   }, [mode, modality, selectedModel, onModalityChange, isLocked]);
 
   useEffect(() => {
-    if (mode === "storyboard") {
-      setModels([]);
-      setModelId("");
-      setModelsError(null);
-      return;
-    }
     const ac = new AbortController();
     setModelsError(null);
     setModels([]);
     setModelId("");
-    const qs = new URLSearchParams({ mode, modality });
+    const qs =
+      mode === "storyboard"
+        ? new URLSearchParams({ mode: "storyboard", modality: "r2v" })
+        : new URLSearchParams({ mode, modality });
     fetch(`/models?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Models ${res.status}`);
@@ -332,8 +347,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       return;
     }
     const ac = new AbortController();
-    const qs = new URLSearchParams({ mode, modality, model_id: modelId });
-    if (duration) qs.set("duration", duration);
+    const qs = new URLSearchParams({
+      mode: isStoryboard ? "video" : mode,
+      modality: isStoryboard ? "r2v" : modality,
+      model_id: modelId,
+    });
+    if (isStoryboard) {
+      const tok = storyboardDurationToken(data.shots ?? [], selectedModel);
+      if (tok) qs.set("duration", tok);
+    } else if (duration) qs.set("duration", duration);
     if (aspect) qs.set("aspect", aspect);
     if (resolution) qs.set("resolution", resolution);
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
@@ -352,22 +374,46 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [mode, modality, modelId, duration, aspect, resolution, audioOn, prompt, isFrame, clipDuration]);
+  }, [
+    mode,
+    modality,
+    modelId,
+    duration,
+    aspect,
+    resolution,
+    audioOn,
+    prompt,
+    isFrame,
+    isStoryboard,
+    clipDuration,
+    selectedModel,
+    data.shots,
+  ]);
 
   async function onGenerate() {
     if (!canGenerate) return;
     setLoading(true);
     setError(null);
     try {
-      const slots = slotsFromGraph(
-        modality,
-        data.source,
-        data.first,
-        data.last,
-        characters,
-        scenes,
-        isFrame ? pins : undefined,
-      );
+      const slots = isStoryboard
+        ? slotsFromStoryboard(storyAssets, storyShots, storyRefs)
+        : slotsFromGraph(
+            modality,
+            data.source,
+            data.first,
+            data.last,
+            characters,
+            scenes,
+            isFrame ? pins : undefined,
+          );
+      const composed = isStoryboard
+        ? composeStoryboardPrompt(
+            data.hubTitle || "",
+            prompt.trim(),
+            storyAssets,
+            storyShots,
+          )
+        : composePrompt(prompt.trim(), characters, scenes);
       if (isFrame && slots.source_video) {
         setPhase("preparing");
         const prepRes = await fetch("/prepare-aleph", {
@@ -398,13 +444,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode,
-          modality: isFrame ? "frame" : modality,
+          mode: isStoryboard ? "video" : mode,
+          modality: isStoryboard ? "r2v" : isFrame ? "frame" : modality,
           model_id: modelId,
-          prompt: composePrompt(prompt.trim(), characters, scenes),
+          prompt: composed,
           surface: "studio",
           params: {
-            duration: isFrame && clipDuration > 0 ? String(clipDuration) : duration || null,
+            duration: isStoryboard
+              ? storyboardDurationToken(storyShots, selectedModel)
+              : isFrame && clipDuration > 0
+                ? String(clipDuration)
+                : duration || null,
             aspect: aspect || null,
             resolution: resolution || null,
             audio_on: audioOn,
@@ -450,8 +500,16 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           model_id: modelId,
           modality,
           mode,
-          refs: enhanceRefs(data.source, characters, scenes),
-          image_urls: enhanceImagePaths(data),
+          refs: isStoryboard
+            ? storyRefs.map((item) => ({
+                path: item.path,
+                role: "source",
+                name: item.name,
+              }))
+            : enhanceRefs(data.source, characters, scenes),
+          image_urls: isStoryboard
+            ? storyRefs.map((item) => item.path).slice(0, 3)
+            : enhanceImagePaths(data),
         }),
       });
       const body = (await res.json()) as {
@@ -529,48 +587,23 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         )}
 
         {isStoryboard ? (
-          <>
-            <p className="hint">
-              Assets feed the Hub. Shots and Assemble come later.
-            </p>
-            <div className="source-row">
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={data.onAddCharacter}
-              >
-                Add Character
-              </button>
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={data.onAddScene}
-              >
-                Add Scene
-              </button>
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={data.onAddProp}
-              >
-                Add Prop
-              </button>
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={data.onAddHub}
-              >
-                Add Hub
-              </button>
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={data.onAddShot}
-              >
-                Add Shot
-              </button>
-            </div>
-          </>
+          <StoryboardPrompt
+            data={data}
+            models={models}
+            modelId={modelId}
+            modelsError={modelsError}
+            selectedModel={selectedModel}
+            estimate={estimate}
+            loading={loading}
+            enhancing={enhancing}
+            phase={phase}
+            error={error}
+            notes={prompt}
+            onNotes={setPrompt}
+            onModel={setModelId}
+            onGenerate={() => void onGenerate()}
+            onEnhance={() => void onEnhance()}
+          />
         ) : null}
 
         {!isStoryboard && !isLocked && !isFrame ? (
@@ -914,6 +947,196 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       <Handle type="source" position={Position.Right} className="node-handle" />
     </div>
   );
+}
+
+function StoryboardPrompt({
+  data,
+  models,
+  modelId,
+  modelsError,
+  selectedModel,
+  estimate,
+  loading,
+  enhancing,
+  phase,
+  error,
+  notes,
+  onNotes,
+  onModel,
+  onGenerate,
+  onEnhance,
+}: {
+  data: PromptNodeData;
+  models: ModelRow[];
+  modelId: string;
+  modelsError: string | null;
+  selectedModel: ModelRow | null;
+  estimate: string;
+  loading: boolean;
+  enhancing: boolean;
+  phase: "idle" | "preparing" | "generating";
+  error: string | null;
+  notes: string;
+  onNotes: (v: string) => void;
+  onModel: (id: string) => void;
+  onGenerate: () => void;
+  onEnhance: () => void;
+}) {
+  const shots = data.shots ?? [];
+  const refs = storyboardRefItems(data.hubAssets ?? [], shots);
+  const maxRefs = maxRefImages(selectedModel, "r2v");
+  const missing: string[] = [];
+  if (!data.hasHub) missing.push("Asset Hub");
+  if (!shots.length) missing.push("Shot");
+  if (!refs.length) missing.push("Hub still or Shot start still");
+  if (maxRefs > 0 && refs.length > maxRefs) {
+    missing.push(`Too many refs (${refs.length} / ${maxRefs})`);
+  }
+  const canGo =
+    Boolean(modelId) && !loading && !enhancing && missing.length === 0;
+  const durs = durationOptions(selectedModel);
+  const aspects = selectedModel?.aspect_choices ?? [];
+
+  return (
+    <>
+      <p className="hint">
+        Hub + Shots feed this Prompt. Primary model: MiniMax H3 Omni (R2V).
+      </p>
+      {data.sequenceLine ? (
+        <p className="hint">Sequence: {data.sequenceLine}</p>
+      ) : (
+        <p className="hint">No shots yet.</p>
+      )}
+      <div className="source-row">
+        <button type="button" className="ghost nodrag" onClick={data.onAddCharacter}>
+          Add Character
+        </button>
+        <button type="button" className="ghost nodrag" onClick={data.onAddScene}>
+          Add Scene
+        </button>
+        <button type="button" className="ghost nodrag" onClick={data.onAddProp}>
+          Add Prop
+        </button>
+        <button type="button" className="ghost nodrag" onClick={data.onAddHub}>
+          Add Hub
+        </button>
+        <button type="button" className="ghost nodrag" onClick={data.onAddShot}>
+          Add Shot
+        </button>
+        <button
+          type="button"
+          className="ghost nodrag"
+          onClick={data.onAddShotBuilder}
+        >
+          Add Shot Prompt Builder
+        </button>
+      </div>
+      <label className="field-label" htmlFor="sb-model">
+        Model
+      </label>
+      <select
+        id="sb-model"
+        className="model nodrag"
+        value={modelId}
+        onChange={(e) => onModel(e.target.value)}
+        disabled={models.length === 0}
+      >
+        {models.length === 0 ? (
+          <option value="">
+            {modelsError ? "No models (API offline?)" : "Loading models…"}
+          </option>
+        ) : (
+          models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))
+        )}
+      </select>
+      {modelsError ? <p className="hint warn">{modelsError}</p> : null}
+      {selectedModel?.notes ? <p className="hint">{selectedModel.notes}</p> : null}
+      {durs.length || aspects.length ? (
+        <div className="params">
+          {durs.length ? (
+            <label className="param">
+              <span>Duration</span>
+              <span className="hint">
+                {formatDurationToken(
+                  storyboardDurationToken(shots, selectedModel),
+                )}{" "}
+                (from shots)
+              </span>
+            </label>
+          ) : null}
+          {aspects.length ? (
+            <span className="hint">Aspect: {selectedModel?.default_aspect || aspects[0]}</span>
+          ) : null}
+        </div>
+      ) : null}
+      <label className="field-label" htmlFor="sb-notes">
+        Global notes
+      </label>
+      <textarea
+        id="sb-notes"
+        className="prompt nodrag nowheel"
+        rows={3}
+        placeholder="Mood, style, anything that applies to every shot…"
+        value={notes}
+        onChange={(e) => onNotes(e.target.value)}
+      />
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="ghost nodrag enhance"
+          disabled={!notes.trim() || enhancing || loading}
+          onClick={onEnhance}
+        >
+          {enhancing ? "Enhancing…" : "Enhance"}
+        </button>
+        <button
+          type="button"
+          className="generate nodrag"
+          disabled={!canGo}
+          onClick={onGenerate}
+        >
+          {phase === "generating" || loading ? "Generating…" : "Generate"}
+        </button>
+      </div>
+      <p className="estimate">{estimate}</p>
+      <p className="hint">
+        {refs.length}
+        {maxRefs > 0 ? ` / ${maxRefs}` : ""} refs
+      </p>
+      {missing.length ? (
+        <p className="hint warn">Needs {missing.join(" + ")}</p>
+      ) : null}
+      {error ? (
+        <p className="hint warn" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function slotsFromStoryboard(
+  _assets: { item?: { path?: string } | null; role?: string; label?: string }[],
+  shots: { still?: { path?: string } | null }[],
+  refs: { path: string; name?: string }[],
+) {
+  const firstStill = shots.map((s) => s.still).find((s) => s?.path);
+  return {
+    start_still: firstStill?.path,
+    source_video: undefined as string | undefined,
+    ref_images: refs.map((r) => r.path),
+    character_ids: [] as string[],
+    scene_ids: [] as string[],
+    ref_roles: refs.map((r) => ({
+      path: r.path,
+      role: "source" as const,
+      name: r.name,
+    })),
+  };
 }
 
 function pathKey(path: string): string {

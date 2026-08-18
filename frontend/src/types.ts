@@ -135,6 +135,12 @@ export type PromptNodeData = {
   onAddProp?: () => void;
   onAddHub?: () => void;
   onAddShot?: () => void;
+  onAddShotBuilder?: () => void;
+  shots?: ShotState[];
+  hubAssets?: HubAsset[];
+  hubTitle?: string;
+  sequenceLine?: string;
+  hasHub?: boolean;
   onModalityChange: (
     mode: Mode,
     modality: string,
@@ -337,7 +343,22 @@ export type ShotNodeData = {
   onAttachStill: (item: LibraryItem) => void;
   onClearStill: () => void;
   onOpenLibrary: () => void;
+  onAddBuilder?: () => void;
   onClose?: () => void;
+};
+
+export type ShotBuilderNodeData = {
+  shotId: string;
+  shotLabel: string;
+  whoChoices: string[];
+  onClose?: () => void;
+  onApply: (patch: {
+    action: string;
+    move: string;
+    speed: string;
+    ease: string;
+    framing: string;
+  }) => void;
 };
 
 export const LIBRARY_DRAG_MIME = "application/x-ams-library";
