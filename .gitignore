@@ -30,6 +30,8 @@ data/uploads/*
 !data/uploads/.gitkeep
 data/library/thumbs/
 data/library/generated.json
+data/assets/*
+!data/assets/.gitkeep
 
 # Local env / secrets — never commit real keys
 .env

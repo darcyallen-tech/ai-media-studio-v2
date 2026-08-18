@@ -101,7 +101,6 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag nopan">
-        {data.role !== "prop" ? (
         <select
           className="model nodrag"
           value={data.catalogId}
@@ -110,7 +109,7 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
           <option value="">
             {data.catalog.length
               ? `Pick ${data.role}…`
-              : `Known ${data.role} ids unavailable`}
+              : `No saved ${data.role}s yet`}
           </option>
           {data.catalog.map((row) => (
             <option key={row.id} value={row.id}>
@@ -119,7 +118,6 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
             </option>
           ))}
         </select>
-        ) : null}
 
         <input
           className="model nodrag"
@@ -189,9 +187,9 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
             type="button"
             className="ghost nodrag"
             onClick={() =>
-              toast(
-                `${title} Creator comes in Phase 17 — attach a still and name it for now.`,
-              )
+              data.onCreate
+                ? data.onCreate()
+                : toast("Open Library → Assets to create one.")
             }
           >
             New {title}

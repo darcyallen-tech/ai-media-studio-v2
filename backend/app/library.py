@@ -230,12 +230,17 @@ def _root_for(source: str) -> Path | None:
     if src == "resolve":
         handoff, _ = resolve_handoff_dir()
         return handoff
+    if src == "assets":
+        from app.assets import ASSETS_DIR, ensure_assets_dir
+
+        ensure_assets_dir()
+        return ASSETS_DIR.resolve()
     return None
 
 
 def allowed_roots() -> list[Path]:
     roots: list[Path] = []
-    for src in ("uploads", "generated", "resolve"):
+    for src in ("uploads", "generated", "resolve", "assets"):
         root = _root_for(src)
         if root is not None:
             roots.append(root)

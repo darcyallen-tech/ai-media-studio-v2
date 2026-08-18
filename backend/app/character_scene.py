@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from app.config import PROJECT_ROOT
 
-Kind = Literal["character", "scene"]
+Kind = Literal["character", "scene", "prop"]
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
@@ -156,54 +156,81 @@ def _row(
     }
 
 
+def _merge_owned(kind: Kind, v1_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """V2-owned assets first; V1 read-only rows follow (no writes)."""
+    try:
+        from app.assets import list_assets
+    except Exception:
+        return v1_rows
+    owned = list_assets(kind)
+    seen = {str(r.get("id") or "").lower() for r in owned}
+    extra: list[dict[str, Any]] = []
+    for row in v1_rows:
+        rid = str(row.get("id") or "").lower()
+        if rid and rid in seen:
+            continue
+        extra.append(row)
+    return owned + extra
+
+
 def list_characters() -> list[dict[str, Any]]:
     data = v1_data_dir()
-    if data is None:
-        return []
-    items = _load_json_list(data / "characters.json", "characters")
-    names = {
-        str(it.get("id") or "").strip(): str(it.get("name") or "").strip()
-        for it in items
-        if str(it.get("id") or "").strip()
-    }
-    out: list[dict[str, Any]] = []
-    for item in items:
-        row = _row(
-            kind="character",
-            item=item,
-            still_path=_primary_character_still(item),
-            names=names,
-        )
-        if row:
-            out.append(row)
-    return out
+    v1_rows: list[dict[str, Any]] = []
+    if data is not None:
+        items = _load_json_list(data / "characters.json", "characters")
+        names = {
+            str(it.get("id") or "").strip(): str(it.get("name") or "").strip()
+            for it in items
+            if str(it.get("id") or "").strip()
+        }
+        for item in items:
+            row = _row(
+                kind="character",
+                item=item,
+                still_path=_primary_character_still(item),
+                names=names,
+            )
+            if row:
+                v1_rows.append(row)
+    return _merge_owned("character", v1_rows)
 
 
 def list_scenes() -> list[dict[str, Any]]:
     data = v1_data_dir()
-    if data is None:
+    v1_rows: list[dict[str, Any]] = []
+    if data is not None:
+        items = _load_json_list(data / "scenes.json", "scenes")
+        names = {
+            str(it.get("id") or "").strip(): str(it.get("name") or "").strip()
+            for it in items
+            if str(it.get("id") or "").strip()
+        }
+        for item in items:
+            row = _row(
+                kind="scene",
+                item=item,
+                still_path=_primary_scene_still(item),
+                names=names,
+            )
+            if row:
+                v1_rows.append(row)
+    return _merge_owned("scene", v1_rows)
+
+
+def list_props() -> list[dict[str, Any]]:
+    try:
+        from app.assets import list_assets
+    except Exception:
         return []
-    items = _load_json_list(data / "scenes.json", "scenes")
-    names = {
-        str(it.get("id") or "").strip(): str(it.get("name") or "").strip()
-        for it in items
-        if str(it.get("id") or "").strip()
-    }
-    out: list[dict[str, Any]] = []
-    for item in items:
-        row = _row(
-            kind="scene",
-            item=item,
-            still_path=_primary_scene_still(item),
-            names=names,
-        )
-        if row:
-            out.append(row)
-    return out
+    return list_assets("prop")
 
 
 def list_kind(kind: Kind) -> list[dict[str, Any]]:
-    return list_characters() if kind == "character" else list_scenes()
+    if kind == "character":
+        return list_characters()
+    if kind == "prop":
+        return list_props()
+    return list_scenes()
 
 
 def find_entry(kind: Kind, id_or_name: str | None) -> dict[str, Any] | None:
@@ -246,7 +273,15 @@ def stills_for_ids(kind: Kind, ids: list[str] | None) -> list[str]:
 
 
 def resolve_still_file(kind: Kind, id_or_name: str) -> Path | None:
-    """Absolute still path if it lives under the V1 data dir."""
+    """Absolute still path under V2 assets or the V1 data dir."""
+    try:
+        from app.assets import resolve_asset_still
+    except Exception:
+        resolve_asset_still = None  # type: ignore[assignment]
+    if resolve_asset_still is not None:
+        owned = resolve_asset_still(id_or_name)
+        if owned is not None:
+            return owned
     data = v1_data_dir()
     path = still_path_for(kind, id_or_name)
     if data is None or not path:

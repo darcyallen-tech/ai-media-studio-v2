@@ -2,7 +2,7 @@ export type Mode = "image" | "video" | "frame" | "storyboard" | "audio";
 
 export type MediaKind = "image" | "video" | "audio";
 
-export type LibrarySource = "resolve" | "uploads" | "generated";
+export type LibrarySource = "resolve" | "uploads" | "generated" | "assets";
 
 export type SlotAccept = "image" | "video" | "any";
 
@@ -140,6 +140,7 @@ export type PromptNodeData = {
   shots?: ShotState[];
   hubAssets?: HubAsset[];
   hubTitle?: string;
+  hubNotes?: string;
   sequenceLine?: string;
   hasHub?: boolean;
   onModalityChange: (
@@ -263,6 +264,38 @@ export type SourceNodeData = {
 
 export type AssetRole = "character" | "scene" | "prop";
 
+export type StudioAsset = {
+  id: string;
+  name: string;
+  label?: string;
+  notes?: string;
+  kind: AssetRole;
+  still_path?: string | null;
+  still_paths?: string[];
+  sheet_path?: string | null;
+  has_still?: boolean;
+  url?: string | null;
+  thumb_url?: string | null;
+  owned?: boolean;
+  created?: string;
+  model?: string;
+};
+
+export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
+  const path = (asset.still_path || "").trim();
+  const url = asset.url || asset.thumb_url || "";
+  if (!path && !url) return null;
+  return {
+    id: `assets:${asset.id}`,
+    name: asset.label || asset.name || asset.id,
+    source: "assets",
+    kind: "image",
+    path: path || asset.id,
+    url,
+    thumb_url: asset.thumb_url || url || null,
+  };
+}
+
 export type RefNodeData = {
   title: string;
   role: AssetRole;
@@ -278,6 +311,7 @@ export type RefNodeData = {
   onNote: (note: string) => void;
   onLabel?: (label: string) => void;
   onAddToHub?: () => void;
+  onCreate?: () => void;
   onClose?: () => void;
 };
 
@@ -457,10 +491,12 @@ export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
   const path = (entry.still_path || "").trim();
   if (!path) return null;
   const url = entry.url || "";
+  const owned = (entry.kind === "character" || entry.kind === "scene" || entry.kind === "prop")
+    && Boolean(url?.startsWith("/assets/"));
   return {
     id: `${entry.kind || "ref"}:${entry.id}`,
     name: entry.label || entry.name || entry.id,
-    source: "uploads",
+    source: owned ? "assets" : "uploads",
     kind: "image",
     path,
     url,

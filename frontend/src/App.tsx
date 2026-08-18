@@ -16,6 +16,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import AssetCreator from "./AssetCreator";
 import LibraryPanel from "./LibraryPanel";
 import MediaLightbox from "./MediaLightbox";
 import SettingsPanel from "./SettingsPanel";
@@ -57,6 +58,7 @@ import {
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
 import { bindToast, toast } from "./toast";
 import {
+  assetToLibraryItem,
   catalogToItem,
   hasLibraryPayload,
   inputPlan,
@@ -84,6 +86,7 @@ import {
   type ShotNodeData,
   type ShotState,
   type SlotAccept,
+  type StudioAsset,
   type SourceNodeData,
   type ToolKind,
   type ToolNodeData,
@@ -273,6 +276,11 @@ function StudioCanvas() {
   const [activeShotId, setActiveShotId] = useState<string | null>(null);
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
+  const [propCatalog, setPropCatalog] = useState<RefCatalogEntry[]>([]);
+  const [creatingAsset, setCreatingAsset] = useState<{
+    kind: AssetRole;
+    slotId?: string;
+  } | null>(null);
   const [studioMode, setStudioMode] = useState<Mode>("image");
   const [studioModality, setStudioModality] = useState("t2i");
   const [appliedPrompt, setAppliedPrompt] = useState<{
@@ -1083,7 +1091,7 @@ function StudioCanvas() {
                 ? charCatalog
                 : role === "scene"
                   ? sceneCatalog
-                  : [],
+                  : propCatalog,
             onClear: () => undefined,
             onOpenLibrary: () => setLibraryOpen(true),
             onAttach: () => undefined,
@@ -1134,6 +1142,7 @@ function StudioCanvas() {
       characters,
       closeNode,
       maxRefs,
+      propCatalog,
       sceneCatalog,
       scenes,
       setEdges,
@@ -1499,23 +1508,35 @@ function StudioCanvas() {
     }
   }, [plan.characters, plan.scenes, setEdges, setNodes]);
 
-  useEffect(() => {
-    if (!plan.characters && !plan.scenes) return;
-    const ac = new AbortController();
-    fetch("/characters", { signal: ac.signal })
+  const loadCatalogs = useCallback(() => {
+    fetch("/characters")
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((body: { items?: RefCatalogEntry[] }) => {
         setCharCatalog(body.items ?? []);
       })
       .catch(() => undefined);
-    fetch("/scenes", { signal: ac.signal })
+    fetch("/scenes")
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((body: { items?: RefCatalogEntry[] }) => {
         setSceneCatalog(body.items ?? []);
       })
       .catch(() => undefined);
-    return () => ac.abort();
-  }, [plan.characters, plan.scenes]);
+    fetch("/props")
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((body: { items?: RefCatalogEntry[] }) => {
+        setPropCatalog(body.items ?? []);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadCatalogs();
+    function onAssets() {
+      loadCatalogs();
+    }
+    window.addEventListener("ams-assets-changed", onAssets);
+    return () => window.removeEventListener("ams-assets-changed", onAssets);
+  }, [loadCatalogs]);
 
   const tryAttachSlot = useCallback(
     (slot: string, item: LibraryItem) => {
@@ -1657,9 +1678,19 @@ function StudioCanvas() {
   );
 
   const pickCatalog = useCallback(
-    (slotId: string, role: "character" | "scene", catalogId: string) => {
-      const catalog = role === "character" ? charCatalog : sceneCatalog;
-      const setter = role === "character" ? setCharacters : setScenes;
+    (slotId: string, role: AssetRole, catalogId: string) => {
+      const catalog =
+        role === "character"
+          ? charCatalog
+          : role === "scene"
+            ? sceneCatalog
+            : propCatalog;
+      const setter =
+        role === "character"
+          ? setCharacters
+          : role === "scene"
+            ? setScenes
+            : setProps;
       const entry = catalog.find((r) => r.id === catalogId) ?? null;
       const mapped = entry ? catalogToItem(entry) : null;
       setter((cur) =>
@@ -1685,7 +1716,45 @@ function StudioCanvas() {
         }),
       );
     },
-    [atRefLimit, charCatalog, maxRefs, sceneCatalog],
+    [atRefLimit, charCatalog, maxRefs, propCatalog, sceneCatalog],
+  );
+
+  const applyCreatedAsset = useCallback(
+    (asset: StudioAsset, slotId?: string) => {
+      const item = assetToLibraryItem(asset);
+      const label = asset.label || asset.name;
+      const role = asset.kind;
+      const setter =
+        role === "character"
+          ? setCharacters
+          : role === "scene"
+            ? setScenes
+            : setProps;
+      if (slotId) {
+        setter((cur) =>
+          cur.map((r) =>
+            r.id === slotId
+              ? {
+                  ...r,
+                  catalogId: asset.id,
+                  label: r.label || label,
+                  item: item || r.item,
+                }
+              : r,
+          ),
+        );
+        return;
+      }
+      const rows =
+        role === "character"
+          ? characters
+          : role === "scene"
+            ? scenes
+            : props;
+      const empty = rows.find((r) => !r.item);
+      if (empty && item) tryAttachSlot(empty.id, item);
+    },
+    [characters, props, scenes, tryAttachSlot],
   );
 
   useEffect(() => {
@@ -1829,6 +1898,7 @@ function StudioCanvas() {
                 })
                 .filter((row): row is HubAsset => Boolean(row)),
               hubTitle,
+              hubNotes,
               sequenceLine: sequenceLine(shots),
               hasHub: current.some((n) => n.id === HUB_ID),
               onModalityChange,
@@ -2126,6 +2196,8 @@ function StudioCanvas() {
                 studioMode === "storyboard"
                   ? () => addAssetToHub(n.id)
                   : undefined,
+              onCreate: () =>
+                setCreatingAsset({ kind: "character", slotId: n.id }),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2167,6 +2239,7 @@ function StudioCanvas() {
                 studioMode === "storyboard"
                   ? () => addAssetToHub(n.id)
                   : undefined,
+              onCreate: () => setCreatingAsset({ kind: "scene", slotId: n.id }),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2184,7 +2257,7 @@ function StudioCanvas() {
               catalogId: row.catalogId,
               note: row.note,
               label: row.label ?? "",
-              catalog: [],
+              catalog: propCatalog,
               onClear: () =>
                 setProps((cur) =>
                   cur.map((r) =>
@@ -2195,7 +2268,7 @@ function StudioCanvas() {
                 ),
               onOpenLibrary: () => setLibraryOpen(true),
               onAttach: (item) => tryAttachSlot(n.id, item),
-              onPickCatalog: () => undefined,
+              onPickCatalog: (id) => pickCatalog(n.id, "prop", id),
               onNote: (note) =>
                 setProps((cur) =>
                   cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
@@ -2205,6 +2278,7 @@ function StudioCanvas() {
                   cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
                 ),
               onAddToHub: () => addAssetToHub(n.id),
+              onCreate: () => setCreatingAsset({ kind: "prop", slotId: n.id }),
               onClose: () => closeNode(n.id),
             },
           };
@@ -2311,6 +2385,7 @@ function StudioCanvas() {
     pinEdit,
     plan.source,
     sourceAccept,
+    propCatalog,
     props,
     sceneCatalog,
     scenes,
@@ -2657,6 +2732,17 @@ function StudioCanvas() {
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
       />
+      {creatingAsset ? (
+        <AssetCreator
+          kind={creatingAsset.kind}
+          onClose={() => setCreatingAsset(null)}
+          onSaved={(asset) => {
+            applyCreatedAsset(asset, creatingAsset.slotId);
+            setCreatingAsset(null);
+            loadCatalogs();
+          }}
+        />
+      ) : null}
       <MediaLightbox />
       {toastMsg ? (
         <div

@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import AssetCreator from "./AssetCreator";
 import { beginLibraryDrag, endLibraryDrag, peekLibraryDrag } from "./libraryDrag";
 import { filesFromDataTransfer, importOsFiles } from "./osImport";
 import { openLightbox } from "./lightbox";
 import { sendToResolve, toast } from "./toast";
 import { isAudioPath, isVideoPath } from "./media";
 import {
+  assetToLibraryItem,
   writeLibraryPayload,
+  type AssetRole,
   type LibraryBucket,
   type LibraryItem,
   type LibrarySource,
   type MediaKind,
+  type StudioAsset,
 } from "./types";
 
+type Pane = "media" | "assets";
+type AssetFilter = "all" | AssetRole;
 type Filter = "all" | MediaKind;
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -27,6 +33,13 @@ const SECTIONS: { id: LibrarySource; label: string }[] = [
   { id: "generated", label: "Generated" },
 ];
 
+const ASSET_TABS: { id: AssetFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "character", label: "Characters" },
+  { id: "scene", label: "Scenes" },
+  { id: "prop", label: "Props" },
+];
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -34,9 +47,13 @@ type Props = {
 };
 
 export default function LibraryPanel({ open, onClose, onPick }: Props) {
+  const [pane, setPane] = useState<Pane>("media");
   const [filter, setFilter] = useState<Filter>("all");
   const [section, setSection] = useState<LibrarySource>("uploads");
   const [buckets, setBuckets] = useState<Record<string, LibraryBucket>>({});
+  const [assets, setAssets] = useState<StudioAsset[]>([]);
+  const [assetFilter, setAssetFilter] = useState<AssetFilter>("all");
+  const [creating, setCreating] = useState<AssetRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dropHot, setDropHot] = useState(false);
@@ -64,22 +81,41 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
     }
   }
 
+  async function reloadAssets() {
+    try {
+      const res = await fetch("/assets");
+      if (!res.ok) throw new Error(`Assets ${res.status}`);
+      const body = (await res.json()) as { items?: StudioAsset[] };
+      setAssets(body.items ?? []);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not load assets.");
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
     void reload();
+    void reloadAssets();
     function onImported() {
+      setPane("media");
       setSection("uploads");
       void reload();
     }
+    function onAssets() {
+      void reloadAssets();
+    }
     window.addEventListener("ams-library-imported", onImported);
+    window.addEventListener("ams-assets-changed", onAssets);
     const id = window.setInterval(() => {
-      if (section === "resolve") void reload();
+      if (pane === "media" && section === "resolve") void reload();
     }, 4000);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("ams-library-imported", onImported);
+      window.removeEventListener("ams-assets-changed", onAssets);
     };
-  }, [open, filter, section]);
+  }, [open, filter, section, pane]);
 
   async function importFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
@@ -152,7 +188,38 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
     endLibraryDrag();
   }
 
+  async function removeAsset(asset: StudioAsset) {
+    if (!window.confirm(`Remove “${asset.name}” from Assets?`)) return;
+    try {
+      const res = await fetch(`/assets/${encodeURIComponent(asset.id)}`, {
+        method: "DELETE",
+      });
+      const body = (await res.json()) as { ok?: boolean; detail?: string };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || "Could not remove asset.");
+      }
+      window.dispatchEvent(new Event("ams-assets-changed"));
+      toast("Removed from Assets.");
+      await reloadAssets();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Remove failed.", true);
+    }
+  }
+
+  function onAssetDragStart(event: DragEvent, asset: StudioAsset) {
+    const item = assetToLibraryItem(asset);
+    if (!item) {
+      event.preventDefault();
+      toast("This asset has no still yet.", true);
+      return;
+    }
+    event.stopPropagation();
+    beginLibraryDrag(item);
+    writeLibraryPayload(event.dataTransfer, item);
+  }
+
   function onPanelDragEnter(event: DragEvent) {
+    if (pane !== "media") return;
     event.preventDefault();
     event.stopPropagation();
     if (peekLibraryDrag()) return;
@@ -161,6 +228,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   function onPanelDragOver(event: DragEvent) {
+    if (pane !== "media") return;
     event.preventDefault();
     event.stopPropagation();
     if (peekLibraryDrag()) return;
@@ -176,6 +244,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   function onPanelDrop(event: DragEvent) {
+    if (pane !== "media") return;
     event.preventDefault();
     event.stopPropagation();
     setDropHot(false);
@@ -190,6 +259,13 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
 
   const active = buckets[section];
   const items = useMemo(() => active?.items ?? [], [active]);
+  const visibleAssets = useMemo(
+    () =>
+      assetFilter === "all"
+        ? assets
+        : assets.filter((a) => a.kind === assetFilter),
+    [assets, assetFilter],
+  );
 
   if (!open) return null;
 
@@ -210,6 +286,25 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
         </button>
       </header>
 
+      <div className="pills chips">
+        <button
+          type="button"
+          className={pane === "media" ? "pill mode on" : "pill mode"}
+          onClick={() => setPane("media")}
+        >
+          Media
+        </button>
+        <button
+          type="button"
+          className={pane === "assets" ? "pill mode on" : "pill mode"}
+          onClick={() => setPane("assets")}
+        >
+          Assets
+        </button>
+      </div>
+
+      {pane === "media" ? (
+        <>
       <div className="pills chips">
         {SECTIONS.map((s) => (
           <button
@@ -355,6 +450,117 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
           ))
         )}
       </div>
+        </>
+      ) : (
+        <>
+          <div className="pills chips">
+            {ASSET_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={
+                  assetFilter === tab.id ? "pill modality on" : "pill modality"
+                }
+                onClick={() => setAssetFilter(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="library-actions">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setCreating("character")}
+            >
+              New Character
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setCreating("scene")}
+            >
+              New Scene
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setCreating("prop")}
+            >
+              New Prop
+            </button>
+          </div>
+          {error ? <p className="hint warn">{error}</p> : null}
+          <p className="hint">
+            Saved Characters, Scenes, and Props. Drag onto a matching node or
+            click to attach.
+          </p>
+          <div className="library-grid">
+            {visibleAssets.length === 0 ? (
+              <p className="hint">No assets yet — New Character / Scene / Prop.</p>
+            ) : (
+              visibleAssets.map((asset) => {
+                const item = assetToLibraryItem(asset);
+                return (
+                  <div
+                    key={asset.id}
+                    className="library-card"
+                    draggable={Boolean(item)}
+                    title={asset.still_path || asset.name}
+                    onDragStart={(e) => onAssetDragStart(e, asset)}
+                    onDragEnd={onDragEnd}
+                    onClick={() => {
+                      if (item) onPick(item);
+                      else toast("This asset has no still yet.", true);
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <button
+                      type="button"
+                      className="library-x nodrag"
+                      aria-label="Remove from Assets"
+                      title="Remove from Assets"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        void removeAsset(asset);
+                      }}
+                    >
+                      ×
+                    </button>
+                    <div className="library-thumb">
+                      {asset.thumb_url || asset.url ? (
+                        <img
+                          src={asset.thumb_url || asset.url || ""}
+                          alt=""
+                          draggable={false}
+                        />
+                      ) : (
+                        <span>{asset.kind}</span>
+                      )}
+                    </div>
+                    <span className="library-name">{asset.label || asset.name}</span>
+                    <span className="hint">{asset.kind}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+      {creating ? (
+        <AssetCreator
+          kind={creating}
+          onClose={() => setCreating(null)}
+          onSaved={(asset) => {
+            setCreating(null);
+            void reloadAssets();
+            const item = assetToLibraryItem(asset);
+            if (item) onPick(item);
+          }}
+        />
+      ) : null}
     </aside>
   );
 }

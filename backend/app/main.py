@@ -38,9 +38,20 @@ from app.tools_service import (  # noqa: E402
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.character_scene import (  # noqa: E402
     list_characters,
+    list_props,
     list_scenes,
     resolve_still_file,
     v1_root,
+)
+from app.assets import (  # noqa: E402
+    create_asset,
+    delete_asset,
+    ensure_assets_dir,
+    generate_asset,
+    get_asset,
+    list_assets,
+    resolve_asset_still,
+    sheet_model_ok,
 )
 from app.aleph_service import (  # noqa: E402
     estimate_frame_label,
@@ -100,12 +111,13 @@ from app.spend_ledger import export_csv, log_spend, spend_summary  # noqa: E402
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
+ensure_assets_dir()
 try:
     purge_expired()
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase16"
+APP_VERSION = "2.0.0-phase17"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -1041,7 +1053,7 @@ def characters_get() -> dict[str, Any]:
     rows = list_characters()
     return {
         "ok": True,
-        "source": "v1" if v1_root() else None,
+        "source": "v2+v1" if v1_root() else "v2",
         "items": rows,
     }
 
@@ -1051,9 +1063,14 @@ def scenes_get() -> dict[str, Any]:
     rows = list_scenes()
     return {
         "ok": True,
-        "source": "v1" if v1_root() else None,
+        "source": "v2+v1" if v1_root() else "v2",
         "items": rows,
     }
+
+
+@app.get("/props")
+def props_get() -> dict[str, Any]:
+    return {"ok": True, "source": "v2", "items": list_props()}
 
 
 @app.get("/characters/{char_id}/still")
@@ -1069,6 +1086,115 @@ def scene_still(scene_id: str) -> FileResponse:
     path = resolve_still_file("scene", scene_id)
     if path is None:
         raise HTTPException(status_code=404, detail="Scene still not found.")
+    return FileResponse(path, filename=path.name)
+
+
+class AssetCreateIn(BaseModel):
+    kind: str
+    name: str
+    notes: str = ""
+    still_paths: list[str] = Field(default_factory=list)
+
+
+class AssetGenerateIn(BaseModel):
+    kind: str
+    name: str
+    notes: str = ""
+    prompt: str = ""
+    model_id: str = ""
+    source_still: str = ""
+
+
+@app.get("/assets")
+def assets_get(kind: str | None = Query(default=None)) -> dict[str, Any]:
+    want = (kind or "").strip().lower() or None
+    if want in ("all",):
+        want = None
+    if want and want not in ("character", "scene", "prop"):
+        raise HTTPException(status_code=400, detail="kind must be character, scene, or prop")
+    return {"ok": True, "items": list_assets(want)}
+
+
+@app.post("/assets")
+async def assets_create(
+    kind: str = Form(...),
+    name: str = Form(...),
+    notes: str = Form(default=""),
+    files: list[UploadFile] | None = File(default=None),
+) -> dict[str, Any]:
+    """Create a V2 Character / Scene / Prop from uploaded stills."""
+    uploads: list[tuple[str, bytes]] = []
+    for upload in files or []:
+        data = await upload.read()
+        uploads.append((upload.filename or "still.png", data))
+    try:
+        row = create_asset(
+            kind=kind,
+            name=name,
+            notes=notes or "",
+            files=uploads,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/json")
+def assets_create_json(body: AssetCreateIn) -> dict[str, Any]:
+    try:
+        row = create_asset(
+            kind=body.kind,
+            name=body.name,
+            notes=body.notes,
+            still_paths=list(body.still_paths or []),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/generate")
+def assets_generate(body: AssetGenerateIn) -> dict[str, Any]:
+    """T2I / I2I a simple still, then save as a V2 asset. Flux / Seedream / Nano."""
+    mid = (body.model_id or "").strip()
+    if mid and not sheet_model_ok(mid):
+        raise HTTPException(
+            status_code=400,
+            detail="Pick Flux, Seedream, or Nano for a simple sheet.",
+        )
+    try:
+        row = generate_asset(
+            kind=body.kind,
+            name=body.name,
+            notes=body.notes,
+            prompt=body.prompt,
+            model_id=mid,
+            source_still=body.source_still,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.delete("/assets/{asset_id}")
+def assets_delete(asset_id: str) -> dict[str, Any]:
+    if not delete_asset(asset_id):
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    return {"ok": True, "id": asset_id}
+
+
+@app.get("/assets/{asset_id}/still")
+def assets_still(asset_id: str) -> FileResponse:
+    path = resolve_asset_still(asset_id)
+    if path is None:
+        row = get_asset(asset_id)
+        kind = str((row or {}).get("kind") or "character")
+        if kind in ("character", "scene", "prop"):
+            path = resolve_still_file(kind, asset_id)  # type: ignore[arg-type]
+    if path is None:
+        raise HTTPException(status_code=404, detail="Asset still not found.")
     return FileResponse(path, filename=path.name)
 
 
