@@ -27,6 +27,11 @@ import {
   slotAccepts,
   slotNeedLabel,
 } from "./libraryDrag";
+import {
+  filesFromDataTransfer,
+  importOsFiles,
+  isOsFileDrag,
+} from "./osImport";
 import { bindToast, toast } from "./toast";
 import {
   catalogToItem,
@@ -878,18 +883,47 @@ function StudioCanvas() {
 
   useEffect(() => {
     function onWinOver(event: globalThis.DragEvent) {
-      if (!peekLibraryDrag()) return;
+      const os = isOsFileDrag(event.dataTransfer);
+      if (!os && !peekLibraryDrag()) return;
       const el = document.elementFromPoint(event.clientX, event.clientY);
-      if (!el?.closest("[data-drop-slot]")) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      const overLibrary = Boolean(el?.closest("[data-os-drop='library']"));
+      const overSlot = Boolean(el?.closest("[data-drop-slot]"));
+      if (!os && !overSlot) return;
+      if (os || overSlot || overLibrary) {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      }
     }
     function onWinDrop(event: globalThis.DragEvent) {
+      const el = document.elementFromPoint(event.clientX, event.clientY);
+      const overLibrary = Boolean(el?.closest("[data-os-drop='library']"));
+      if (isOsFileDrag(event.dataTransfer)) {
+        if (overLibrary) return;
+        const files = event.dataTransfer
+          ? filesFromDataTransfer(event.dataTransfer)
+          : [];
+        if (!files.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void importOsFiles(files)
+          .then((items) => {
+            if (items.length) {
+              setLibraryOpen(true);
+              toast(`Imported ${items.length} file(s) to Uploads.`);
+            }
+          })
+          .catch((err: unknown) => {
+            toast(
+              err instanceof Error ? err.message : "Import failed.",
+              true,
+            );
+          });
+        return;
+      }
       const item =
         peekLibraryDrag() ||
         (event.dataTransfer ? parseLibraryPayload(event.dataTransfer) : null);
       if (!item) return;
-      const el = document.elementFromPoint(event.clientX, event.clientY);
       const slotEl = el?.closest("[data-drop-slot]") as HTMLElement | null;
       const slot = slotEl?.dataset.dropSlot;
       if (
@@ -914,7 +948,11 @@ function StudioCanvas() {
   }, [tryAttachSlot]);
 
   const onFlowDragOver = useCallback((event: DragEvent) => {
-    if (peekLibraryDrag() || hasLibraryPayload(event.dataTransfer)) {
+    if (
+      peekLibraryDrag() ||
+      hasLibraryPayload(event.dataTransfer) ||
+      isOsFileDrag(event.dataTransfer)
+    ) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
     }
@@ -922,6 +960,22 @@ function StudioCanvas() {
 
   const onFlowDrop = useCallback(
     (event: DragEvent) => {
+      if (isOsFileDrag(event.dataTransfer)) {
+        event.preventDefault();
+        const files = filesFromDataTransfer(event.dataTransfer);
+        if (!files.length) return;
+        void importOsFiles(files)
+          .then((items) => {
+            if (items.length) {
+              setLibraryOpen(true);
+              toast(`Imported ${items.length} file(s) to Uploads.`);
+            }
+          })
+          .catch((err: unknown) => {
+            toast(err instanceof Error ? err.message : "Import failed.", true);
+          });
+        return;
+      }
       const item = peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
       if (!item) return;
       event.preventDefault();

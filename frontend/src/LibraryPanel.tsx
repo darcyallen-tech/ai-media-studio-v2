@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
-import { sendToResolve } from "./toast";
+import {
+  filesFromDataTransfer,
+  importOsFiles,
+  isOsFileDrag,
+} from "./osImport";
+import { sendToResolve, toast } from "./toast";
 import {
   writeLibraryPayload,
   type LibraryBucket,
@@ -36,6 +41,7 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   const [buckets, setBuckets] = useState<Record<string, LibraryBucket>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dropHot, setDropHot] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLElement>(null);
 
@@ -63,10 +69,18 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   useEffect(() => {
     if (!open) return;
     void reload();
+    function onImported() {
+      setSection("uploads");
+      void reload();
+    }
+    window.addEventListener("ams-library-imported", onImported);
     const id = window.setInterval(() => {
       if (section === "resolve") void reload();
     }, 4000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("ams-library-imported", onImported);
+    };
   }, [open, filter, section]);
 
   async function importFiles(fileList: FileList | File[]) {
@@ -74,16 +88,13 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
     if (!files.length) return;
     setBusy(true);
     try {
-      const form = new FormData();
-      for (const file of files) form.append("files", file);
-      const res = await fetch("/library/import", { method: "POST", body: form });
-      const body = (await res.json()) as { errors?: string[] };
-      if (!res.ok) throw new Error((body as { detail?: string }).detail || "Import failed");
-      if (body.errors?.length) setError(body.errors.join(" · "));
+      await importOsFiles(files);
       setSection("uploads");
       await reload();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Import failed.");
+      const msg = err instanceof Error ? err.message : "Import failed.";
+      setError(msg);
+      toast(msg, true);
     } finally {
       setBusy(false);
     }
@@ -99,16 +110,38 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
     endLibraryDrag();
   }
 
-  function onPanelDragOver(event: DragEvent) {
-    if (![...event.dataTransfer.types].includes("Files")) return;
+  function onPanelDragEnter(event: DragEvent) {
+    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
+    event.stopPropagation();
+    setDropHot(true);
     event.dataTransfer.dropEffect = "copy";
   }
 
-  function onPanelDrop(event: DragEvent) {
-    if (![...event.dataTransfer.types].includes("Files")) return;
+  function onPanelDragOver(event: DragEvent) {
+    if (!isOsFileDrag(event.dataTransfer)) return;
     event.preventDefault();
-    if (event.dataTransfer.files.length) void importFiles(event.dataTransfer.files);
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setDropHot(true);
+  }
+
+  function onPanelDragLeave(event: DragEvent) {
+    if (!isOsFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    const next = event.relatedTarget as globalThis.Node | null;
+    if (next && event.currentTarget.contains(next)) return;
+    setDropHot(false);
+  }
+
+  function onPanelDrop(event: DragEvent) {
+    if (!isOsFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDropHot(false);
+    const files = filesFromDataTransfer(event.dataTransfer);
+    if (files.length) void importFiles(files);
+    else toast("No files found in that drop.", true);
   }
 
   const active = buckets[section];
@@ -118,9 +151,12 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
 
   return (
     <aside
-      className="library"
+      className={dropHot ? "library drop-hot" : "library"}
       ref={dropRef}
+      data-os-drop="library"
+      onDragEnter={onPanelDragEnter}
       onDragOver={onPanelDragOver}
+      onDragLeave={onPanelDragLeave}
       onDrop={onPanelDrop}
     >
       <header className="library-head">
