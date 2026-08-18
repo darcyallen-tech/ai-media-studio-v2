@@ -1,5 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
+import { sendToResolve } from "./toast";
 import type { ResultNodeData } from "./types";
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
@@ -57,6 +58,19 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           </button>
           <button type="button" className="ghost nodrag" disabled={!copyPath} onClick={copyLocal}>
             Copy path
+          </button>
+          <button
+            type="button"
+            className="ghost nodrag"
+            disabled={!copyPath}
+            onClick={() =>
+              void sendToResolve(copyPath, {
+                type: isVideoPath(copyPath) ? "video" : "image",
+                cost: result.cost,
+              })
+            }
+          >
+            Send to Resolve
           </button>
         </div>
       </div>

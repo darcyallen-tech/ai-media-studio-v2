@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { sendToResolve } from "./toast";
 import {
   LIBRARY_DRAG_MIME,
   type LibraryBucket,
@@ -59,8 +60,13 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
   }
 
   useEffect(() => {
-    if (open) void reload();
-  }, [open, filter]);
+    if (!open) return;
+    void reload();
+    const id = window.setInterval(() => {
+      if (section === "resolve") void reload();
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [open, filter, section]);
 
   async function importFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
@@ -145,6 +151,11 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
       </div>
 
       <div className="library-actions">
+        {section === "resolve" ? (
+          <button type="button" className="ghost" onClick={() => void reload()}>
+            Refresh From Resolve
+          </button>
+        ) : null}
         <button
           type="button"
           className="ghost"
@@ -175,24 +186,39 @@ export default function LibraryPanel({ open, onClose, onPick }: Props) {
           <p className="hint">Nothing here yet.</p>
         ) : (
           items.map((item) => (
-            <button
+            <div
               key={item.id}
-              type="button"
               className="library-card"
               draggable
               title={item.path}
               onDragStart={(e) => onDragStart(e, item)}
               onClick={() => onPick(item)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") onPick(item);
+              }}
+              role="button"
+              tabIndex={0}
             >
               <div className="library-thumb">
-                {item.kind === "image" && item.thumb_url ? (
+                {item.thumb_url ? (
                   <img src={item.thumb_url} alt="" />
                 ) : (
                   <span>{item.kind}</span>
                 )}
               </div>
               <span className="library-name">{item.name}</span>
-            </button>
+              <button
+                type="button"
+                className="ghost library-send"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void sendToResolve(item.path, { type: item.kind });
+                }}
+              >
+                Send to Resolve
+              </button>
+            </div>
           ))
         )}
       </div>

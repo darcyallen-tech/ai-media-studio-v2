@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -25,6 +26,9 @@ GENERATED_INDEX = LIBRARY_DIR / "generated.json"
 
 SKIP_DIR_NAMES = {"_smoke", "__pycache__", "thumbs"}
 
+# External stills/clips named in handoff JSON but living outside the inbox.
+_RESOLVE_EXT: dict[str, Path] = {}
+
 
 def ensure_library_dirs() -> None:
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,20 +37,29 @@ def ensure_library_dirs() -> None:
 
 
 def resolve_handoff_dir() -> tuple[Path | None, str | None]:
-    """V1 Resolve inbox — read-only. Never write into V1."""
-    env = (
-        os.environ.get("AI_MEDIA_STUDIO_V1_ROOT")
-        or os.environ.get("AI_MEDIA_STUDIO_ROOT")
-        or ""
-    ).strip()
+    """
+    Resolve → Studio inbox (read-only). Never write into V1.
+
+    Priority:
+      RESOLVE_INBOX / RESOLVE_HANDOFF
+      AI_MEDIA_STUDIO_ROOT or AI_MEDIA_STUDIO_V1_ROOT / data/resolve_handoff
+      sibling ../ai-media-studio/data/resolve_handoff
+    """
     candidates: list[Path] = []
-    if env:
-        root = Path(env)
-        candidates.append(root / "data" / "resolve_handoff")
-        if root.name == "resolve_handoff":
-            candidates.append(root)
-    sibling = PROJECT_ROOT.parent / "ai-media-studio" / "data" / "resolve_handoff"
-    candidates.append(sibling)
+    for key in ("RESOLVE_INBOX", "RESOLVE_HANDOFF"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            candidates.append(Path(raw).expanduser())
+    for key in ("AI_MEDIA_STUDIO_ROOT", "AI_MEDIA_STUDIO_V1_ROOT"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            root = Path(raw).expanduser()
+            candidates.append(root / "data" / "resolve_handoff")
+            if root.name == "resolve_handoff":
+                candidates.append(root)
+    candidates.append(
+        PROJECT_ROOT.parent / "ai-media-studio" / "data" / "resolve_handoff"
+    )
     for path in candidates:
         try:
             if path.is_dir():
@@ -54,8 +67,8 @@ def resolve_handoff_dir() -> tuple[Path | None, str | None]:
         except OSError:
             continue
     return None, (
-        "No Resolve handoff folder found. V1 writes stills/clips to "
-        "ai-media-studio/data/resolve_handoff/. Send from Resolve is Phase 4."
+        "No Resolve inbox found. Set RESOLVE_INBOX or AI_MEDIA_STUDIO_ROOT, "
+        "or keep V1 at ../ai-media-studio (data/resolve_handoff)."
     )
 
 
@@ -81,11 +94,53 @@ def _safe_rel(root: Path, path: Path) -> str | None:
     return text
 
 
+def _ext_token(path: Path) -> str:
+    digest = hashlib.sha1(str(path.resolve()).encode("utf-8", "replace")).hexdigest()[:16]
+    return f"ext/{digest}{path.suffix.lower()}"
+
+
+def _refresh_resolve_ext() -> None:
+    _RESOLVE_EXT.clear()
+    inbox, _ = resolve_handoff_dir()
+    if inbox is None:
+        return
+    jsons = [inbox / "latest.json", *inbox.glob("handoff_*.json")]
+    for js in jsons:
+        if not js.is_file():
+            continue
+        try:
+            data = json.loads(js.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for key in ("still_path", "video_path"):
+            raw = data.get(key)
+            if not raw:
+                continue
+            p = Path(str(raw))
+            try:
+                if not p.is_file():
+                    continue
+                if _safe_rel(inbox, p):
+                    continue
+                _RESOLVE_EXT[_ext_token(p)] = p.resolve()
+            except OSError:
+                continue
+
+
 def resolve_library_file(source: str, rel: str) -> Path:
+    raw = (rel or "").replace("\\", "/").lstrip("/")
+    if raw.startswith("ext/"):
+        if raw not in _RESOLVE_EXT:
+            _refresh_resolve_ext()
+        hit = _RESOLVE_EXT.get(raw)
+        if hit is None or not hit.is_file():
+            raise FileNotFoundError(f"File not found: {rel}")
+        return hit
     root = _root_for(source)
     if root is None:
         raise FileNotFoundError(f"Unknown or missing library source: {source}")
-    raw = (rel or "").replace("\\", "/").lstrip("/")
     if not raw or ".." in Path(raw).parts:
         raise FileNotFoundError("Invalid library path.")
     path = (root / raw).resolve()
@@ -130,7 +185,8 @@ def is_allowed_path(path: str | Path) -> bool:
             return True
         except ValueError:
             continue
-    return False
+    _refresh_resolve_ext()
+    return any(resolved == p for p in _RESOLVE_EXT.values())
 
 
 def _item(
@@ -161,13 +217,36 @@ def _item(
         "path": str(path),
         "rel": rel,
         "url": f"/library/file?{q}",
-        "thumb_url": f"/library/thumb?{q}" if kind == "image" else None,
+        "thumb_url": f"/library/thumb?{q}" if kind in ("image", "video") else None,
         "mtime": mtime,
         "size": size,
     }
     if extra:
         row.update(extra)
     return row
+
+
+def _item_with_rel(*, source: str, path: Path, rel: str) -> dict[str, Any] | None:
+    kind = kind_for(path)
+    if kind is None:
+        return None
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    q = f"source={quote(source)}&rel={quote(rel)}"
+    return {
+        "id": f"{source}:{rel}",
+        "name": path.name,
+        "source": source,
+        "kind": kind,
+        "path": str(path),
+        "rel": rel,
+        "url": f"/library/file?{q}",
+        "thumb_url": f"/library/thumb?{q}" if kind in ("image", "video") else None,
+        "mtime": stat.st_mtime,
+        "size": stat.st_size,
+    }
 
 
 def _iter_media(root: Path) -> Iterable[Path]:
@@ -238,6 +317,7 @@ def list_source(source: str, media_type: str | None = None) -> dict[str, Any]:
     root: Path | None
     if src == "resolve":
         root, note = resolve_handoff_dir()
+        _refresh_resolve_ext()
     else:
         root = _root_for(src)
         if root is None:
@@ -254,6 +334,17 @@ def list_source(source: str, media_type: str | None = None) -> dict[str, Any]:
         if want and row["kind"] != want:
             continue
         items.append(row)
+    if src == "resolve":
+        seen = {str(Path(i["path"]).resolve()) for i in items}
+        for token, path in _RESOLVE_EXT.items():
+            if str(path) in seen:
+                continue
+            row = _item_with_rel(source="resolve", path=path, rel=token)
+            if row is None:
+                continue
+            if want and row["kind"] != want:
+                continue
+            items.append(row)
     items.sort(key=lambda r: float(r.get("mtime") or 0), reverse=True)
     return {"source": src, "note": note, "items": items}
 
@@ -309,8 +400,8 @@ def write_upload(filename: str, data: bytes) -> dict[str, Any]:
 def thumb_path(source: str, rel: str) -> Path:
     src = resolve_library_file(source, rel)
     kind = kind_for(src)
-    if kind != "image":
-        raise FileNotFoundError("Thumbs are only generated for images.")
+    if kind not in ("image", "video"):
+        raise FileNotFoundError("Thumbs are only generated for images and video.")
     ensure_library_dirs()
     key = f"{source}_{rel}".replace("/", "_").replace("\\", "_")
     cache = THUMBS_DIR / f"{key}.jpg"
@@ -319,14 +410,49 @@ def thumb_path(source: str, rel: str) -> Path:
             return cache
     except OSError:
         pass
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    if kind == "video":
+        _video_thumb(src, cache)
+        return cache
     from PIL import Image
 
     with Image.open(src) as im:
         im = im.convert("RGB")
         im.thumbnail((320, 320))
-        cache.parent.mkdir(parents=True, exist_ok=True)
         im.save(cache, format="JPEG", quality=82, optimize=True)
     return cache
+
+
+def _video_thumb(src: Path, dest: Path) -> None:
+    import cv2
+
+    cap = cv2.VideoCapture(str(src))
+    try:
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            raise FileNotFoundError(f"Could not read video frame: {src.name}")
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        from PIL import Image
+
+        im = Image.fromarray(frame)
+        im.thumbnail((320, 320))
+        im.save(dest, format="JPEG", quality=82, optimize=True)
+    finally:
+        cap.release()
+
+
+def inbox_status() -> dict[str, Any]:
+    inbox, note = resolve_handoff_dir()
+    listed = list_source("resolve")
+    stills = sum(1 for i in listed["items"] if i["kind"] == "image")
+    videos = sum(1 for i in listed["items"] if i["kind"] == "video")
+    return {
+        "inbox": str(inbox) if inbox else None,
+        "note": note,
+        "stills": stills,
+        "videos": videos,
+        "items": len(listed["items"]),
+    }
 
 
 def reveal_in_folder(path: str | Path) -> None:

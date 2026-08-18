@@ -17,6 +17,7 @@ import LibraryPanel from "./LibraryPanel";
 import PromptNode from "./PromptNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
+import { bindToast } from "./toast";
 import type {
   GenerateResponse,
   LibraryItem,
@@ -65,6 +66,22 @@ const initialNodes: StudioNode[] = [
 function StudioCanvas() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ text: string; error: boolean } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    bindToast((message, error) => {
+      setToastMsg({ text: message, error: Boolean(error) });
+    });
+    return () => bindToast(null);
+  }, []);
+
+  useEffect(() => {
+    if (!toastMsg) return;
+    const id = window.setTimeout(() => setToastMsg(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [toastMsg]);
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
@@ -252,6 +269,14 @@ function StudioCanvas() {
         onClose={() => setLibraryOpen(false)}
         onPick={attachSource}
       />
+      {toastMsg ? (
+        <div
+          className={toastMsg.error ? "toast error" : "toast"}
+          role="status"
+        >
+          {toastMsg.text}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -39,7 +39,9 @@ from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E40
 from app.library import (  # noqa: E402
     ensure_library_dirs,
     import_upload,
+    inbox_status,
     is_allowed_path,
+    kind_for,
     list_library,
     list_source,
     record_generated,
@@ -48,13 +50,14 @@ from app.library import (  # noqa: E402
     thumb_path,
     write_upload,
 )
+from app.resolve_export import send_file_to_resolve  # noqa: E402
 from app.secrets_store import apply_secrets_to_env  # noqa: E402
 
 apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase3"
+APP_VERSION = "2.0.0-phase4"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -109,6 +112,14 @@ class ParamsIn(BaseModel):
 
 class RevealIn(BaseModel):
     path: str
+
+
+class ResolveSendIn(BaseModel):
+    path: str
+    type: str | None = None
+    job_name: str | None = None
+    model: str | None = None
+    cost: str | None = None
 
 
 class CreateStateIn(BaseModel):
@@ -491,6 +502,46 @@ def library_reveal(body: RevealIn) -> dict[str, Any]:
     except (OSError, PermissionError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@app.get("/resolve/status")
+def resolve_status() -> dict[str, Any]:
+    return {"ok": True, **inbox_status()}
+
+
+@app.post("/resolve/send")
+def resolve_send(body: ResolveSendIn) -> dict[str, Any]:
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="path is required")
+    if not is_allowed_path(raw):
+        raise HTTPException(status_code=403, detail="Path is outside library roots.")
+    kind = (body.type or "").strip().lower() or kind_for(Path(raw))
+    if kind not in ("image", "video", "audio"):
+        raise HTTPException(status_code=400, detail="type must be image, video, or audio")
+    result = send_file_to_resolve(
+        raw,
+        job_name=body.job_name,
+        model=body.model,
+        cost=body.cost,
+    )
+    if result.fallback_folder and not result.ok:
+        try:
+            reveal_in_folder(raw)
+            result.message = (result.message or "") + " File revealed in Explorer."
+        except Exception:
+            pass
+    return {
+        "ok": result.ok,
+        "message": result.message,
+        "bin_name": result.bin_name,
+        "clips": result.clips,
+        "placed_on_timeline": result.placed_on_timeline,
+        "marker_added": result.marker_added,
+        "fallback_folder": result.fallback_folder,
+        "notes": result.notes,
+        "type": kind,
+    }
 
 
 app.mount(
