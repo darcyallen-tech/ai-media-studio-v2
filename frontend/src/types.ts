@@ -1,4 +1,4 @@
-export type Mode = "image" | "video" | "audio";
+export type Mode = "image" | "video" | "frame" | "audio";
 
 export type MediaKind = "image" | "video" | "audio";
 
@@ -36,6 +36,7 @@ export type ModelRow = {
     max_ref_images?: number;
     max_refs?: number;
   };
+  requires_runware?: boolean;
 };
 
 export type GenerateResponse = {
@@ -120,6 +121,8 @@ export type PromptNodeData = {
     modality: string,
     model?: ModelRow | null,
   ) => void;
+  onOpenSettings?: () => void;
+  onOpenLibrary?: () => void;
   source: LibraryItem | null;
   first: LibraryItem | null;
   last: LibraryItem | null;
@@ -228,7 +231,11 @@ export function hasLibraryPayload(dt: DataTransfer): boolean {
 export function inputPlan(
   modality: string,
   model?: ModelRow | null,
+  mode?: Mode,
 ): GraphInputs {
+  if (mode === "frame" || modality === "frame") {
+    return { source: "video" };
+  }
   if (modality === "bridge" || model?.requires_end_frame) {
     return { first: true, last: true };
   }

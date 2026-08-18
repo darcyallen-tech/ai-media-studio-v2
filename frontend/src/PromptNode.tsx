@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import FrameEdit, {
+  ALEPH_MAX_PINS,
+  ALEPH_MAX_S,
+  ALEPH_MIN_S,
+  type FramePin,
+} from "./FrameEdit";
 import {
   durationOptions,
   formatDurationToken,
@@ -18,6 +24,7 @@ import {
 const MODES: { id: Mode; label: string }[] = [
   { id: "image", label: "Image" },
   { id: "video", label: "Video" },
+  { id: "frame", label: "Frame" },
   { id: "audio", label: "Audio" },
 ];
 
@@ -36,6 +43,7 @@ const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
     { id: "bridge", label: "Bridge" },
     { id: "extend", label: "Extend" },
   ],
+  frame: [{ id: "frame", label: "Edit" }],
   audio: [
     { id: "music", label: "Music" },
     { id: "sfx", label: "SFX" },
@@ -62,13 +70,16 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pins, setPins] = useState<FramePin[]>([]);
+  const [clipDuration, setClipDuration] = useState(0);
+  const [hasRunwareKey, setHasRunwareKey] = useState(true);
 
   const modalityOptions = MODALITIES[mode];
   const selectedModel = useMemo(
     () => models.find((m) => m.id === modelId) ?? null,
     [models, modelId],
   );
-  const plan = inputPlan(modality, selectedModel);
+  const plan = inputPlan(modality, selectedModel, mode);
   const durs = durationOptions(selectedModel);
   const aspects = selectedModel?.aspect_choices ?? [];
   const resolutions = resolutionOptions(selectedModel);
@@ -76,10 +87,12 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   const voices = selectedModel?.voices ?? [];
   const promptRequired = modality !== "i2v";
   const isAudio = mode === "audio";
+  const isFrame = mode === "frame";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
   const characters = data.characters ?? [];
   const scenes = data.scenes ?? [];
   const filledRefs = countFilledRefs(data.source, characters, scenes);
+  const onDuration = useCallback((s: number) => setClipDuration(s), []);
 
   const missing: string[] = [];
   if (plan.first && !data.first?.path) missing.push("First Frame");
@@ -101,19 +114,61 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   if (maxRefs > 0 && filledRefs > maxRefs) {
     missing.push(`Too many refs (${filledRefs} / ${maxRefs})`);
   }
+  if (isFrame && pins.length === 0) missing.push("Pinned frame");
+  if (isFrame && pins.length > ALEPH_MAX_PINS) {
+    missing.push(`Too many pins (${pins.length} / ${ALEPH_MAX_PINS})`);
+  }
+  if (
+    isFrame &&
+    clipDuration > 0 &&
+    (clipDuration + 0.05 < ALEPH_MIN_S || clipDuration > ALEPH_MAX_S + 0.25)
+  ) {
+    missing.push(`Source must be ${ALEPH_MIN_S}–${ALEPH_MAX_S}s`);
+  }
 
   const canGenerate =
     Boolean(modelId) &&
     !loading &&
     !enhancing &&
     missing.length === 0 &&
-    (!promptRequired || prompt.trim().length > 0);
+    (!promptRequired || prompt.trim().length > 0) &&
+    (!isFrame || hasRunwareKey);
   const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading;
 
   useEffect(() => {
     setModality(MODALITIES[mode][0]?.id ?? "");
     setError(null);
+    setPins([]);
+    setClipDuration(0);
   }, [mode]);
+
+  useEffect(() => {
+    if (mode === "frame") data.onAddSource();
+  }, [mode, data.onAddSource]);
+
+  useEffect(() => {
+    setPins([]);
+    setClipDuration(0);
+  }, [data.source?.path]);
+
+  useEffect(() => {
+    if (!isFrame) return;
+    const ac = new AbortController();
+    const load = () => {
+      fetch("/health", { signal: ac.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { keys?: { runware?: boolean } } | null) => {
+          if (body) setHasRunwareKey(Boolean(body.keys?.runware));
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const id = window.setInterval(load, 4000);
+    return () => {
+      ac.abort();
+      window.clearInterval(id);
+    };
+  }, [isFrame]);
 
   const onModalityChange = data.onModalityChange;
   useEffect(() => {
@@ -184,6 +239,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
     if (resolution) qs.set("resolution", resolution);
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
     if (mode === "audio" && prompt.trim()) qs.set("prompt", prompt.trim());
+    if (isFrame && clipDuration > 0) qs.set("duration", String(clipDuration));
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Estimate ${res.status}`);
@@ -197,7 +253,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [mode, modality, modelId, duration, aspect, resolution, audioOn, prompt]);
+  }, [mode, modality, modelId, duration, aspect, resolution, audioOn, prompt, isFrame, clipDuration]);
 
   async function onGenerate() {
     if (!canGenerate) return;
@@ -211,18 +267,19 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         data.last,
         characters,
         scenes,
+        isFrame ? pins : undefined,
       );
       const res = await fetch("/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          modality,
+          modality: isFrame ? "frame" : modality,
           model_id: modelId,
           prompt: composePrompt(prompt.trim(), characters, scenes),
           surface: "studio",
           params: {
-            duration: duration || null,
+            duration: isFrame && clipDuration > 0 ? String(clipDuration) : duration || null,
             aspect: aspect || null,
             resolution: resolution || null,
             audio_on: audioOn,
@@ -293,7 +350,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
   }
 
   return (
-    <div className="studio-node prompt-node">
+    <div className={isFrame ? "studio-node prompt-node frame-wide" : "studio-node prompt-node"}>
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">Prompt</div>
       <div className="node-body nodrag">
@@ -312,6 +369,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           ))}
         </div>
 
+        {!isFrame ? (
         <div className="pills chips" role="tablist" aria-label="Modality">
           {modalityOptions.map((item) => (
             <button
@@ -331,6 +389,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
             </button>
           ))}
         </div>
+        ) : null}
 
         <label className="field-label" htmlFor="model">
           Model
@@ -359,7 +418,19 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           <p className="hint">{selectedModel.notes}</p>
         ) : null}
 
-        {durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || isAudio && modality === "music" ? (
+        {isFrame ? (
+          <FrameEdit
+            source={data.source}
+            pins={pins}
+            onPinsChange={setPins}
+            onDuration={onDuration}
+            hasRunwareKey={hasRunwareKey}
+            onOpenSettings={data.onOpenSettings}
+            onAddSource={data.onAddSource}
+          />
+        ) : null}
+
+        {!isFrame && (durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || isAudio && modality === "music") ? (
           <div className="params">
             {durs.length > 0 ? (
               <label className="param">
@@ -456,7 +527,9 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           className="prompt nodrag nowheel"
           rows={5}
           placeholder={
-            isAudio && modality === "voice"
+            isFrame
+              ? "What to change on the pinned frames…"
+              : isAudio && modality === "voice"
               ? "Script to speak…"
               : isAudio && modality === "sfx"
                 ? "Describe the sound…"
@@ -488,7 +561,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
         </div>
         <p className="estimate">{estimate}</p>
 
-        {plan.characters || plan.scenes ? (
+        {!isFrame && (plan.characters || plan.scenes) ? (
           <div className="source-row">
             {plan.characters ? (
               <button
@@ -526,7 +599,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
               </span>
             ) : null}
           </div>
-        ) : plan.source ? (
+        ) : !isFrame && plan.source ? (
           <div className="source-row">
             <button type="button" className="ghost nodrag" onClick={data.onAddSource}>
               {data.source ? "Source attached" : "Add Source"}
@@ -545,7 +618,7 @@ export default function PromptNode({ data }: NodeProps<PromptFlowNode>) {
           </div>
         ) : null}
 
-        {plan.first || plan.last ? (
+        {!isFrame && (plan.first || plan.last) ? (
           <div className="source-row">
             {plan.first ? (
               <button type="button" className="ghost nodrag" onClick={data.onAddFirst}>
@@ -674,6 +747,7 @@ function slotsFromGraph(
   last: LibraryItem | null,
   characters: RefSlotState[],
   scenes: RefSlotState[],
+  pins?: FramePin[],
 ) {
   const slots: {
     start_still?: string;
@@ -683,6 +757,11 @@ function slotsFromGraph(
     character_ids: string[];
     scene_ids: string[];
     ref_roles: RefRolePayload[];
+    keyframes?: {
+      image_path: string;
+      pin: string;
+      timestamp_s: number;
+    }[];
   } = {
     ref_images: [],
     character_ids: [],
@@ -692,11 +771,25 @@ function slotsFromGraph(
   if (first?.path) slots.start_still = first.path;
   if (last?.path) slots.end_still = last.path;
   if (source?.path) {
-    if (modality === "v2v" || modality === "extend" || source.kind === "video") {
+    if (
+      modality === "v2v" ||
+      modality === "extend" ||
+      modality === "frame" ||
+      source.kind === "video"
+    ) {
       slots.source_video = source.path;
     } else if (!slots.start_still) {
       slots.start_still = source.path;
     }
+  }
+  if (pins?.length) {
+    slots.keyframes = pins
+      .filter((p) => p.image.path)
+      .map((p) => ({
+        image_path: p.image.path,
+        pin: p.pin,
+        timestamp_s: p.timestamp_s,
+      }));
   }
   const seen = new Set<string>();
   for (const row of [...characters, ...scenes]) {

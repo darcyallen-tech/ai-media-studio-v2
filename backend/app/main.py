@@ -42,10 +42,18 @@ from app.character_scene import (  # noqa: E402
     resolve_still_file,
     v1_root,
 )
+from app.aleph_service import (  # noqa: E402
+    estimate_frame_label,
+    extract_pin_still,
+    frame_models_for_ui,
+    keyframes_from_payload,
+    run_aleph_keyframe_edit,
+)
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
 from app.enhance import enhance_prompt_text  # noqa: E402
 from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
+from app.runware_client import has_runware_key  # noqa: E402
 from app.library import (  # noqa: E402
     ensure_library_dirs,
     import_upload,
@@ -82,7 +90,7 @@ apply_secrets_to_env()
 ensure_output_dir(OUTPUT_DIR)
 ensure_library_dirs()
 
-APP_VERSION = "2.0.0-phase9"
+APP_VERSION = "2.0.0-phase10"
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
@@ -106,6 +114,12 @@ class RefRoleIn(BaseModel):
     note: str | None = None
 
 
+class KeyframeIn(BaseModel):
+    image_path: str
+    pin: str = "timestamp"
+    timestamp_s: float | None = None
+
+
 class SlotsIn(BaseModel):
     start_still: str | None = None
     end_still: str | None = None
@@ -116,7 +130,13 @@ class SlotsIn(BaseModel):
     character_ids: list[str] = Field(default_factory=list)
     scene_ids: list[str] = Field(default_factory=list)
     ref_roles: list[RefRoleIn] = Field(default_factory=list)
+    keyframes: list[KeyframeIn] = Field(default_factory=list)
     mask: str | None = None
+
+
+class ExtractFrameIn(BaseModel):
+    video_path: str
+    seconds: float = 0.0
 
 
 class ParamsIn(BaseModel):
@@ -380,9 +400,7 @@ def health() -> dict[str, Any]:
         "keys": {
             "fal": bool(os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY")),
             "xai": bool(os.environ.get("XAI_API_KEY") or os.environ.get("XAI_KEY")),
-            "runware": bool(
-                os.environ.get("RUNWARE_API_KEY") or os.environ.get("RUNWARE_KEY")
-            ),
+            "runware": has_runware_key(),
         },
         "v1_root": str(v1_root()) if v1_root() else None,
     }
@@ -390,7 +408,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/models")
 def list_models_endpoint(
-    mode: str | None = Query(default=None, description="image | video | audio"),
+    mode: str | None = Query(default=None, description="image | video | frame | audio"),
     modality: str | None = Query(
         default=None,
         description="e.g. t2i, i2v, music — depends on mode",
@@ -406,10 +424,19 @@ def list_models_endpoint(
             "default_id": default_id,
             "models": models,
         }
+    if want_mode == "frame":
+        models = frame_models_for_ui()
+        default_id = models[0]["id"] if models else None
+        return {
+            "mode": "frame",
+            "modality": "frame",
+            "default_id": default_id,
+            "models": models,
+        }
     if want_mode and want_mode not in ("image", "video"):
         raise HTTPException(
             status_code=400,
-            detail="mode must be image, video, or audio",
+            detail="mode must be image, video, frame, or audio",
         )
     entries = list_models_for_ui(want_mode, modality)
     default = default_model_for(want_mode, modality)
@@ -467,13 +494,17 @@ def estimate_post(body: CreateStateIn) -> dict[str, Any]:
 
 
 def _estimate_payload(body: CreateStateIn) -> dict[str, Any]:
-    if (body.mode or "").strip().lower() == "audio":
+    mode = (body.mode or "").strip().lower()
+    if mode == "audio":
         cost = _audio_estimate(
             body.model_id,
             body.modality,
             duration=body.params.duration,
             prompt=body.prompt,
         )
+        return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
+    if mode == "frame":
+        cost = estimate_frame_label(body.params.duration)
         return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
     state = _state_from_body(body)
     cost = estimate_create_cost(state)
@@ -485,7 +516,59 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
     """
     Run V1 ``generate(CreateState)`` and return result_paths + cost + duration.
     """
-    if (body.mode or "").strip().lower() == "audio":
+    mode = (body.mode or "").strip().lower()
+    if mode == "frame":
+        t0 = time.perf_counter()
+        pins = keyframes_from_payload(
+            [k.model_dump() for k in (body.slots.keyframes or [])]
+        )
+        extra_pins = (body.params.extra or {}).get("keyframes")
+        if extra_pins and not pins:
+            pins = keyframes_from_payload(extra_pins if isinstance(extra_pins, list) else [])
+        aleph = run_aleph_keyframe_edit(
+            video_path=body.slots.source_video,
+            prompt=body.prompt,
+            keyframes=pins,
+            output_dir=body.output_dir or OUTPUT_DIR,
+        )
+        elapsed = time.perf_counter() - t0
+        duration = aleph.render_seconds if aleph.render_seconds is not None else elapsed
+        cost = aleph.cost_label or aleph.metrics_line or estimate_frame_label(
+            body.params.duration
+        )
+        local_paths = [aleph.path] if aleph.path else []
+        if aleph.ok and local_paths:
+            record_generated(
+                local_paths,
+                cost=cost,
+                duration_sec=duration,
+                model=aleph.model or aleph.model_key,
+            )
+            _log_job_spend(
+                ok=True,
+                cost=cost,
+                model_id=aleph.model_key or body.model_id or "runware:aleph@2.0",
+                job_kind=aleph.job_kind,
+            )
+        return _payload(
+            ok=aleph.ok,
+            result_paths=_public_paths(local_paths),
+            cost=cost,
+            duration_sec=duration,
+            error=None if aleph.ok else (aleph.status or "Frame generate failed."),
+            extra={
+                "status": aleph.status,
+                "errors": [] if aleph.ok else [aleph.status],
+                "local_paths": local_paths,
+                "video_path": aleph.path,
+                "job_kind": aleph.job_kind,
+                "model": aleph.model,
+                "model_key": aleph.model_key,
+                "notes": list(aleph.notes),
+                "metrics_line": aleph.metrics_line,
+            },
+        )
+    if mode == "audio":
         t0 = time.perf_counter()
         audio = generate_audio(
             modality=body.modality,
@@ -581,6 +664,20 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "estimate": estimate_create_cost(state) if not result.ok else cost,
         },
     )
+
+
+@app.post("/extract-frame")
+def extract_frame_endpoint(body: ExtractFrameIn) -> dict[str, Any]:
+    """Pin still: extract a frame at ``seconds`` from a Library video."""
+    try:
+        row = extract_pin_still(body.video_path, body.seconds)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract frame: {exc}") from exc
+    return {"ok": True, **row}
 
 
 @app.get("/tools")

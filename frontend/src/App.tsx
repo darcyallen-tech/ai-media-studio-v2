@@ -138,6 +138,8 @@ const initialNodes: StudioNode[] = [
       onAddCharacter: () => undefined,
       onAddScene: () => undefined,
       onModalityChange: () => undefined,
+      onOpenSettings: () => undefined,
+      onOpenLibrary: () => undefined,
       source: null,
       first: null,
       last: null,
@@ -396,7 +398,8 @@ function StudioCanvas() {
 
   const addSourceNode = useCallback(() => {
     const accept = plan.source ?? "any";
-    ensureSlot(SOURCE_ID, "Source", accept, 36);
+    const title = accept === "video" ? "Source Video" : "Source";
+    ensureSlot(SOURCE_ID, title, accept, 36);
   }, [ensureSlot, plan.source]);
 
   const addFirstNode = useCallback(() => {
@@ -408,8 +411,8 @@ function StudioCanvas() {
   }, [ensureSlot]);
 
   const onModalityChange = useCallback(
-    (_mode: Mode, modality: string, model?: ModelRow | null) => {
-      setPlan(inputPlan(modality, model));
+    (mode: Mode, modality: string, model?: ModelRow | null) => {
+      setPlan(inputPlan(modality, model, mode));
       setMaxRefs(maxRefImages(model, modality));
     },
     [],
@@ -696,6 +699,8 @@ function StudioCanvas() {
               onAddCharacter: addCharacterNode,
               onAddScene: addSceneNode,
               onModalityChange,
+              onOpenSettings: () => setSettingsOpen(true),
+              onOpenLibrary: () => setLibraryOpen(true),
               source: sourceItem,
               first: firstItem,
               last: lastItem,
@@ -710,7 +715,7 @@ function StudioCanvas() {
             ...n,
             type: "source",
             data: {
-              title: "Source",
+              title: plan.source === "video" ? "Source Video" : "Source",
               accept: plan.source ?? "any",
               item: sourceItem,
               onClear: () => setSourceItem(null),
