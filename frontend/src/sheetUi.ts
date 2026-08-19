@@ -57,19 +57,43 @@ export function useSheetModels() {
   return { t2i, r2i, t2iId, r2iId, setT2iId, setR2iId };
 }
 
+export function localSheetEstimate(
+  kind: string,
+  t2i: ModelRow | undefined,
+  r2i: ModelRow | undefined,
+  slots: string[],
+) {
+  const planned = slots.length ? slots : ["front"];
+  let total = 0;
+  planned.forEach((slot, i) => {
+    const first = i === 0 || slot === "front";
+    const costume = kind === "costume";
+    const row = costume || !first ? r2i : t2i;
+    const fallback = costume || !first ? 0.03 : 0.04;
+    const usd = Number(row?.cost_estimate_usd);
+    total += Number.isFinite(usd) && usd > 0 ? usd : fallback;
+  });
+  const n = planned.length;
+  return `Est. cost: $${total.toFixed(2)} · ${n} still${n === 1 ? "" : "s"}`;
+}
+
 export function useSheetEstimate(
   kind: string,
   t2iId: string,
   r2iId: string,
   slots: string[],
+  models?: { t2i: ModelRow[]; r2i: ModelRow[] },
 ) {
-  const [estimate, setEstimate] = useState("Est. cost: —");
   const key = slots.join("|");
+  const local = localSheetEstimate(
+    kind,
+    models?.t2i.find((m) => m.id === t2iId),
+    models?.r2i.find((m) => m.id === r2iId),
+    slots,
+  );
+  const [estimate, setEstimate] = useState(local);
   useEffect(() => {
-    if (!t2iId && !r2iId) {
-      setEstimate("Est. cost: —");
-      return;
-    }
+    setEstimate(local);
     const ac = new AbortController();
     fetch("/assets/sheet/estimate", {
       method: "POST",
@@ -84,13 +108,12 @@ export function useSheetEstimate(
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { cost?: string } | null) => {
-        setEstimate(body?.cost || "Est. cost: —");
+        if (body?.cost && body.cost.includes("$")) setEstimate(body.cost);
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [kind, t2iId, r2iId, key]);
+  }, [kind, t2iId, r2iId, key, local]);
   return estimate;
 }

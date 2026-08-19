@@ -73,16 +73,75 @@ export default function CreatorBuilderNode({
   );
 }
 
+const HAIR_LEN = ["bald", "buzz", "short", "medium", "long", "very long"];
+const HAIR_STYLE = [
+  "straight",
+  "wavy",
+  "curly",
+  "coily",
+  "pulled back",
+  "bun",
+  "ponytail",
+  "cropped",
+];
+const HAIR_COLOR = [
+  "black",
+  "dark brown",
+  "brown",
+  "auburn",
+  "blonde",
+  "red",
+  "gray",
+  "white",
+];
+const FACIAL = ["none", "stubble", "short beard", "full beard", "mustache", "goatee"];
+const EYES = ["brown", "dark brown", "hazel", "green", "blue", "gray", "amber"];
+const SKIN = ["fair", "light", "medium", "olive", "tan", "brown", "deep"];
+const HEIGHT = ["short", "average", "tall", "5'4\"", "5'8\"", "6'0\"", "6'2\""];
+const WEIGHT = ["slim", "average", "athletic", "heavy", "stocky"];
+const BODY = ["lean", "average", "muscular", "curvy", "lanky", "hourglass", "rectangle"];
+const FACE = ["oval", "round", "square", "heart", "diamond", "oblong"];
+const NOSE = ["straight", "button", "roman", "wide", "narrow", "upturned"];
+const JAW = ["soft", "defined", "square", "rounded", "pointed", "cleft"];
+
+function pickField(value: string, custom: string) {
+  if (value === "Custom") return custom.trim();
+  return value.trim();
+}
+
 function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Male" | "Female">("Male");
   const [age, setAge] = useState("30s");
-  const [build, setBuild] = useState("average");
-  const [hair, setHair] = useState("dark brown short");
-  const [face, setFace] = useState("");
+  const [hairLen, setHairLen] = useState("short");
+  const [hairLenC, setHairLenC] = useState("");
+  const [hairStyle, setHairStyle] = useState("straight");
+  const [hairStyleC, setHairStyleC] = useState("");
+  const [hairColor, setHairColor] = useState("dark brown");
+  const [hairColorC, setHairColorC] = useState("");
+  const [facial, setFacial] = useState("none");
+  const [facialC, setFacialC] = useState("");
+  const [eyes, setEyes] = useState("brown");
+  const [eyesC, setEyesC] = useState("");
+  const [skin, setSkin] = useState("medium");
+  const [skinC, setSkinC] = useState("");
+  const [height, setHeight] = useState("average");
+  const [heightC, setHeightC] = useState("");
+  const [weight, setWeight] = useState("average");
+  const [weightC, setWeightC] = useState("");
+  const [body, setBody] = useState("average");
+  const [bodyC, setBodyC] = useState("");
+  const [faceShape, setFaceShape] = useState("oval");
+  const [faceShapeC, setFaceShapeC] = useState("");
+  const [nose, setNose] = useState("straight");
+  const [noseC, setNoseC] = useState("");
+  const [jaw, setJaw] = useState("defined");
+  const [jawC, setJawC] = useState("");
   const [notes, setNotes] = useState("");
   const [overrideWardrobe, setOverrideWardrobe] = useState(false);
   const [wardrobe, setWardrobe] = useState("");
+  const [enhanced, setEnhanced] = useState("");
+  const [enhancing, setEnhancing] = useState(false);
   const [extras, setExtras] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +155,62 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     models.t2iId,
     models.r2iId,
     slots,
+    models,
   );
+  const identityFields = useMemo(() => {
+    const clothes = overrideWardrobe ? wardrobe.trim() : locked;
+    return {
+      gender,
+      age,
+      hair_length: pickField(hairLen, hairLenC),
+      hair_style: pickField(hairStyle, hairStyleC),
+      hair_color: pickField(hairColor, hairColorC),
+      facial_hair: gender === "Male" ? pickField(facial, facialC) : "",
+      eye_color: pickField(eyes, eyesC),
+      skin: pickField(skin, skinC),
+      height: pickField(height, heightC),
+      weight: pickField(weight, weightC),
+      body: pickField(body, bodyC),
+      face_shape: pickField(faceShape, faceShapeC),
+      nose: pickField(nose, noseC),
+      jaw: pickField(jaw, jawC),
+      wardrobe: clothes,
+      notes: notes.trim(),
+      enhanced: enhanced.trim(),
+    };
+  }, [
+    gender,
+    age,
+    hairLen,
+    hairLenC,
+    hairStyle,
+    hairStyleC,
+    hairColor,
+    hairColorC,
+    facial,
+    facialC,
+    eyes,
+    eyesC,
+    skin,
+    skinC,
+    height,
+    heightC,
+    weight,
+    weightC,
+    body,
+    bodyC,
+    faceShape,
+    faceShapeC,
+    nose,
+    noseC,
+    jaw,
+    jawC,
+    notes,
+    overrideWardrobe,
+    wardrobe,
+    locked,
+    enhanced,
+  ]);
 
   async function generate() {
     const label = name.trim();
@@ -115,15 +229,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
           kind: "character",
           name: label,
           notes: notes.trim(),
-          fields: {
-            gender,
-            age,
-            build,
-            hair,
-            face: face.trim(),
-            wardrobe: overrideWardrobe ? wardrobe.trim() : locked,
-            notes: notes.trim(),
-          },
+          fields: identityFields,
         }),
       });
       const draft = await readJson<GenBody>(created);
@@ -145,7 +251,8 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             kind: "character",
             slot,
             name: label,
-            fields: draft.item.fields || {},
+            fields: identityFields,
+            extra: enhanced.trim(),
           }),
         });
         const promptBody = await readJson<GenBody>(promptRes);
@@ -164,7 +271,8 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             slot,
             model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
             source_still: prior,
-            wardrobe: overrideWardrobe ? wardrobe.trim() : locked,
+            wardrobe: identityFields.wardrobe,
+            extra: enhanced.trim(),
           }),
         });
         const body = await readJson<GenBody>(res);
@@ -216,6 +324,49 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     });
   }
 
+  async function onEnhance() {
+    setEnhancing(true);
+    setError(null);
+    try {
+      const composed = await fetch("/assets/sheet/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "character",
+          slot: "front",
+          name: name.trim() || "character",
+          fields: identityFields,
+        }),
+      });
+      const brief = await readJson<GenBody>(composed);
+      const raw = brief.prompt || "";
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt:
+            "Rewrite this character identity and wardrobe into a strong photoreal character-reference sheet prompt. Keep every listed physical trait. No extra people, no scene environment.\n\n" +
+            raw,
+          model_id: models.t2iId,
+          mode: "image",
+          modality: "t2i",
+        }),
+      });
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.prompt) {
+        throw new Error(errOf(body, "Enhance failed."));
+      }
+      setEnhanced(body.prompt);
+      toast("Identity enhanced.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Enhance failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setEnhancing(false);
+    }
+  }
+
   return (
     <>
       <p className="hint">Identity + models. Generate drops angle nodes on the canvas.</p>
@@ -243,35 +394,115 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             ))}
           </select>
         </label>
-        <label className="param">
-          <span>Build</span>
-          <select className="model" value={build} onChange={(e) => setBuild(e.target.value)}>
-            {["slim", "average", "athletic", "heavy"].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
       </div>
-      <label className="builder-field">
-        <span className="field-label">Hair</span>
-        <select className="model" value={hair} onChange={(e) => setHair(e.target.value)}>
-          {[
-            "black short",
-            "dark brown short",
-            "brown medium",
-            "blonde long",
-            "red wavy",
-            "gray short",
-            "bald",
-          ].map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Face notes</span>
-        <input className="model" value={face} onChange={(e) => setFace(e.target.value)} />
-      </label>
+      <div className="params">
+        <FieldSelect
+          label="Hair length"
+          value={hairLen}
+          custom={hairLenC}
+          options={HAIR_LEN}
+          onValue={setHairLen}
+          onCustom={setHairLenC}
+        />
+        <FieldSelect
+          label="Hair style"
+          value={hairStyle}
+          custom={hairStyleC}
+          options={HAIR_STYLE}
+          onValue={setHairStyle}
+          onCustom={setHairStyleC}
+        />
+        <FieldSelect
+          label="Hair color"
+          value={hairColor}
+          custom={hairColorC}
+          options={HAIR_COLOR}
+          onValue={setHairColor}
+          onCustom={setHairColorC}
+        />
+      </div>
+      {gender === "Male" ? (
+        <div className="params">
+          <FieldSelect
+            label="Facial hair"
+            value={facial}
+            custom={facialC}
+            options={FACIAL}
+            onValue={setFacial}
+            onCustom={setFacialC}
+          />
+        </div>
+      ) : null}
+      <div className="params">
+        <FieldSelect
+          label="Eye color"
+          value={eyes}
+          custom={eyesC}
+          options={EYES}
+          onValue={setEyes}
+          onCustom={setEyesC}
+        />
+        <FieldSelect
+          label="Skin tone"
+          value={skin}
+          custom={skinC}
+          options={SKIN}
+          onValue={setSkin}
+          onCustom={setSkinC}
+        />
+        <FieldSelect
+          label="Height"
+          value={height}
+          custom={heightC}
+          options={HEIGHT}
+          onValue={setHeight}
+          onCustom={setHeightC}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Weight / build"
+          value={weight}
+          custom={weightC}
+          options={WEIGHT}
+          onValue={setWeight}
+          onCustom={setWeightC}
+        />
+        <FieldSelect
+          label="Body type"
+          value={body}
+          custom={bodyC}
+          options={BODY}
+          onValue={setBody}
+          onCustom={setBodyC}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Face shape"
+          value={faceShape}
+          custom={faceShapeC}
+          options={FACE}
+          onValue={setFaceShape}
+          onCustom={setFaceShapeC}
+        />
+        <FieldSelect
+          label="Nose"
+          value={nose}
+          custom={noseC}
+          options={NOSE}
+          onValue={setNose}
+          onCustom={setNoseC}
+        />
+        <FieldSelect
+          label="Jaw / chin"
+          value={jaw}
+          custom={jawC}
+          options={JAW}
+          onValue={setJaw}
+          onCustom={setJawC}
+        />
+      </div>
       <label className="builder-field">
         <span className="field-label">Notes</span>
         <textarea
@@ -316,12 +547,30 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         ))}
       </div>
       <ModelPickers models={models} />
+      <label className="builder-field">
+        <span className="field-label">Enhanced sheet prompt</span>
+        <textarea
+          className="prompt nowheel"
+          rows={3}
+          placeholder="Enhance rewrites identity + wardrobe here"
+          value={enhanced}
+          onChange={(e) => setEnhanced(e.target.value)}
+        />
+      </label>
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
         <button
           type="button"
+          className="ghost enhance"
+          disabled={enhancing || busy}
+          onClick={() => void onEnhance()}
+        >
+          {enhancing ? "Enhancing…" : "Enhance"}
+        </button>
+        <button
+          type="button"
           className="generate"
-          disabled={busy || !name.trim()}
+          disabled={busy || enhancing || !name.trim()}
           onClick={() => void generate()}
         >
           {busy ? "Generating…" : "Generate Base Sheet"}
@@ -354,9 +603,13 @@ function CostumeForm({ data }: { data: CreatorBuilderNodeData }) {
   const [ready, setReady] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const models = useSheetModels();
-  const estimate = useSheetEstimate("costume", models.t2iId, models.r2iId, [
-    ...CORE_SLOTS,
-  ]);
+  const estimate = useSheetEstimate(
+    "costume",
+    models.t2iId,
+    models.r2iId,
+    [...CORE_SLOTS],
+    models,
+  );
 
   useEffect(() => {
     fetch("/assets?kind=character")
@@ -587,7 +840,7 @@ function SceneForm({ data }: { data: CreatorBuilderNodeData }) {
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
   const slots = sheet ? ["front", "side"] : ["front"];
-  const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots);
+  const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots, models);
 
   async function generate() {
     const label = name.trim();
@@ -743,7 +996,7 @@ function PropForm({ data }: { data: CreatorBuilderNodeData }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
-  const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"]);
+  const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"], models);
 
   async function generate() {
     const label = name.trim();
@@ -866,6 +1119,44 @@ function PropForm({ data }: { data: CreatorBuilderNodeData }) {
         </p>
       ) : null}
     </>
+  );
+}
+
+function FieldSelect({
+  label,
+  value,
+  custom,
+  options,
+  onValue,
+  onCustom,
+}: {
+  label: string;
+  value: string;
+  custom: string;
+  options: string[];
+  onValue: (v: string) => void;
+  onCustom: (v: string) => void;
+}) {
+  return (
+    <label className="param">
+      <span>{label}</span>
+      <select className="model" value={value} onChange={(e) => onValue(e.target.value)}>
+        {options.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+        <option value="Custom">Custom</option>
+      </select>
+      {value === "Custom" ? (
+        <input
+          className="model"
+          value={custom}
+          placeholder="Custom…"
+          onChange={(e) => onCustom(e.target.value)}
+        />
+      ) : null}
+    </label>
   );
 }
 

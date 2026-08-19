@@ -666,7 +666,11 @@
 }
 
 .creator-builder-node {
-  width: 340px;
+  width: 380px;
+}
+
+.creator-builder-node .param input.model {
+  margin-top: 4px;
 }
 
 .sheet-angle-node {

@@ -79,16 +79,51 @@ PROFILE_VIEWS: dict[str, str] = {
 }
 
 CHAR_AGES = ("20s", "30s", "40s", "50s", "60+")
-CHAR_BUILDS = ("slim", "average", "athletic", "heavy")
-CHAR_HAIR = (
-    "black short",
-    "dark brown short",
-    "brown medium",
-    "blonde long",
-    "red wavy",
-    "gray short",
-    "bald",
+CHAR_HAIR_LENGTH = ("bald", "buzz", "short", "medium", "long", "very long")
+CHAR_HAIR_STYLE = (
+    "straight",
+    "wavy",
+    "curly",
+    "coily",
+    "pulled back",
+    "bun",
+    "ponytail",
+    "cropped",
 )
+CHAR_HAIR_COLOR = (
+    "black",
+    "dark brown",
+    "brown",
+    "auburn",
+    "blonde",
+    "red",
+    "gray",
+    "white",
+)
+CHAR_FACIAL_HAIR = (
+    "none",
+    "stubble",
+    "short beard",
+    "full beard",
+    "mustache",
+    "goatee",
+)
+CHAR_EYES = ("brown", "dark brown", "hazel", "green", "blue", "gray", "amber")
+CHAR_SKIN = ("fair", "light", "medium", "olive", "tan", "brown", "deep")
+CHAR_HEIGHT = ("short", "average", "tall", "5'4\"", "5'8\"", "6'0\"", "6'2\"")
+CHAR_WEIGHT = ("slim", "average", "athletic", "heavy", "stocky")
+CHAR_BODY = (
+    "lean",
+    "average",
+    "muscular",
+    "curvy",
+    "lanky",
+    "hourglass",
+    "rectangle",
+)
+CHAR_FACE = ("oval", "round", "square", "heart", "diamond", "oblong")
+CHAR_NOSE = ("straight", "button", "roman", "wide", "narrow", "upturned")
+CHAR_JAW = ("soft", "defined", "square", "rounded", "pointed", "cleft")
 SCENE_SETTINGS = ("interior", "exterior")
 SCENE_TIMES = ("dawn", "day", "golden hour", "dusk", "night")
 SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful")
@@ -135,9 +170,18 @@ def builder_fields(kind: str) -> dict[str, Any]:
         "fields": {
             "gender": {"label": "Gender", "choices": ["Male", "Female"]},
             "age": {"label": "Age", "choices": list(CHAR_AGES)},
-            "build": {"label": "Build", "choices": list(CHAR_BUILDS)},
-            "hair": {"label": "Hair", "choices": list(CHAR_HAIR)},
-            "face": {"label": "Face notes", "type": "text"},
+            "hair_length": {"label": "Hair length", "choices": list(CHAR_HAIR_LENGTH)},
+            "hair_style": {"label": "Hair style", "choices": list(CHAR_HAIR_STYLE)},
+            "hair_color": {"label": "Hair color", "choices": list(CHAR_HAIR_COLOR)},
+            "facial_hair": {"label": "Facial hair", "choices": list(CHAR_FACIAL_HAIR)},
+            "eye_color": {"label": "Eye color", "choices": list(CHAR_EYES)},
+            "skin": {"label": "Skin tone", "choices": list(CHAR_SKIN)},
+            "height": {"label": "Height", "choices": list(CHAR_HEIGHT)},
+            "weight": {"label": "Weight / build", "choices": list(CHAR_WEIGHT)},
+            "body": {"label": "Body type", "choices": list(CHAR_BODY)},
+            "face_shape": {"label": "Face shape", "choices": list(CHAR_FACE)},
+            "nose": {"label": "Nose", "choices": list(CHAR_NOSE)},
+            "jaw": {"label": "Jaw / chin", "choices": list(CHAR_JAW)},
             "wardrobe": {"label": "Wardrobe override", "type": "text"},
             "notes": {"label": "Notes", "type": "text"},
         },
@@ -149,31 +193,77 @@ def _nv(v: Any) -> str:
     return str(v or "").strip()
 
 
+def _choice(fields: dict[str, Any], key: str) -> str:
+    raw = _nv(fields.get(key))
+    if raw.lower() == "custom":
+        return _nv(fields.get(f"{key}_custom"))
+    if raw.lower() in ("", "—", "-", "skip"):
+        return ""
+    return raw
+
+
 def character_brief(fields: dict[str, Any] | None, *, costume: bool = False) -> str:
     f = fields or {}
     parts: list[str] = []
-    gender = _nv(f.get("gender"))
-    age = _nv(f.get("age"))
+    gender = _choice(f, "gender")
+    age = _choice(f, "age")
     if gender and age:
         parts.append(f"{gender.lower()} in their {age}")
     elif gender:
         parts.append(gender.lower())
     elif age:
         parts.append(f"adult in their {age}")
-    build = _nv(f.get("build"))
-    if build:
-        parts.append(f"{build} build")
-    hair = _nv(f.get("hair"))
-    if hair:
-        parts.append(f"hair: {hair}")
-    face = _nv(f.get("face"))
+    height = _choice(f, "height")
+    if height:
+        parts.append(f"height: {height}")
+    weight = _choice(f, "weight") or _choice(f, "build")
+    if weight:
+        parts.append(f"build: {weight}")
+    body = _choice(f, "body")
+    if body:
+        parts.append(f"body type: {body}")
+    hair_bits = [
+        x
+        for x in (
+            _choice(f, "hair_length"),
+            _choice(f, "hair_style"),
+            _choice(f, "hair_color"),
+        )
+        if x
+    ]
+    if not hair_bits and _choice(f, "hair"):
+        hair_bits = [_choice(f, "hair")]
+    if hair_bits:
+        parts.append("hair: " + ", ".join(hair_bits))
+    facial = _choice(f, "facial_hair")
+    if facial:
+        if facial.lower() == "none":
+            parts.append("clean-shaven, no facial hair")
+        else:
+            parts.append(f"facial hair: {facial}")
+    eyes = _choice(f, "eye_color")
+    if eyes:
+        parts.append(f"eyes: {eyes}")
+    skin = _choice(f, "skin")
+    if skin:
+        parts.append(f"skin tone: {skin}")
+    face_shape = _choice(f, "face_shape")
+    if face_shape:
+        parts.append(f"face shape: {face_shape}")
+    nose = _choice(f, "nose")
+    if nose:
+        parts.append(f"nose: {nose}")
+    jaw = _choice(f, "jaw")
+    if jaw:
+        parts.append(f"jaw/chin: {jaw}")
+    face = _choice(f, "face")
     if face:
-        parts.append(f"face: {face}")
+        parts.append(f"face notes: {face}")
     if not costume:
         wardrobe = _nv(f.get("wardrobe")) or default_wardrobe(gender)
         parts.append(f"wardrobe: {wardrobe}")
     notes = _nv(f.get("notes"))
-    head = ", ".join(parts)
+    head = "; ".join(parts)
     if head and notes:
         return f"{head}. {notes}"
     return notes or head or "photoreal adult person"
@@ -395,6 +485,40 @@ def _usd_from_label(label: str) -> float:
     return float(match.group(1)) if match else 0.0
 
 
+def _angle_usd(model_id: str, modality: str) -> tuple[str, float]:
+    from app.create import estimate_create_cost
+    from app.create_catalog import default_model_for, resolve_model
+    from app.create_state import CreateState
+
+    mid = (model_id or "").strip()
+    if not mid:
+        fallback = default_model_for("image", modality)
+        mid = fallback.id if fallback else ""
+    usd = 0.0
+    if mid:
+        label = estimate_create_cost(
+            CreateState(mode="image", modality=modality, model_id=mid, prompt="sheet")
+        )
+        usd = _usd_from_label(label)
+        if usd <= 0:
+            entry = resolve_model(mid, mode="image", modality=modality)
+            if entry is not None:
+                try:
+                    from app.vision_registry import find_vision_model
+
+                    spec = find_vision_model(
+                        entry.source_key or entry.label,
+                        entry.vision_mode or None,  # type: ignore[arg-type]
+                    )
+                    if spec is not None:
+                        usd = float(getattr(spec, "cost_estimate_usd", 0) or 0)
+                except Exception:
+                    usd = 0.0
+    if usd <= 0:
+        usd = 0.04 if modality == "t2i" else 0.03
+    return mid, usd
+
+
 def estimate_sheet_cost(
     *,
     kind: str = "character",
@@ -403,10 +527,6 @@ def estimate_sheet_cost(
     slots: list[str] | None = None,
 ) -> dict[str, Any]:
     """Sum catalog estimates for the selected models × still count."""
-    from app.create import estimate_create_cost
-    from app.create_catalog import default_model_for
-    from app.create_state import CreateState
-
     want = (kind or "character").strip().lower()
     planned = [s for s in (slots or list(CORE_SLOTS)) if s]
     if not planned:
@@ -427,30 +547,20 @@ def estimate_sheet_cost(
         else:
             modality = "i2i"
             mid = (r2i_model_id or t2i_model_id).strip()
-        if not mid:
-            fallback = default_model_for("image", modality)
-            mid = fallback.id if fallback else ""
-        if not mid:
-            label = "Est. cost: —"
-            usd = 0.0
-        else:
-            label = estimate_create_cost(
-                CreateState(mode="image", modality=modality, model_id=mid, prompt="sheet")
-            )
-            usd = _usd_from_label(label)
+        mid, usd = _angle_usd(mid, modality)
         total += usd
         angles.append(
             {
                 "slot": slot,
                 "modality": modality,
                 "model_id": mid,
-                "cost": label,
+                "cost": f"${usd:.2f}",
                 "usd": usd,
             }
         )
     n = len(planned)
     unit = "1 still" if n == 1 else f"{n} stills"
-    cost = f"Est. cost: ${total:.2f} · {unit}" if total else "Est. cost: —"
+    cost = f"Est. cost: ${total:.2f} · {unit}"
     return {"ok": True, "cost": cost, "usd": total, "count": n, "angles": angles}
 
 
