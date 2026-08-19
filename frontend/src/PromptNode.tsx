@@ -9,6 +9,7 @@ import PromptErrorBoundary from "./PromptErrorBoundary";
 import { itemMediaKind } from "./libraryDrag";
 import {
   allocatedSeconds,
+  composeStoryboardEnhanceBrief,
   composeStoryboardPrompt,
   distributeShotSeconds,
   evenSplitSeconds,
@@ -17,6 +18,7 @@ import {
   storyboardDurationChoices,
   storyboardRefItems,
 } from "./storyboard";
+import { readJson } from "./http";
 import { toast } from "./toast";
 import {
   durationOptions,
@@ -219,7 +221,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     missing.length === 0 &&
     (isStoryboard || !promptRequired || prompt.trim().length > 0) &&
     (!isFrame || hasRunwareKey);
-  const canEnhance = Boolean(prompt.trim()) && !enhancing && !loading && phase === "idle";
+  const canEnhance =
+    !enhancing &&
+    !loading &&
+    phase === "idle" &&
+    (isStoryboard
+      ? storyShots.length > 0 || Boolean(prompt.trim())
+      : Boolean(prompt.trim()));
 
   useEffect(() => {
     if (isLocked) return;
@@ -516,19 +524,32 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setEnhancing(true);
     setError(null);
     try {
+      const sbDuration =
+        duration || storyboardDurationChoices(selectedModel)[0] || "";
+      const boardBrief = isStoryboard
+        ? composeStoryboardEnhanceBrief(
+            data.hubTitle || "",
+            prompt.trim(),
+            storyAssets,
+            storyShots,
+            distributeShotSeconds(storyShots, sbDuration),
+            data.hubNotes,
+          )
+        : "";
       const res = await fetch("/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt.trim(),
+          prompt: isStoryboard ? boardBrief : prompt.trim(),
           model_id: modelId,
-          modality,
-          mode,
+          modality: isStoryboard ? "r2v" : modality,
+          mode: isStoryboard ? "storyboard" : mode,
           refs: isStoryboard
-            ? storyRefs.map((item) => ({
-                path: item.path,
-                role: "source",
-                name: item.name,
+            ? storyAssets.map((row) => ({
+                path: row.item?.path || "",
+                role: row.role,
+                name: row.label || row.item?.name || row.role,
+                note: row.item?.path ? "still attached" : "no still",
               }))
             : enhanceRefs(data.source, characters, scenes),
           image_urls: isStoryboard
@@ -536,14 +557,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             : enhanceImagePaths(data),
         }),
       });
-      const body = (await res.json()) as {
+      const body = (await readJson(res)) as {
         ok?: boolean;
         prompt?: string;
         error?: string;
         detail?: string;
         vision?: boolean;
       };
-      if (!res.ok || !body.ok) {
+      if (!res.ok || body.ok === false) {
         setError(
           body.error ||
             (typeof body.detail === "string" ? body.detail : null) ||
@@ -552,7 +573,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         return;
       }
       if (body.prompt) setPrompt(body.prompt);
-      const sent = enhanceImagePaths(data);
+      const sent = isStoryboard
+        ? storyRefs.map((item) => item.path).slice(0, 3)
+        : enhanceImagePaths(data);
       if (sent.length && body.vision === false) {
         toast("Enhance ran without image context", true);
       }
@@ -633,6 +656,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             onResolution={setResolution}
             onGenerate={() => void onGenerate()}
             onEnhance={() => void onEnhance()}
+            canEnhance={canEnhance}
           />
         ) : null}
 
@@ -1001,6 +1025,7 @@ function StoryboardPrompt({
   onResolution,
   onGenerate,
   onEnhance,
+  canEnhance,
 }: {
   data: PromptNodeData;
   models: ModelRow[];
@@ -1023,6 +1048,7 @@ function StoryboardPrompt({
   onResolution: (v: string) => void;
   onGenerate: () => void;
   onEnhance: () => void;
+  canEnhance: boolean;
 }) {
   const shots = data.shots ?? [];
   const refs = storyboardRefItems(data.hubAssets ?? [], shots);
@@ -1194,11 +1220,15 @@ function StoryboardPrompt({
         value={notes}
         onChange={(e) => onNotes(e.target.value)}
       />
+      <p className="hint">
+        Enhance rewrites Hub assets, these notes, and every shot into this
+        master prompt for the selected model.
+      </p>
       <div className="prompt-actions">
         <button
           type="button"
           className="ghost nodrag enhance"
-          disabled={!notes.trim() || enhancing || loading}
+          disabled={!canEnhance}
           onClick={onEnhance}
         >
           {enhancing ? "Enhancing…" : "Enhance"}

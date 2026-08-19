@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import NodeErrorBoundary from "./NodeErrorBoundary";
+import { readJson as readJsonSafe } from "./http";
 import { toast } from "./toast";
 import {
   CORE_SLOTS,
@@ -28,7 +29,7 @@ type GenBody = {
 };
 
 async function readJson<T>(res: Response): Promise<T> {
-  return (await res.json()) as T;
+  return (await readJsonSafe(res)) as T;
 }
 
 function errOf(body: GenBody, fallback: string) {
@@ -164,24 +165,22 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [notes, setNotes] = useState("");
   const [overrideWardrobe, setOverrideWardrobe] = useState(false);
   const [wardrobe, setWardrobe] = useState("");
-  const [enhanced, setEnhanced] = useState("");
+  const [identityPrompt, setIdentityPrompt] = useState("");
+  const [applying, setApplying] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
-  const [extras, setExtras] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [busySlot, setBusySlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assetId, setAssetId] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [done, setDone] = useState<Record<string, string>>({});
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
-  const slots = useMemo(
-    () => [...CORE_SLOTS, ...(Array.isArray(extras) ? extras : [])],
-    [extras],
-  );
+  const haveFront = Boolean(done.front);
   const estimate = useSheetEstimate(
     "character",
     models.t2iId,
     models.r2iId,
-    slots,
+    ["front"],
     models,
   );
   const identityFields = useMemo(() => {
@@ -202,8 +201,6 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       nose: pickField(nose, noseC),
       jaw: pickField(jaw, jawC),
       wardrobe: clothes,
-      notes: notes.trim(),
-      enhanced: enhanced.trim(),
     };
   }, [
     gender,
@@ -232,113 +229,161 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     noseC,
     jaw,
     jawC,
-    notes,
     overrideWardrobe,
     wardrobe,
     locked,
-    enhanced,
   ]);
 
-  async function generate() {
+  async function composeIdentity(): Promise<string> {
+    const res = await fetch("/assets/sheet/prompt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "character",
+        slot: "identity",
+        name: name.trim() || "character",
+        fields: identityFields,
+        extra: notes.trim(),
+      }),
+    });
+    const body = await readJson<GenBody>(res);
+    const text = (body.prompt || "").trim();
+    if (!res.ok || !text) {
+      throw new Error(errOf(body, "Could not compose identity prompt."));
+    }
+    return text;
+  }
+
+  async function applySelection() {
+    setApplying(true);
+    setError(null);
+    try {
+      const text = await composeIdentity();
+      setIdentityPrompt(text);
+      toast("Identity prompt applied.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Apply selection failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  async function ensureIdentity(): Promise<string> {
+    const cur = identityPrompt.trim();
+    if (cur) return cur;
+    const text = await composeIdentity();
+    setIdentityPrompt(text);
+    return text;
+  }
+
+  async function generateSlot(slot: string) {
     const label = name.trim();
     if (!label) {
       setError("Name is required.");
       return;
     }
+    if (slot !== "front" && !haveFront) {
+      setError("Generate Front first.");
+      return;
+    }
     setBusy(true);
+    setBusySlot(slot);
     setError(null);
-    setReady(false);
     try {
-      const created = await fetch("/assets/sheet/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "character",
-          name: label,
-          notes: notes.trim(),
-          fields: identityFields,
-        }),
-      });
-      const draft = await readJson<GenBody>(created);
-      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
-      setAssetId(draft.item.id);
-      data.onSession?.({
-        assetId: draft.item.id,
-        t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
-        slots,
-      });
-      let prior = "";
-      let last = draft.item;
-      for (const slot of slots) {
-        const promptRes = await fetch("/assets/sheet/prompt", {
+      const ident = await ensureIdentity();
+      if (!ident) throw new Error("Apply selection first so Generate has an identity prompt.");
+      const fields = { ...identityFields, identity_prompt: ident };
+      let id = assetId;
+      if (!id) {
+        const created = await fetch("/assets/sheet/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             kind: "character",
-            slot,
             name: label,
-            fields: identityFields,
-            extra: enhanced.trim(),
+            notes: notes.trim(),
+            fields,
           }),
         });
-        const promptBody = await readJson<GenBody>(promptRes);
-        data.onAngle(slot, {
-          slot,
-          label: SLOT_LABEL[slot] || slot,
-          prompt: promptBody.prompt || "",
-          generating: true,
-          error: null,
-        });
-        const res = await fetch("/assets/sheet/angle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            asset_id: draft.item.id,
-            slot,
-            model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
-            source_still: prior,
-            wardrobe: identityFields.wardrobe,
-            extra: enhanced.trim(),
-          }),
-        });
-        const body = await readJson<GenBody>(res);
-        if (!res.ok || !body.item) {
-          data.onAngle(slot, {
-            slot,
-            generating: false,
-            error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`),
-          });
-          throw new Error(errOf(body, `${SLOT_LABEL[slot] || slot} failed.`));
-        }
-        last = body.item;
-        const path = body.item.identity?.[slot] || body.item.still_path || "";
-        const url = body.item.identity_urls?.[slot] || body.item.url || "";
-        prior = path;
-        data.onAngle(slot, {
-          slot,
-          prompt: body.item.prompt || promptBody.prompt || "",
-          path,
-          url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
-          generating: false,
-          error: null,
+        const draft = await readJson<GenBody>(created);
+        if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
+        id = draft.item.id;
+        setAssetId(id);
+        data.onSession?.({
+          assetId: id,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          slots: [...CORE_SLOTS, ...EXTRA_SLOTS],
         });
       }
-      const have = CORE_SLOTS.every((s) => last.identity?.[s]);
-      setReady(have);
-      toast(`Generated ${slots.length} angles.`);
+      const source = slot === "front" ? "" : done.front || "";
+      const promptRes = await fetch("/assets/sheet/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "character",
+          slot,
+          name: label,
+          fields,
+        }),
+      });
+      const promptBody = await readJson<GenBody>(promptRes);
+      const anglePrompt = promptBody.prompt || "";
+      data.onAngle(slot, {
+        slot,
+        label: SLOT_LABEL[slot] || slot,
+        prompt: anglePrompt,
+        generating: true,
+        error: null,
+      });
+      const res = await fetch("/assets/sheet/angle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_id: id,
+          slot,
+          model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
+          source_still: source,
+          wardrobe: identityFields.wardrobe,
+          prompt: anglePrompt,
+        }),
+      });
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) {
+        data.onAngle(slot, {
+          slot,
+          generating: false,
+          error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`),
+        });
+        throw new Error(errOf(body, `${SLOT_LABEL[slot] || slot} failed.`));
+      }
+      const path = body.item.identity?.[slot] || body.item.still_path || "";
+      const url = body.item.identity_urls?.[slot] || body.item.url || "";
+      setDone((cur) => ({ ...cur, [slot]: path }));
+      data.onAngle(slot, {
+        slot,
+        prompt: body.item.prompt || anglePrompt,
+        path,
+        url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
+        generating: false,
+        error: null,
+      });
+      toast(`Generated ${SLOT_LABEL[slot] || slot}.`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Generate failed.";
       setError(msg);
       toast(msg, true);
     } finally {
       setBusy(false);
+      setBusySlot(null);
     }
   }
 
   function save() {
-    if (!assetId || !ready) {
-      setError("Generate Front, Side, and Close-up first.");
+    if (!assetId || !haveFront) {
+      setError("Generate Front first.");
       return;
     }
     data.onSaved({
@@ -355,18 +400,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     setEnhancing(true);
     setError(null);
     try {
-      const composed = await fetch("/assets/sheet/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "character",
-          slot: "front",
-          name: name.trim() || "character",
-          fields: identityFields,
-        }),
-      });
-      const brief = await readJson<GenBody>(composed);
-      const raw = brief.prompt || "";
+      const raw = await ensureIdentity();
+      if (!raw) {
+        throw new Error("Apply selection first so Enhance has identity + wardrobe text.");
+      }
       const res = await fetch("/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -380,10 +417,13 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         }),
       });
       const body = await readJson<GenBody>(res);
-      if (!res.ok || !body.prompt) {
-        throw new Error(errOf(body, "Enhance failed."));
+      const rewritten = (body.prompt || "").trim();
+      if (!res.ok || body.ok === false || !rewritten) {
+        throw new Error(
+          errOf(body, "Enhance returned an empty or incomplete reply. Try again."),
+        );
       }
-      setEnhanced(body.prompt);
+      setIdentityPrompt(rewritten);
       toast("Identity enhanced.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Enhance failed.";
@@ -396,7 +436,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
 
   return (
     <>
-      <p className="hint">Identity + models. Generate drops angle nodes on the canvas.</p>
+      <p className="hint">
+        Dropdowns stay. Apply selection builds the identity prompt (fields + notes + wardrobe).
+        Generate Front first (1 still). Side / Close-up use Front as reference.
+      </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
@@ -531,10 +574,11 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         />
       </div>
       <label className="builder-field">
-        <span className="field-label">Notes</span>
+        <span className="field-label">Notes (extra only)</span>
         <textarea
           className="prompt nowheel"
           rows={2}
+          placeholder="Optional extras — not the whole prompt"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -556,53 +600,79 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
           onChange={(e) => setWardrobe(e.target.value)}
         />
       </label>
-      <span className="field-label">Extra angles</span>
-      <div className="chip-row">
-        {EXTRA_SLOTS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={extras.includes(id) ? "pill modality on" : "pill modality"}
-            onClick={() =>
-              setExtras((cur) =>
-                cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
-              )
-            }
-          >
-            {SLOT_LABEL[id]}
-          </button>
-        ))}
-      </div>
       <ModelPickers models={models} />
-      <label className="builder-field">
-        <span className="field-label">Enhanced sheet prompt</span>
-        <textarea
-          className="prompt nowheel"
-          rows={3}
-          placeholder="Enhance rewrites identity + wardrobe here"
-          value={enhanced}
-          onChange={(e) => setEnhanced(e.target.value)}
-        />
-      </label>
-      <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
         <button
           type="button"
+          className="ghost"
+          disabled={applying || enhancing || busy}
+          onClick={() => void applySelection()}
+        >
+          {applying ? "Applying…" : "Apply selection"}
+        </button>
+        <button
+          type="button"
           className="ghost enhance"
-          disabled={enhancing || busy}
+          disabled={enhancing || busy || applying}
           onClick={() => void onEnhance()}
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+      </div>
+      <label className="builder-field">
+        <span className="field-label">Identity prompt</span>
+        <textarea
+          className="prompt nowheel"
+          rows={5}
+          placeholder="Apply selection to compose identity + wardrobe here"
+          value={identityPrompt}
+          onChange={(e) => setIdentityPrompt(e.target.value)}
+        />
+      </label>
+      <p className="estimate">{estimate}</p>
+      <p className="hint">Each extra angle is billed separately (1 still).</p>
+      <div className="prompt-actions">
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || !name.trim()}
-          onClick={() => void generate()}
+          disabled={busy || enhancing || applying || !name.trim()}
+          onClick={() => void generateSlot("front")}
         >
-          {busy ? "Generating…" : "Generate Base Sheet"}
+          {busySlot === "front" ? "Generating Front…" : "Generate Front"}
         </button>
-        <button type="button" className="ghost" disabled={busy || !ready} onClick={save}>
+        <button
+          type="button"
+          className="generate"
+          disabled={busy || enhancing || applying || !haveFront}
+          onClick={() => void generateSlot("side")}
+        >
+          {busySlot === "side" ? "Generating Side…" : "Generate Side"}
+        </button>
+        <button
+          type="button"
+          className="generate"
+          disabled={busy || enhancing || applying || !haveFront}
+          onClick={() => void generateSlot("closeup")}
+        >
+          {busySlot === "closeup" ? "Generating Close-up…" : "Generate Close-up"}
+        </button>
+      </div>
+      <span className="field-label">Extra angles</span>
+      <div className="prompt-actions">
+        {EXTRA_SLOTS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className="ghost"
+            disabled={busy || enhancing || applying || !haveFront}
+            onClick={() => void generateSlot(id)}
+          >
+            {busySlot === id ? `Generating ${SLOT_LABEL[id]}…` : `Generate ${SLOT_LABEL[id]}`}
+          </button>
+        ))}
+      </div>
+      <div className="prompt-actions">
+        <button type="button" className="ghost" disabled={busy || !haveFront} onClick={save}>
           Save Character
         </button>
       </div>

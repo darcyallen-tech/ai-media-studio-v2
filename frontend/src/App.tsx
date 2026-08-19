@@ -1309,12 +1309,18 @@ function StudioCanvas() {
         angle?.type === "sheet-angle" ? angle.data.prompt || "" : "";
       const order = session.slots.length ? session.slots : ["front", "side", "closeup"];
       const idx = order.indexOf(slot);
+      const frontNode = live.find((n) => n.id === `sang-${builderId}-front`);
+      const frontPath =
+        frontNode?.type === "sheet-angle" ? frontNode.data.path || "" : "";
       const priorSlot = idx > 0 ? order[idx - 1] : "";
       const priorNode = priorSlot
         ? live.find((n) => n.id === `sang-${builderId}-${priorSlot}`)
         : null;
       const priorPath =
-        priorNode?.type === "sheet-angle" ? priorNode.data.path || "" : "";
+        slot === "front"
+          ? ""
+          : frontPath ||
+            (priorNode?.type === "sheet-angle" ? priorNode.data.path || "" : "");
       upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
       try {
         const res = await fetch("/assets/sheet/angle", {
@@ -1328,13 +1334,13 @@ function StudioCanvas() {
             source_still: priorPath,
           }),
         });
-        const body = (await res.json()) as {
+        const body = (await readJson(res)) as {
           ok?: boolean;
           item?: StudioAsset;
           detail?: string;
           error?: string;
         };
-        if (!res.ok || !body.item) {
+        if (!res.ok || body.ok === false || !body.item) {
           throw new Error(
             (typeof body.detail === "string" ? body.detail : null) ||
               body.error ||

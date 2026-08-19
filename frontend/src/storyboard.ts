@@ -52,6 +52,100 @@ export function composeStoryboardPrompt(
   return parts.join("\n\n").trim();
 }
 
+function stillMark(item: LibraryItem | null | undefined): string {
+  const path = (item?.path || "").trim();
+  return path ? "still attached" : "no still";
+}
+
+function dialogueFromAction(action: string): string[] {
+  const out: string[] = [];
+  const re = /([^\n:]{1,60}):\s*["“]([^"”]+)["”]/g;
+  let match: RegExpExecArray | null = re.exec(action);
+  while (match) {
+    const speaker = match[1].trim();
+    const line = match[2].trim();
+    if (speaker && line) out.push(`${speaker}: "${line}"`);
+    match = re.exec(action);
+  }
+  return out;
+}
+
+function shotDurationLabel(
+  shot: ShotState,
+  hold?: number,
+): string {
+  const raw = shot.duration.trim();
+  if (raw) {
+    const n = parseSeconds(raw);
+    return n ? `${formatHold(n)}s` : raw;
+  }
+  if (hold && hold > 0) return `${formatHold(hold)}s`;
+  return "(unallocated)";
+}
+
+export function composeStoryboardEnhanceBrief(
+  title: string,
+  notes: string,
+  assets: HubAsset[],
+  shots: ShotState[],
+  holds?: Map<string, number>,
+  hubNotes?: string,
+): string {
+  const parts: string[] = [];
+  const t = title.trim();
+  if (t) parts.push(`Sequence title: ${t}`);
+  parts.push("Hub assets:");
+  if (!assets.length) {
+    parts.push("- (none)");
+  } else {
+    for (const row of assets) {
+      const label = (row.label || row.item?.name || row.role).trim();
+      parts.push(`- ${row.role}: ${label} [${stillMark(row.item)}]`);
+    }
+  }
+  const mood = (hubNotes || "").trim();
+  const n = notes.trim();
+  if (mood && mood !== n) {
+    parts.push("");
+    parts.push("Hub mood / style:");
+    parts.push(mood);
+  }
+  parts.push("");
+  parts.push("Global notes:");
+  parts.push(n || "(none)");
+  parts.push("");
+  parts.push("Shots in order:");
+  const ordered = [...shots].sort((a, b) => a.order - b.order);
+  if (!ordered.length) {
+    parts.push("- (none)");
+  } else {
+    for (const shot of ordered) {
+      const hold = holds?.get(shot.id);
+      const lines = [`${shot.order}. ${shot.label || `Shot ${shot.order}`}`];
+      lines.push(`   Action: ${shot.action.trim() || "(empty)"}`);
+      lines.push(`   Move: ${shot.move || "—"}`);
+      if (shot.move && shot.move !== "Static" && shot.speed) {
+        lines.push(`   Speed: ${shot.speed}`);
+      }
+      if (shot.move && shot.move !== "Static" && shot.ease) {
+        lines.push(`   Ease: ${shot.ease}`);
+      }
+      lines.push(`   Duration: ${shotDurationLabel(shot, hold)}`);
+      lines.push(`   Framing: ${shot.framing.trim() || "(none)"}`);
+      const speech = dialogueFromAction(shot.action);
+      lines.push(
+        `   Dialogue: ${speech.length ? speech.join(" | ") : "(none)"}`,
+      );
+      parts.push(lines.join("\n"));
+    }
+  }
+  parts.push("");
+  parts.push(
+    "Rewrite this board into a master generation prompt (global notes) for the selected model. Keep shot order, attributed dialogue, hub identities, camera/move, durations, and framing. Do not drop shots or unname the cast.",
+  );
+  return parts.join("\n").trim();
+}
+
 export function storyboardRefItems(
   assets: HubAsset[],
   shots: ShotState[],

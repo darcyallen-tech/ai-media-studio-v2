@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
+import { readJson } from "./http";
 import { toast } from "./toast";
 import type { HubNodeData } from "./types";
 
@@ -39,14 +40,14 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
             })),
         }),
       });
-      const body = (await res.json()) as {
+      const body = (await readJson(res)) as {
         ok?: boolean;
         prompt?: string;
         error?: string;
         detail?: string;
         vision?: boolean;
       };
-      if (!res.ok || !body.ok) {
+      if (!res.ok || body.ok === false) {
         throw new Error(
           body.error ||
             (typeof body.detail === "string" ? body.detail : null) ||

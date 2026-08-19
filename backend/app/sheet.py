@@ -204,6 +204,9 @@ def _choice(fields: dict[str, Any], key: str) -> str:
 
 def character_brief(fields: dict[str, Any] | None, *, costume: bool = False) -> str:
     f = fields or {}
+    override = _nv(f.get("identity_prompt"))
+    if override:
+        return override
     parts: list[str] = []
     gender = _choice(f, "gender")
     age = _choice(f, "age")
@@ -262,11 +265,8 @@ def character_brief(fields: dict[str, Any] | None, *, costume: bool = False) -> 
     if not costume:
         wardrobe = _nv(f.get("wardrobe")) or default_wardrobe(gender)
         parts.append(f"wardrobe: {wardrobe}")
-    notes = _nv(f.get("notes"))
     head = "; ".join(parts)
-    if head and notes:
-        return f"{head}. {notes}"
-    return notes or head or "photoreal adult person"
+    return head or "photoreal adult person"
 
 
 def compile_wardrobe(
@@ -467,6 +467,12 @@ def compose_angle_prompt(
 ) -> str:
     key = (slot or "front").strip().lower()
     merged = {**(fields or {}), "name": name or (fields or {}).get("name") or ""}
+    if key == "identity":
+        brief = character_brief(merged, costume=is_costume)
+        note = _nv(extra) or _nv(merged.get("notes"))
+        if note:
+            return f"{brief}. Extra: {note}" if brief else note
+        return brief
     if kind == "scene":
         return scene_prompt(merged, detail=key != "front")
     if kind == "prop":
