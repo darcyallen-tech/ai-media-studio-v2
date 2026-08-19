@@ -1247,37 +1247,70 @@ function StudioCanvas() {
       const angleId = `sang-${builderId}-${slot}`;
       setNodes((current) => {
         const builder = current.find((n) => n.id === builderId);
+        const promptNode = current.find((n) => n.id === "prompt");
         const existing = current.find((n) => n.id === angleId);
-        const order = ["front", "side", "closeup", "back", "threequarter_front", "threequarter_back", "top"];
+        const order = [
+          "front",
+          "side",
+          "closeup",
+          "back",
+          "threequarter_front",
+          "threequarter_back",
+          "top",
+        ];
         const idx = Math.max(0, order.indexOf(slot));
         const position = existing?.position ?? {
-          x: (builder?.position.x ?? PROMPT_POS.x) + 400,
-          y: (builder?.position.y ?? PROMPT_POS.y) + idx * 250,
+          x: Math.max(
+            (builder?.position.x ?? PROMPT_POS.x) + 400,
+            (promptNode?.position.x ?? PROMPT_POS.x) + 520,
+          ),
+          y: (builder?.position.y ?? PROMPT_POS.y) + idx * 270,
         };
-        const prev = existing?.type === "sheet-angle" ? existing.data : null;
+        const prev = existing?.type === "result" ? existing.data : null;
+        const url = patch.url ?? prev?.result?.result_paths?.[0] ?? "";
+        const path = patch.path ?? prev?.result?.local_paths?.[0] ?? "";
+        const title =
+          patch.label ||
+          prev?.title ||
+          SLOT_LABEL[slot] ||
+          slot;
         const node: StudioNode = {
           id: angleId,
-          type: "sheet-angle",
+          type: "result",
           position,
           dragHandle: ".node-header",
           data: {
+            title,
             builderId,
             slot,
-            label: patch.label || prev?.label || SLOT_LABEL[slot] || slot,
             prompt: patch.prompt ?? prev?.prompt ?? "",
-            url: patch.url ?? prev?.url,
-            path: patch.path ?? prev?.path,
             generating: patch.generating ?? prev?.generating ?? false,
             error: patch.error === undefined ? prev?.error ?? null : patch.error,
+            result: {
+              ok: true,
+              result_paths: url ? [url] : [],
+              local_paths: path ? [path] : [],
+              cost: patch.cost || prev?.result?.cost || "",
+            },
+            dragItem: path
+              ? {
+                  id: `assets:${builderId}:${slot}`,
+                  name: title,
+                  source: "generated",
+                  kind: "image",
+                  path,
+                  url: url || "",
+                  thumb_url: url || "",
+                }
+              : prev?.dragItem ?? null,
             onPrompt: () => undefined,
             onRegen: () => undefined,
             onClose: () => closeNode(angleId),
           },
         };
-        const withNode = existing
+        return existing
           ? current.map((n) => (n.id === angleId ? node : n))
           : [...current, node];
-        return withNode;
       });
       setEdges((current) => {
         const edgeId = `e-${builderId}-${slot}`;
@@ -1304,23 +1337,25 @@ function StudioCanvas() {
         return;
       }
       const live = getNodes();
+      const anglePath = (id: string) => {
+        const node = live.find((n) => n.id === id);
+        if (!node || node.type !== "result") return "";
+        const data = node.data as ResultNodeData;
+        return data.result?.local_paths?.[0] || "";
+      };
       const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
       const prompt =
-        angle?.type === "sheet-angle" ? angle.data.prompt || "" : "";
+        angle?.type === "result"
+          ? ((angle.data as ResultNodeData).prompt || "")
+          : "";
       const order = session.slots.length ? session.slots : ["front", "side", "closeup"];
       const idx = order.indexOf(slot);
-      const frontNode = live.find((n) => n.id === `sang-${builderId}-front`);
-      const frontPath =
-        frontNode?.type === "sheet-angle" ? frontNode.data.path || "" : "";
+      const frontPath = anglePath(`sang-${builderId}-front`);
       const priorSlot = idx > 0 ? order[idx - 1] : "";
-      const priorNode = priorSlot
-        ? live.find((n) => n.id === `sang-${builderId}-${priorSlot}`)
-        : null;
       const priorPath =
         slot === "front"
           ? ""
-          : frontPath ||
-            (priorNode?.type === "sheet-angle" ? priorNode.data.path || "" : "");
+          : frontPath || (priorSlot ? anglePath(`sang-${builderId}-${priorSlot}`) : "");
       upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
       try {
         const res = await fetch("/assets/sheet/angle", {
@@ -2315,6 +2350,29 @@ function StudioCanvas() {
         if (n.type === "result") {
           const result = "result" in n.data ? n.data.result : undefined;
           if (!result) return n;
+          const builderId = n.data.builderId;
+          const slot = n.data.slot;
+          if (builderId && slot) {
+            return {
+              ...n,
+              type: "result",
+              data: {
+                ...n.data,
+                result,
+                title: n.data.title,
+                prompt: n.data.prompt,
+                generating: n.data.generating,
+                error: n.data.error,
+                builderId,
+                slot,
+                dragItem: n.data.dragItem ?? itemFromResult(result),
+                onPrompt: (prompt) =>
+                  upsertSheetAngle(builderId, slot, { slot, prompt }),
+                onRegen: () => void regenSheetAngle(builderId, slot),
+                onClose: () => closeNode(n.id),
+              },
+            };
+          }
           const pinApply =
             n.id === PIN_EDIT_RESULT && pinEdit
               ? () => applyPinStill(result)

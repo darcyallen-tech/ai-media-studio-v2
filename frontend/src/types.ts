@@ -219,6 +219,14 @@ export type ToolKind =
 
 export type ResultNodeData = {
   result: GenerateResponse;
+  title?: string;
+  prompt?: string;
+  generating?: boolean;
+  error?: string | null;
+  builderId?: string;
+  slot?: string;
+  onPrompt?: (prompt: string) => void;
+  onRegen?: () => void;
   onClose?: () => void;
   onTool?: (kind: ToolKind) => void;
   onApplyToPin?: () => void;
@@ -287,6 +295,7 @@ export type StudioAsset = {
   angle?: string;
   modality?: string;
   prompt?: string;
+  cost?: string;
 };
 
 export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
@@ -312,6 +321,7 @@ export type SheetAnglePatch = {
   prompt?: string;
   url?: string;
   path?: string;
+  cost?: string;
   generating?: boolean;
   error?: string | null;
 };

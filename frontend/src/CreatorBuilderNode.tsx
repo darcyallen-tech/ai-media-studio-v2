@@ -299,9 +299,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         });
       }
       const source = slot === "front" ? "" : done.front || "";
+      const title = `${SLOT_LABEL[slot] || slot} · ${label}`;
       data.onAngle(slot, {
         slot,
-        label: SLOT_LABEL[slot] || slot,
+        label: title,
         prompt: ident,
         generating: true,
         error: null,
@@ -321,6 +322,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       if (!res.ok || !body.item) {
         data.onAngle(slot, {
           slot,
+          label: title,
           generating: false,
           error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`, res),
         });
@@ -331,9 +333,11 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       setDone((cur) => ({ ...cur, [slot]: path }));
       data.onAngle(slot, {
         slot,
+        label: title,
         prompt: body.item.prompt || ident,
         path,
         url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
+        cost: body.item.cost || "",
         generating: false,
         error: null,
       });
@@ -358,7 +362,8 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       name: name.trim(),
       kind: "character",
       has_still: true,
-      still_path: assetId,
+      still_path: done.front || assetId,
+      identity: { ...done },
       url: `/assets/${assetId}/still`,
     });
   }

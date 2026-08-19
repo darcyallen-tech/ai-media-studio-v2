@@ -51,17 +51,22 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     });
   }
 
+  const title = (data.title || "").trim() || "Result";
+  const isAngle = Boolean(data.slot || data.onRegen);
+
   return (
     <div className="studio-node result-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">
-        <span>Result</span>
+        <span>{title}</span>
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag">
         <p className="meta">
-          <span>{result.cost || "Cost: —"}</span>
-          <span>{formatDuration(result.duration_sec)}</span>
+          <span>{result.cost || (data.generating ? "Generating…" : "Cost: —")}</span>
+          {result.duration_sec ? (
+            <span>{formatDuration(result.duration_sec)}</span>
+          ) : null}
         </p>
         <div className="media">
           {paths.map((src) =>
@@ -112,10 +117,41 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ),
           )}
           {paths.length === 0 ? (
-            <p className="hint">No media paths returned.</p>
+            <p className="hint">
+              {data.generating ? "Generating…" : "No media paths returned."}
+            </p>
           ) : null}
         </div>
-        {tools.length && data.onTool ? (
+        {isAngle ? (
+          <>
+            <label className="builder-field">
+              <span className="field-label">Angle prompt</span>
+              <textarea
+                className="prompt nowheel"
+                rows={4}
+                value={data.prompt || ""}
+                disabled={data.generating}
+                onChange={(e) => data.onPrompt?.(e.target.value)}
+              />
+            </label>
+            <div className="prompt-actions">
+              <button
+                type="button"
+                className="generate nodrag"
+                disabled={data.generating || !String(data.prompt || "").trim()}
+                onClick={data.onRegen}
+              >
+                {data.generating ? "Generating…" : "Regenerate"}
+              </button>
+            </div>
+            {data.error ? (
+              <p className="hint warn" role="alert">
+                {data.error}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {tools.length && data.onTool && !isAngle ? (
           <div className="result-tools">
             {tools.map((t) => (
               <button

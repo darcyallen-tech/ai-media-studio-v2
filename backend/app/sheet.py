@@ -683,4 +683,9 @@ def generate_angle(
     pub["modality"] = modality
     pub["model_used"] = mid
     pub["prompt"] = text
+    pub["cost"] = (
+        getattr(result, "cost_label", "")
+        or getattr(result, "cost_estimate", "")
+        or ""
+    )
     return pub
