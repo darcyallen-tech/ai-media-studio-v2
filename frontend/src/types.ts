@@ -324,6 +324,7 @@ export type SheetAnglePatch = {
   cost?: string;
   generating?: boolean;
   error?: string | null;
+  focus?: boolean;
 };
 
 export type BuilderSessionInfo = {

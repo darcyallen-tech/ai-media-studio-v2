@@ -502,23 +502,25 @@
 .lightbox {
   position: fixed;
   inset: 0;
-  z-index: 40;
-  background: rgba(28, 37, 48, 0.62);
+  z-index: 80;
+  background: rgba(28, 37, 48, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  cursor: zoom-out;
 }
 
 .lightbox-frame {
-  max-width: min(92vw, 1100px);
-  max-height: 90vh;
+  max-width: min(96vw, 1400px);
+  max-height: 94vh;
+  cursor: default;
 }
 
 .lightbox-frame img,
 .lightbox-frame video {
-  max-width: 92vw;
-  max-height: 82vh;
+  max-width: 96vw;
+  max-height: 88vh;
   border-radius: 10px;
   background: #111;
 }

@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { requestAngleGenerate } from "./angleSpawn";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
@@ -52,8 +54,38 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   }
 
   const title = (data.title || "").trim() || "Result";
-  const isAngle = Boolean(data.slot || data.onRegen);
+  const isAngle = Boolean(data.slot || data.builderId);
   const hasStill = paths.length > 0;
+  const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
+  useEffect(() => {
+    setAnglePrompt(data.prompt || "");
+  }, [data.prompt]);
+
+  function enlarge() {
+    const src = paths[0] || "";
+    if (!src) return;
+    openLightbox({
+      src,
+      kind: isVid ? "video" : isAud ? "audio" : "image",
+      title,
+    });
+  }
+
+  function runAngleJob() {
+    try {
+      if (data.builderId && data.slot) {
+        requestAngleGenerate({
+          builderId: data.builderId,
+          slot: data.slot,
+          prompt: anglePrompt,
+        });
+        return;
+      }
+      data.onRegen?.();
+    } catch (err: unknown) {
+      console.error("Angle generate failed to start", err);
+    }
+  }
 
   return (
     <div className="studio-node result-node">
@@ -69,7 +101,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             <span>{formatDuration(result.duration_sec)}</span>
           ) : null}
         </p>
-        <div className="media">
+        <div className="media" onDoubleClick={enlarge}>
           {paths.map((src) =>
             isVideoPath(src) ? (
               <ResizableMedia key={src} id={`result-vid-${src}`} minHeight={140} defaultHeight={220}>
@@ -77,9 +109,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 src={src}
                 controls
                 playsInline
-                onDoubleClick={() =>
-                  openLightbox({ src, kind: "video" })
-                }
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  openLightbox({ src, kind: "video", title });
+                }}
               />
               </ResizableMedia>
             ) : isAudioPath(src) ? (
@@ -89,9 +122,6 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 key={src}
                 className="nodrag result-drag"
                 draggable={Boolean(data.dragItem)}
-                onPointerDown={() => {
-                  if (data.dragItem) beginLibraryDrag(data.dragItem);
-                }}
                 onDragStart={(event) => {
                   if (!data.dragItem) {
                     event.preventDefault();
@@ -109,9 +139,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 src={src}
                 alt="Generated result"
                 draggable={false}
-                onDoubleClick={() =>
-                  openLightbox({ src, kind: "image" })
-                }
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  openLightbox({ src, kind: "image", title });
+                }}
               />
               </ResizableMedia>
               </div>
@@ -134,17 +165,20 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               <textarea
                 className="prompt nowheel"
                 rows={4}
-                value={data.prompt || ""}
+                value={anglePrompt}
                 disabled={data.generating}
-                onChange={(e) => data.onPrompt?.(e.target.value)}
+                onChange={(e) => {
+                  setAnglePrompt(e.target.value);
+                  data.onPrompt?.(e.target.value);
+                }}
               />
             </label>
             <div className="prompt-actions">
               <button
                 type="button"
                 className="generate nodrag"
-                disabled={data.generating || !String(data.prompt || "").trim()}
-                onClick={data.onRegen}
+                disabled={data.generating || !anglePrompt.trim()}
+                onClick={runAngleJob}
               >
                 {data.generating ? "Generating…" : hasStill ? "Regenerate" : "Generate"}
               </button>

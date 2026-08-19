@@ -194,7 +194,6 @@ function CharacterForm({
   const [identityPrompt, setIdentityPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assetId, setAssetId] = useState<string | null>(null);
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const haveFront = Boolean(data.doneSlots?.front);
@@ -281,40 +280,17 @@ function CharacterForm({
     return text;
   }
 
-  function sessionPayload(id: string, ident: string) {
+  function sessionPayload(id: string, ident: string, label: string) {
     return {
       assetId: id,
       t2iModel: models.t2iId,
       r2iModel: models.r2iId || models.t2iId,
       slots: [...CORE_SLOTS, ...EXTRA_SLOTS],
-      name: name.trim(),
+      name: label,
       fields: { ...identityFields, identity_prompt: ident },
       wardrobe: identityFields.wardrobe,
       notes: notes.trim(),
     };
-  }
-
-  async function ensureDraft(label: string, ident: string) {
-    const fields = { ...identityFields, identity_prompt: ident };
-    let id = assetId || data.sessionAssetId || "";
-    if (!id) {
-      const created = await fetch("/assets/sheet/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "character",
-          name: label,
-          notes: notes.trim(),
-          fields,
-        }),
-      });
-      const draft = await readJson<GenBody>(created);
-      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed.", created));
-      id = draft.item.id;
-      setAssetId(id);
-    }
-    data.onSession?.(sessionPayload(id, ident));
-    return id;
   }
 
   function openAngle(slot: string) {
@@ -324,24 +300,18 @@ function CharacterForm({
       const anglePrompt = composeAnglePrompt(slot, ident, { hasFront: haveFront });
       const patch = {
         slot,
-        label: `${SLOT_LABEL[slot] || slot} · ${label}`,
+        label: SLOT_LABEL[slot] || slot,
         prompt: anglePrompt,
         generating: false,
         error: null as string | null,
         cost: estimate,
+        focus: true,
       };
       spawnAngleResult({ builderId, ...patch });
-      if (typeof data.onAngle === "function" && data.onAngle.length >= 2) {
-        data.onAngle(slot, patch);
-      }
       setError(null);
-      toast(`${SLOT_LABEL[slot] || slot} Result opened.`);
-      void ensureDraft(label, ident).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Could not create character draft.";
-        setError(msg);
-        data.onSession?.(sessionPayload("", ident));
-      });
+      data.onSession?.(sessionPayload(data.sessionAssetId || "", ident, label));
     } catch (err: unknown) {
+      console.error("Angle Result spawn failed", err);
       const msg = err instanceof Error ? err.message : "Could not open Result node.";
       setError(msg);
       toast(msg, true);
@@ -349,7 +319,7 @@ function CharacterForm({
   }
 
   function save() {
-    const id = assetId || data.sessionAssetId || "";
+    const id = data.sessionAssetId || "";
     if (!id || !haveFront) {
       setError("Generate Front first.");
       return;
@@ -646,7 +616,7 @@ function CharacterForm({
         <button
           type="button"
           className="ghost"
-          disabled={!haveFront || !(assetId || data.sessionAssetId)}
+          disabled={!haveFront || !data.sessionAssetId}
           onClick={save}
         >
           Save Character

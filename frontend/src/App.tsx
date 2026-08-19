@@ -57,7 +57,12 @@ import {
   type GridSnap,
 } from "./canvasPrefs";
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
-import { ANGLE_SPAWN_EVENT, type AngleSpawnDetail } from "./angleSpawn";
+import {
+  ANGLE_GENERATE_EVENT,
+  ANGLE_SPAWN_EVENT,
+  type AngleGenerateDetail,
+  type AngleSpawnDetail,
+} from "./angleSpawn";
 import { SLOT_LABEL } from "./sheetUi";
 import { bindToast, toast } from "./toast";
 import {
@@ -1248,92 +1253,132 @@ function StudioCanvas() {
     [closeNode, setNodes],
   );
 
+  const upsertSheetAngleRef = useRef<
+    (builderId: string, slot: string, patch: SheetAnglePatch) => void
+  >(() => undefined);
+  const regenSheetAngleRef = useRef<
+    (builderId: string, slot: string, prompt?: string) => void
+  >(() => undefined);
+
   const upsertSheetAngle = useCallback(
     (builderId: string, slot: string, patch: SheetAnglePatch) => {
       const angleId = `sang-${builderId}-${slot}`;
-      setNodes((current) => {
-        const builder = current.find((n) => n.id === builderId);
-        const promptNode = current.find((n) => n.id === "prompt");
-        const existing = current.find((n) => n.id === angleId);
-        const order = [
-          "front",
-          "side",
-          "closeup",
-          "back",
-          "threequarter_front",
-          "threequarter_back",
-          "top",
-        ];
-        const idx = Math.max(0, order.indexOf(slot));
-        const position = existing?.position ?? {
-          x: Math.max(
-            (builder?.position.x ?? PROMPT_POS.x) + 400,
-            (promptNode?.position.x ?? PROMPT_POS.x) + 520,
-          ),
-          y: (builder?.position.y ?? PROMPT_POS.y) + idx * 270,
-        };
-        const prev = existing?.type === "result" ? existing.data : null;
-        const url = patch.url ?? prev?.result?.result_paths?.[0] ?? "";
-        const path = patch.path ?? prev?.result?.local_paths?.[0] ?? "";
-        const title =
-          patch.label ||
-          prev?.title ||
-          SLOT_LABEL[slot] ||
-          slot;
-        const node: StudioNode = {
-          id: angleId,
-          type: "result",
-          position,
-          dragHandle: ".node-header",
-          data: {
-            title,
-            builderId,
-            slot,
-            prompt: patch.prompt ?? prev?.prompt ?? "",
-            generating: patch.generating ?? prev?.generating ?? false,
-            error: patch.error === undefined ? prev?.error ?? null : patch.error,
-            result: {
-              ok: true,
-              result_paths: url ? [url] : [],
-              local_paths: path ? [path] : [],
-              cost: patch.cost || prev?.result?.cost || "",
+      const edgeId = `e-${builderId}-${slot}`;
+      const order = [
+        "front",
+        "side",
+        "closeup",
+        "back",
+        "threequarter_front",
+        "threequarter_back",
+        "top",
+      ];
+      const idx = Math.max(0, order.indexOf(slot));
+      let panTo: { x: number; y: number } | null = patch.focus ? { x: 0, y: 0 } : null;
+      try {
+        setNodes((current) => {
+          const builder = current.find((n) => n.id === builderId);
+          const promptNode = current.find((n) => n.id === "prompt");
+          const existing = current.find((n) => n.id === angleId);
+          const position = existing?.position ?? {
+            x: Math.max(
+              (builder?.position.x ?? PROMPT_POS.x) + 400,
+              (promptNode?.position.x ?? PROMPT_POS.x) + 520,
+            ),
+            y: (builder?.position.y ?? PROMPT_POS.y) + idx * 270,
+          };
+          if (panTo) panTo = position;
+          const prev = existing?.type === "result" ? existing.data : null;
+          const hasStill = Boolean(
+            prev?.result?.result_paths?.[0] || prev?.result?.local_paths?.[0],
+          );
+          if (existing && patch.focus && !patch.generating && !patch.path && !patch.url) {
+            return current.map((n) => {
+              if (n.id !== angleId) return { ...n, selected: false };
+              if (n.type !== "result") return { ...n, selected: true };
+              const nextPrompt =
+                hasStill ? n.data.prompt : patch.prompt ?? n.data.prompt;
+              return {
+                ...n,
+                selected: true,
+                data: {
+                  ...n.data,
+                  title: patch.label || n.data.title,
+                  prompt: nextPrompt,
+                  error: patch.error === undefined ? n.data.error ?? null : patch.error,
+                },
+              };
+            });
+          }
+          const url = patch.url ?? prev?.result?.result_paths?.[0] ?? "";
+          const path = patch.path ?? prev?.result?.local_paths?.[0] ?? "";
+          const title = patch.label || prev?.title || SLOT_LABEL[slot] || slot;
+          const node: StudioNode = {
+            id: angleId,
+            type: "result",
+            position,
+            selected: Boolean(patch.focus),
+            dragHandle: ".node-header",
+            data: {
+              title,
+              builderId,
+              slot,
+              prompt: patch.prompt ?? prev?.prompt ?? "",
+              generating: patch.generating ?? prev?.generating ?? false,
+              error: patch.error === undefined ? prev?.error ?? null : patch.error,
+              result: {
+                ok: true,
+                result_paths: url ? [url] : [],
+                local_paths: path ? [path] : [],
+                cost: patch.cost || prev?.result?.cost || "",
+              },
+              dragItem: path
+                ? {
+                    id: `assets:${builderId}:${slot}`,
+                    name: title,
+                    source: "generated",
+                    kind: "image",
+                    path,
+                    url: url || "",
+                    thumb_url: url || "",
+                  }
+                : prev?.dragItem ?? null,
+              onPrompt: (prompt) =>
+                upsertSheetAngleRef.current(builderId, slot, { slot, prompt }),
+              onRegen: () => regenSheetAngleRef.current(builderId, slot),
+              onClose: () => closeNode(angleId),
             },
-            dragItem: path
-              ? {
-                  id: `assets:${builderId}:${slot}`,
-                  name: title,
-                  source: "generated",
-                  kind: "image",
-                  path,
-                  url: url || "",
-                  thumb_url: url || "",
-                }
-              : prev?.dragItem ?? null,
-            onPrompt: () => undefined,
-            onRegen: () => undefined,
-            onClose: () => closeNode(angleId),
-          },
-        };
-        return existing
-          ? current.map((n) => (n.id === angleId ? node : n))
-          : [...current, node];
-      });
-      setEdges((current) => {
-        const edgeId = `e-${builderId}-${slot}`;
-        if (current.some((e) => e.id === edgeId)) return current;
-        return addEdge(
-          {
-            id: edgeId,
-            source: builderId,
-            target: angleId,
-            style: { stroke: "#8aa4c2", strokeWidth: 2 },
-          },
-          current,
-        );
-      });
+          };
+          const mapped = existing
+            ? current.map((n) =>
+                n.id === angleId ? node : patch.focus ? { ...n, selected: false } : n,
+              )
+            : [...current.map((n) => (patch.focus ? { ...n, selected: false } : n)), node];
+          return mapped;
+        });
+        setEdges((current) => {
+          if (current.some((e) => e.id === edgeId)) return current;
+          return addEdge(
+            {
+              id: edgeId,
+              source: builderId,
+              target: angleId,
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            current,
+          );
+        });
+        if (panTo && (panTo.x || panTo.y)) {
+          setCenter(panTo.x + 200, panTo.y + 150, { duration: 180, zoom: 1 });
+        }
+      } catch (err: unknown) {
+        console.error("Angle Result spawn failed", err);
+        throw err;
+      }
     },
-    [closeNode, setEdges, setNodes],
+    [closeNode, setCenter, setEdges, setNodes],
   );
+  upsertSheetAngleRef.current = upsertSheetAngle;
 
   useEffect(() => {
     function onSpawn(ev: Event) {
@@ -1343,10 +1388,25 @@ function StudioCanvas() {
         return;
       }
       try {
-        upsertSheetAngle(detail.builderId, detail.slot, detail);
+        upsertSheetAngle(detail.builderId, detail.slot, {
+          ...detail,
+          focus: true,
+        });
       } catch (err: unknown) {
+        console.error("Angle Result spawn failed", err);
         const msg = err instanceof Error ? err.message : "Could not open Result node.";
         toast(msg, true);
+        try {
+          upsertSheetAngle(detail.builderId, detail.slot, {
+            slot: detail.slot,
+            prompt: detail.prompt || "",
+            label: detail.label,
+            error: msg,
+            focus: true,
+          });
+        } catch (inner: unknown) {
+          console.error("Angle Result fallback spawn failed", inner);
+        }
       }
     }
     window.addEventListener(ANGLE_SPAWN_EVENT, onSpawn);
@@ -1354,7 +1414,7 @@ function StudioCanvas() {
   }, [upsertSheetAngle]);
 
   const regenSheetAngle = useCallback(
-    async (builderId: string, slot: string) => {
+    async (builderId: string, slot: string, promptOverride?: string) => {
       const session = builderSessions[builderId];
       if (!session) {
         toast("Open the angle from the Character Builder first.", true);
@@ -1368,10 +1428,12 @@ function StudioCanvas() {
         return data.result?.local_paths?.[0] || "";
       };
       const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
-      const prompt =
-        angle?.type === "result"
-          ? ((angle.data as ResultNodeData).prompt || "")
-          : "";
+      const prompt = (
+        promptOverride ??
+        (angle?.type === "result"
+          ? (angle.data as ResultNodeData).prompt || ""
+          : "")
+      ).trim();
       const order = session.slots.length ? session.slots : ["front", "side", "closeup"];
       const idx = order.indexOf(slot);
       const frontPath = anglePath(`sang-${builderId}-front`);
@@ -1468,6 +1530,17 @@ function StudioCanvas() {
     },
     [builderSessions, getNodes, upsertSheetAngle],
   );
+  regenSheetAngleRef.current = regenSheetAngle;
+
+  useEffect(() => {
+    function onGenerate(ev: Event) {
+      const detail = (ev as CustomEvent<AngleGenerateDetail>).detail;
+      if (!detail?.builderId || !detail.slot) return;
+      void regenSheetAngle(detail.builderId, detail.slot, detail.prompt);
+    }
+    window.addEventListener(ANGLE_GENERATE_EVENT, onGenerate);
+    return () => window.removeEventListener(ANGLE_GENERATE_EVENT, onGenerate);
+  }, [regenSheetAngle]);
 
   const connectAssetToHub = useCallback(
     (id: string) => {

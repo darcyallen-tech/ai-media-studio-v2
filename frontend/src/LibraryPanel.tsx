@@ -545,7 +545,20 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
                     >
                       ×
                     </button>
-                    <div className="library-thumb">
+                    <div
+                      className="library-thumb"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const src = asset.thumb_url || asset.url;
+                        if (!src) return;
+                        openLightbox({
+                          src,
+                          kind: "image",
+                          title: asset.label || asset.name,
+                        });
+                      }}
+                    >
                       {asset.thumb_url || asset.url ? (
                         <img
                           src={asset.thumb_url || asset.url || ""}

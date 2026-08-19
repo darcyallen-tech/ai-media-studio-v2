@@ -19,17 +19,17 @@ export const CLEAN_PLATE =
 
 export const PROFILE_VIEWS: Record<string, string> = {
   front:
-    "Full-body head-to-toe front view, entire figure visible including feet, standing straight, neutral pose, arms relaxed at sides, facing the camera, subject centered, no crop at head or feet",
+    "full body front view, entire figure visible including feet, standing straight, facing the camera, subject centered, no crop",
   side:
-    "Full-body head-to-toe clear side profile view, entire figure visible including feet, standing straight, neutral pose, arms relaxed, clean silhouette, subject centered, no crop at head or feet",
+    "full body side view, entire figure visible including feet, standing straight, clean silhouette, subject centered, no crop",
   closeup:
-    "Face close-up portrait, shoulders up, sharp facial features, match identity from the references, subject correctly framed",
+    "face close-up, shoulders up, sharp facial features, correctly framed",
   back:
-    "full-body head-to-toe back view, entire figure visible including feet, standing straight, neutral pose, arms relaxed, facing away from camera",
+    "full body back view, entire figure visible including feet, standing straight, facing away from the camera",
   threequarter_front:
-    "full-body head-to-toe three-quarter front view (about 45°), entire figure visible including feet, standing straight, neutral pose",
+    "full body three-quarter front view (about 45°), entire figure visible including feet, standing straight",
   threequarter_back:
-    "full-body head-to-toe three-quarter back view (about 45° from behind), entire figure visible including feet, standing straight, neutral pose",
+    "full body three-quarter back view (about 45° from behind), entire figure visible including feet, standing straight",
   top:
     "direct top-down view, camera directly above looking straight down, bird's-eye, full body visible including head and feet, subject centered, no three-quarter tilt",
 };
@@ -107,7 +107,7 @@ export function composeCharacterIdentity(
   return head || "photoreal adult person";
 }
 
-/** Identity paragraph + camera framing for one sheet angle. No API. */
+/** Identity paragraph + one framing line for the angle. No API. */
 export function composeAnglePrompt(
   slot: string,
   identity: string,
@@ -116,32 +116,14 @@ export function composeAnglePrompt(
   const key = slot || "front";
   const view = PROFILE_VIEWS[key] || PROFILE_VIEWS.front;
   const ident = bit(identity) || "photoreal adult person";
-  if (key === "front") {
-    return [
-      `Photoreal character reference still of: ${ident}.`,
-      `Framing: ${view}.`,
-      "Single subject only, head unobstructed, natural expression.",
-      "Entire figure visible head to toe including feet; no crop; subject centered.",
-      CLEAN_PLATE,
-    ].join(" ");
-  }
-  const ref = opts?.hasFront
-    ? "Same person as the Front reference still. Use the Front still as the identity source. "
-    : "Same person as the reference image(s). ";
-  if (key === "closeup") {
-    return (
-      `${ref}Generate a character-reference still: ${view}. ` +
-      "Preserve face, proportions, hair, skin tone, age, and lighting from the reference stills. " +
-      "Do not invent a different person. Head unobstructed. " +
-      `${CLEAN_PLATE} Subject description guide: ${ident}.`
+  const lines = [ident, `Framing: ${view}.`];
+  if (key !== "front" && opts?.hasFront) {
+    lines.push(
+      "Same person as the Front reference still. Use the Front still as the R2I identity source.",
     );
   }
-  return (
-    `${ref}Generate a character-reference still: ${view}. ` +
-    "Match face and identity from the reference image(s) exactly. " +
-    "Keep wardrobe, body proportions, and lighting. Do not invent a different person. " +
-    `${CLEAN_PLATE} Subject description guide: ${ident}.`
-  );
+  lines.push(CLEAN_PLATE);
+  return lines.join("\n\n");
 }
 
 export function sheetModel(row: ModelRow | null | undefined) {
