@@ -37,12 +37,10 @@ CLEAN_PLATE = (
 )
 
 WARDROBE_M = (
-    "minimal form-fit neutral muscle shirt and short seamed shorts, barefoot, "
-    "no logos, no accessories"
+    "simple neutral athletic wear, non-revealing, studio character reference"
 )
 WARDROBE_F = (
-    "minimal form-fit neutral high crop tank-top and short spandex shorts, "
-    "barefoot, no logos, no accessories"
+    "simple neutral athletic wear, non-revealing, studio character reference"
 )
 
 PROFILE_VIEWS: dict[str, str] = {
@@ -646,6 +644,22 @@ def short_generate_error(exc: BaseException | str) -> str:
         "auto" in low or "enum" in low or "input should be" in low
     ):
         return "This model rejected image_size. Pick a listed resolution (not Auto)."
+    if "aspect" in low and (
+        "enum" in low or "input should be" in low or "invalid" in low
+    ):
+        return "Invalid aspect ratio for this model. Use 9:16, 1:1, or 16:9 — not a label like '9:16 portrait'."
+    if any(
+        tok in low
+        for tok in (
+            "content policy",
+            "safety",
+            "flagged",
+            "nudge",
+            "image_rejected",
+            "prohibited",
+        )
+    ):
+        return "The model declined this prompt (content policy). Soften wardrobe/body notes and retry."
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("File ") or "Traceback" in line:
@@ -708,6 +722,59 @@ def character_angle_resolution(
     return pick_character_resolution(allowed, requested, default)
 
 
+_QUALITY_TOKENS = {"0.5k": "0.5K", "1k": "1K", "2k": "2K", "4k": "4K"}
+
+
+def character_angle_params(
+    model_id: str,
+    modality: str,
+    requested: str = "",
+    requested_aspect: str = "",
+) -> tuple[str, str]:
+    """Return (aspect, resolution) using each model's exact allowed API strings."""
+    from app.create_catalog import default_model_for, resolve_model
+    from app.vision_registry import clamp_nano_aspect
+
+    mid = (model_id or "").strip()
+    entry = resolve_model(mid, mode="image", modality=modality) if mid else None
+    if entry is None:
+        entry = default_model_for("image", modality)
+    blob = " ".join(
+        str(getattr(entry, k, "") or "")
+        for k in ("endpoint", "label", "source_key", "id")
+    ).lower()
+    is_nano = "nano" in blob or "banana" in blob
+    aspects = [str(x).strip() for x in (getattr(entry, "aspect_choices", ()) or ()) if str(x).strip()]
+    resolutions = [
+        str(x).strip()
+        for x in (getattr(entry, "resolution_choices", ()) or ())
+        if str(x).strip()
+    ]
+    req = (requested or "").strip()
+    req_aspect = (requested_aspect or "").strip()
+    quality = ""
+    for token, canon in _QUALITY_TOKENS.items():
+        if req.lower().replace(" ", "") == token:
+            quality = canon
+            req = ""
+            break
+    if is_nano:
+        aspect = clamp_nano_aspect(req_aspect or req or "9:16")
+        q_allowed = {r.lower(): r for r in resolutions if r.lower().replace(" ", "") in _QUALITY_TOKENS}
+        resolution = ""
+        if quality and quality.lower() in q_allowed:
+            resolution = q_allowed[quality.lower()]
+        elif q_allowed:
+            resolution = q_allowed.get("2k") or q_allowed.get("1k") or next(iter(q_allowed.values()))
+        return aspect, resolution
+    # Seedream / Flux image_size or aspect labels
+    allowed = resolutions or aspects
+    picked = pick_character_resolution(allowed, req or req_aspect)
+    if resolutions:
+        return picked, picked
+    return picked, quality
+
+
 def generate_angle(
     *,
     asset_id: str,
@@ -719,6 +786,7 @@ def generate_angle(
     prompt: str = "",
     source_still: str = "",
     resolution: str = "",
+    aspect: str = "",
 ) -> dict[str, Any]:
     from app.config import OUTPUT_DIR
     from app.create import generate
@@ -772,14 +840,19 @@ def generate_angle(
 
     start = refs[0] if refs else None
     extras = refs[1:] if len(refs) > 1 else []
-    size = character_angle_resolution(mid, modality, requested=resolution)
+    aspect, size = character_angle_params(
+        mid, modality, requested=resolution, requested_aspect=aspect
+    )
     state = CreateState(
         mode="image",
         modality=modality,  # type: ignore[arg-type]
         model_id=mid,
         prompt=text,
         slots=CreateSlots(start_still=start, ref_images=extras),
-        params=CreateParams(resolution=size, aspect=size),
+        params=CreateParams(
+            resolution=size or None,
+            aspect=aspect or None,
+        ),
         surface="studio",
         output_dir=OUTPUT_DIR,
     )

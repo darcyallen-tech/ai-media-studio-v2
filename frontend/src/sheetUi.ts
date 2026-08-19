@@ -10,9 +10,23 @@ export const EXTRA_SLOTS = [
 ] as const;
 
 export const WARDROBE_M =
-  "minimal form-fit neutral muscle shirt and short seamed shorts, barefoot, no logos, no accessories";
+  "simple neutral athletic wear, non-revealing, studio character reference";
 export const WARDROBE_F =
-  "minimal form-fit neutral high crop tank-top and short spandex shorts, barefoot, no logos, no accessories";
+  "simple neutral athletic wear, non-revealing, studio character reference";
+
+export const NANO_ASPECTS = [
+  "auto",
+  "21:9",
+  "16:9",
+  "3:2",
+  "4:3",
+  "5:4",
+  "1:1",
+  "4:5",
+  "3:4",
+  "2:3",
+  "9:16",
+] as const;
 
 export const CLEAN_PLATE =
   "Pure solid black background only (#000000). Isolated subject on a clean plate — no environment, no floor, no props, no other people, no text, no logo. Clean silhouette, fully visible for the target angle.";
@@ -126,11 +140,31 @@ export function composeAnglePrompt(
   return lines.join("\n\n");
 }
 
+export function isNanoModel(row: ModelRow | null | undefined): boolean {
+  const blob = `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+  return blob.includes("nano") || blob.includes("banana");
+}
+
+export function aspectChoices(row: ModelRow | null | undefined): string[] {
+  if (isNanoModel(row)) return [...NANO_ASPECTS];
+  return (row?.aspect_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+}
+
+export function qualityChoices(row: ModelRow | null | undefined): string[] {
+  return (row?.resolution_choices ?? [])
+    .map((s) => String(s).trim())
+    .filter((s) => /^(0\.5K|1K|2K|4K)$/i.test(s));
+}
+
 export function sizeChoices(row: ModelRow | null | undefined): string[] {
   if (!row) return [];
+  const qualities = qualityChoices(row);
   const res = (row.resolution_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
-  if (res.length) return res;
-  return (row.aspect_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+  const sizes = res.filter((s) => !qualities.includes(s));
+  if (sizes.length) return sizes;
+  const aspects = aspectChoices(row);
+  if (aspects.length) return aspects;
+  return qualities;
 }
 
 export function pickDefaultResolution(choices: string[]): string {
@@ -138,6 +172,7 @@ export function pickDefaultResolution(choices: string[]): string {
   if (!opts.length) return "";
   const lower = new Map(opts.map((c) => [c.toLowerCase(), c]));
   const prefer = [
+    "9:16",
     "portrait_16_9",
     "portrait_4_3",
     "9:16 portrait",

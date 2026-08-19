@@ -227,6 +227,9 @@ export type ResultNodeData = {
   slot?: string;
   resolution?: string;
   resolutionChoices?: string[];
+  aspect?: string;
+  quality?: string;
+  qualityChoices?: string[];
   t2iModel?: string;
   r2iModel?: string;
   assetId?: string;
@@ -345,6 +348,9 @@ export type SheetAnglePatch = {
   focus?: boolean;
   resolution?: string;
   resolutionChoices?: string[];
+  aspect?: string;
+  quality?: string;
+  qualityChoices?: string[];
   t2iModel?: string;
   r2iModel?: string;
   assetId?: string;

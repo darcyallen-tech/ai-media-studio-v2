@@ -1130,6 +1130,7 @@ class AssetSheetAngleIn(BaseModel):
     prompt: str = ""
     source_still: str = ""
     resolution: str = ""
+    aspect: str = ""
 
 
 class AssetSheetEstimateIn(BaseModel):
@@ -1186,6 +1187,7 @@ def assets_sheet_angle(body: AssetSheetAngleIn) -> dict[str, Any]:
             prompt=body.prompt,
             source_still=body.source_still,
             resolution=body.resolution,
+            aspect=body.aspect,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=short_generate_error(exc)) from exc

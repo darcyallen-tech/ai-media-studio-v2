@@ -121,14 +121,17 @@ T2I_ASPECT_CHOICES: tuple[str, ...] = (
 
 # Nano Banana family uses colon aspect ratios (+ resolution on 2/Pro)
 T2I_NANO_ASPECT_CHOICES: tuple[str, ...] = (
-    "16:9",
-    "9:16",
-    "4:3",
-    "3:4",
-    "1:1",
-    "3:2",
-    "2:3",
+    "auto",
     "21:9",
+    "16:9",
+    "3:2",
+    "4:3",
+    "5:4",
+    "1:1",
+    "4:5",
+    "3:4",
+    "2:3",
+    "9:16",
 )
 
 T2I_NANO2_RES_CHOICES: tuple[str, ...] = ("0.5K", "1K", "2K", "4K")
@@ -210,25 +213,30 @@ def map_t2i_image_size(aspect_label: str | None) -> str:
 def map_t2i_aspect_colon(aspect_label: str | None) -> str:
     """Map UI aspect label → '16:9' style string for Nano Banana / Recraft / Ultra."""
     raw = (aspect_label or "").strip().lower()
-    if not raw:
+    if not raw or raw in ("auto", "default"):
+        return "auto" if raw == "auto" else "16:9"
+    compact = raw.replace(" ", "").replace("_", "").replace("-", "").replace(":", "")
+    if compact in ("portrait169", "portrait916"):
+        return "9:16"
+    if compact in ("landscape169",):
         return "16:9"
     bare = raw.replace(" ", "")
     # Prefer longer tokens first so 9:16 wins over 16:9 substring false positives
     for tok in (
         "21:9",
         "9:21",
-        "16:9",
         "9:16",
-        "4:3",
+        "16:9",
         "3:4",
-        "3:2",
+        "4:3",
         "2:3",
-        "5:4",
+        "3:2",
         "4:5",
+        "5:4",
         "1:1",
     ):
         if tok in bare:
-            return tok
+            return "9:16" if tok == "9:21" else tok
     size = map_t2i_image_size(aspect_label)
     return {
         "landscape_16_9": "16:9",
@@ -238,6 +246,18 @@ def map_t2i_aspect_colon(aspect_label: str | None) -> str:
         "square": "1:1",
         "square_hd": "1:1",
     }.get(size, "16:9")
+
+
+def clamp_nano_aspect(aspect_label: str | None) -> str:
+    """Exact Nano Banana aspect_ratio enum — never '9:16 portrait'."""
+    allowed = {a.lower(): a for a in T2I_NANO_ASPECT_CHOICES}
+    raw = (aspect_label or "").strip()
+    if raw.lower() in allowed:
+        return allowed[raw.lower()]
+    colon = map_t2i_aspect_colon(raw)
+    if colon.lower() in allowed:
+        return allowed[colon.lower()]
+    return "9:16"
 
 
 # ---------------------------------------------------------------------------
@@ -2210,8 +2230,8 @@ def build_vision_arguments(
             args["resolution"] = picked or (spec.default_resolution or "1k")
             args.setdefault("quality", "medium")
         elif "nano-banana" in ep:
-            # Nano Banana / 2 / Pro: aspect_ratio "16:9"; 2+Pro also resolution
-            args["aspect_ratio"] = colon_ar
+            # Nano Banana / 2 / Pro: exact colon enum only (never "9:16 portrait")
+            args["aspect_ratio"] = clamp_nano_aspect(aspect_ratio or colon_ar)
             if spec.resolution_choices:
                 # Map loose UI value to API enum (0.5K, 1K, 2K, 4K)
                 picked = None

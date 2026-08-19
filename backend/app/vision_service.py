@@ -430,16 +430,21 @@ def run_vision(
             spec_endpoint = edit_spec.endpoint
             spec_key = edit_spec.key
             # Build parameters for Studio-compatible edit path
-            from app.vision_registry import map_t2i_aspect_colon
+            from app.vision_registry import clamp_nano_aspect, map_t2i_aspect_colon, map_t2i_image_size
 
             params: dict[str, Any] = {"num_images": 1}
             asp = (aspect_ratio or "").strip()
+            edit_ep = (edit_spec.endpoint or "").lower()
             # "Match source" / empty → leave aspect to build_edit_arguments (source image)
             if asp and "match" not in asp.lower():
                 params["image_size"] = map_t2i_image_size(asp)
-                params["aspect_ratio"] = map_t2i_aspect_colon(asp)
+                params["aspect_ratio"] = (
+                    clamp_nano_aspect(asp)
+                    if "nano-banana" in edit_ep
+                    else map_t2i_aspect_colon(asp)
+                )
             else:
-                params["aspect_ratio"] = "auto"
+                params["aspect_ratio"] = "auto" if "nano-banana" in edit_ep else "auto"
                 params["image_size"] = "auto"
             if resolution and str(resolution).strip():
                 params["resolution"] = str(resolution).strip()

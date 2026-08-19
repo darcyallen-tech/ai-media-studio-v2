@@ -14,6 +14,7 @@ import {
   composeAnglePrompt,
   composeCharacterIdentity,
   pickDefaultResolution,
+  qualityChoices,
   sizeChoices,
   useSheetEstimate,
   useSheetModels,
@@ -203,18 +204,28 @@ function CharacterForm({
   const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
   const frontSizes = sizeChoices(t2iRow);
   const angleSizes = sizeChoices(r2iRow);
+  const frontQualities = qualityChoices(t2iRow);
+  const angleQualities = qualityChoices(r2iRow);
   const frontSizeKey = frontSizes.join("|");
   const angleSizeKey = angleSizes.join("|");
   const [frontRes, setFrontRes] = useState("");
   const [angleRes, setAngleRes] = useState("");
+  const [frontQuality, setFrontQuality] = useState("");
+  const [angleQuality, setAngleQuality] = useState("");
   useEffect(() => {
     setFrontRes((cur) =>
       frontSizes.includes(cur) ? cur : pickDefaultResolution(frontSizes),
+    );
+    setFrontQuality((cur) =>
+      frontQualities.includes(cur) ? cur : pickDefaultResolution(frontQualities),
     );
   }, [models.t2iId, frontSizeKey]);
   useEffect(() => {
     setAngleRes((cur) =>
       angleSizes.includes(cur) ? cur : pickDefaultResolution(angleSizes),
+    );
+    setAngleQuality((cur) =>
+      angleQualities.includes(cur) ? cur : pickDefaultResolution(angleQualities),
     );
   }, [models.r2iId, angleSizeKey]);
   const estimate = useSheetEstimate(
@@ -329,8 +340,11 @@ function CharacterForm({
         error: null as string | null,
         cost: estimate,
         focus: true,
-        resolution: slot === "front" ? frontRes : angleRes,
+        resolution: slot === "front" ? frontQuality || frontRes : angleQuality || angleRes,
         resolutionChoices: slot === "front" ? frontSizes : angleSizes,
+        aspect: slot === "front" ? frontRes : angleRes,
+        quality: slot === "front" ? frontQuality : angleQuality,
+        qualityChoices: slot === "front" ? frontQualities : angleQualities,
         t2iModel: models.t2iId,
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
@@ -631,6 +645,38 @@ function CharacterForm({
             ))}
           </select>
         </label>
+        {frontQualities.length ? (
+          <label className="param">
+            <span>Front quality</span>
+            <select
+              className="model"
+              value={frontQuality}
+              onChange={(e) => setFrontQuality(e.target.value)}
+            >
+              {frontQualities.map((s) => (
+                <option key={`fq-${s}`} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {angleQualities.length ? (
+          <label className="param">
+            <span>Angle quality</span>
+            <select
+              className="model"
+              value={angleQuality}
+              onChange={(e) => setAngleQuality(e.target.value)}
+            >
+              {angleQualities.map((s) => (
+                <option key={`aq-${s}`} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
       <div className="prompt-actions">
         <button
