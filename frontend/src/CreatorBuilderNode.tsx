@@ -299,6 +299,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         });
       }
       const source = slot === "front" ? "" : done.front || "";
+      // Front / Side / Close-up use the same Result-node spawn as extras.
       const title = `${SLOT_LABEL[slot] || slot} · ${label}`;
       data.onAngle(slot, {
         slot,
