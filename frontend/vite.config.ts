@@ -17,6 +17,8 @@ export default defineConfig({
       "/assets": "http://127.0.0.1:8000",
       "/characters": "http://127.0.0.1:8000",
       "/scenes": "http://127.0.0.1:8000",
+      "/props": "http://127.0.0.1:8000",
+      "/costumes": "http://127.0.0.1:8000",
       "/tools": "http://127.0.0.1:8000",
       "/settings": "http://127.0.0.1:8000",
       "/frame": "http://127.0.0.1:8000",

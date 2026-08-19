@@ -1356,14 +1356,23 @@ function enhanceRefs(
     out.push({ path: source.path, role: "source", name: source.name });
   }
   for (const row of characters) {
-    if (!row.item?.path) continue;
-    out.push({
-      path: row.item.path,
-      role: "character",
-      id: row.catalogId || null,
-      name: row.item.name,
-      note: row.note.trim() || null,
-    });
+    const paths = [
+      row.item?.path,
+      ...(row.identityPaths || []),
+    ].filter((p): p is string => Boolean(p));
+    const seen = new Set<string>();
+    for (const path of paths) {
+      const key = path.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        path,
+        role: "character",
+        id: row.catalogId || null,
+        name: row.item?.name,
+        note: row.note.trim() || null,
+      });
+    }
   }
   for (const row of scenes) {
     if (!row.item?.path) continue;
@@ -1431,12 +1440,16 @@ function slotsFromGraph(
   }
   const seen = new Set<string>();
   for (const row of [...characters, ...scenes]) {
-    const path = row.item?.path;
-    if (!path) continue;
-    const key = pathKey(path);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    slots.ref_images.push(path);
+    const extras = [
+      row.item?.path,
+      ...(row.identityPaths || []),
+    ].filter((p): p is string => Boolean(p));
+    for (const path of extras) {
+      const key = pathKey(path);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      slots.ref_images.push(path);
+    }
   }
   for (const row of characters) {
     if (row.catalogId) slots.character_ids.push(row.catalogId);

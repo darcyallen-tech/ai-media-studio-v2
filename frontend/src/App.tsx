@@ -1213,9 +1213,9 @@ function StudioCanvas() {
   const addPropNode = useCallback(() => addRefNode("prop"), [addRefNode]);
 
   const addCreatorBuilder = useCallback(
-    (kind: CreatorKind, attachSlotId?: string) => {
+    (kind: CreatorKind, attachSlotId?: string, seeds?: { characterId?: string; costumeId?: string }) => {
       const safeKind: CreatorKind =
-        kind === "costume" || kind === "scene" || kind === "prop"
+        kind === "costume" || kind === "scene" || kind === "prop" || kind === "dress"
           ? kind
           : "character";
       const id = `cbuild-${safeKind}-${Date.now().toString(36)}`;
@@ -1241,6 +1241,8 @@ function StudioCanvas() {
           data: {
             kind: safeKind,
             attachSlotId,
+            seedCharacterId: seeds?.characterId,
+            seedCostumeId: seeds?.costumeId,
             onAngle: () => undefined,
             onSaved: () => undefined,
             onClose: () => closeNode(id),
@@ -1315,6 +1317,7 @@ function StudioCanvas() {
                   quality: patch.quality ?? n.data.quality,
                   qualityChoices: patch.qualityChoices ?? n.data.qualityChoices,
                   sourceStill: patch.sourceStill || n.data.sourceStill,
+                  extraRefs: patch.extraRefs ?? n.data.extraRefs,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
               };
@@ -1344,6 +1347,7 @@ function StudioCanvas() {
               r2iModel: patch.r2iModel ?? prev?.r2iModel,
               assetId: patch.assetId ?? prev?.assetId,
               sourceStill: patch.sourceStill ?? prev?.sourceStill,
+              extraRefs: patch.extraRefs ?? prev?.extraRefs,
               wardrobe: patch.wardrobe ?? prev?.wardrobe,
               name: patch.name ?? prev?.name,
               generating: patch.generating ?? prev?.generating ?? false,
@@ -1552,6 +1556,7 @@ function StudioCanvas() {
             wardrobe: session?.wardrobe || "",
             resolution,
             aspect: (angle.data as ResultNodeData).aspect || resolution,
+            extra_refs: (angle.data as ResultNodeData).extraRefs || [],
           }),
         });
         const body = (await readJson(res)) as {
@@ -2169,6 +2174,9 @@ function StudioCanvas() {
             ...r,
             catalogId,
             item: catalogId ? mapped || r.item : r.item,
+            identityPaths: catalogId
+              ? Object.values(entry?.identity || {}).filter(Boolean)
+              : [],
             label:
               r.label ||
               (catalogId
@@ -2183,6 +2191,7 @@ function StudioCanvas() {
 
   const applyCreatedAsset = useCallback(
     (asset: StudioAsset, slotId?: string) => {
+      if (asset.kind === "costume") return;
       const item = assetToLibraryItem(asset);
       const label = asset.label || asset.name;
       const role = asset.kind;
@@ -2596,6 +2605,7 @@ function StudioCanvas() {
                   (slot === "front"
                     ? ""
                     : builderSessions[builderId]?.done?.front || ""),
+                extraRefs: n.data.extraRefs,
                 wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
                 name: n.data.name || builderSessions[builderId]?.name,
                 onPrompt: (prompt) =>
@@ -2921,6 +2931,8 @@ function StudioCanvas() {
             data: {
               kind,
               attachSlotId: n.data?.attachSlotId,
+              seedCharacterId: n.data?.seedCharacterId,
+              seedCostumeId: n.data?.seedCostumeId,
               onClose: () => closeNode(n.id),
               onAngle: (slot, patch) => upsertSheetAngle(n.id, slot, patch),
               sessionAssetId: builderSessions[n.id]?.assetId || "",
@@ -2932,7 +2944,10 @@ function StudioCanvas() {
                     ...cur[n.id],
                     ...info,
                     attachSlotId: n.data.attachSlotId,
-                    done: cur[n.id]?.done || {},
+                    done: {
+                      ...(cur[n.id]?.done || {}),
+                      ...(info.done || {}),
+                    },
                   },
                 })),
               onSaved: (asset) => {
@@ -2948,6 +2963,7 @@ function StudioCanvas() {
                     applyCreatedAsset(asset, n.data.attachSlotId);
                   }
                   loadCatalogs();
+                  window.dispatchEvent(new Event("ams-assets-changed"));
                   toast("Saved to Assets.");
                 })();
               },
@@ -3376,7 +3392,7 @@ function StudioCanvas() {
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
-        onNewAsset={(kind) => addCreatorBuilder(kind)}
+        onNewAsset={(kind, seeds) => addCreatorBuilder(kind, undefined, seeds)}
       />
       <MediaLightbox />
       {toastMsg ? (

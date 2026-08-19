@@ -148,11 +148,12 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           asset_id: assetId,
           slot,
           model_id:
-            slot === "front"
+            slot === "front" && !data.sourceStill
               ? data.t2iModel || ""
               : data.r2iModel || data.t2iModel || "",
           prompt,
-          source_still: slot === "front" ? "" : data.sourceStill || "",
+          source_still: data.sourceStill || "",
+          extra_refs: Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [],
           wardrobe: data.wardrobe || "",
           resolution: pickedQuality || pickedAspect || data.resolution || "",
           aspect: pickedAspect,

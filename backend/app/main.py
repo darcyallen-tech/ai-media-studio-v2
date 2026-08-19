@@ -44,14 +44,19 @@ from app.character_scene import (  # noqa: E402
     v1_root,
 )
 from app.assets import (  # noqa: E402
+    attach_identity_bytes,
+    attach_identity_still,
     create_asset,
     delete_asset,
     ensure_assets_dir,
     generate_asset,
     get_asset,
     list_assets,
+    public_asset,
     resolve_asset_still,
+    save_sheet,
     sheet_model_ok,
+    update_asset,
 )
 from app.sheet import (  # noqa: E402
     builder_fields,
@@ -1080,6 +1085,11 @@ def props_get() -> dict[str, Any]:
     return {"ok": True, "source": "v2", "items": list_props()}
 
 
+@app.get("/costumes")
+def costumes_get() -> dict[str, Any]:
+    return {"ok": True, "source": "v2", "items": list_assets("costume")}
+
+
 @app.get("/characters/{char_id}/still")
 def character_still(char_id: str) -> FileResponse:
     path = resolve_still_file("character", char_id)
@@ -1131,6 +1141,34 @@ class AssetSheetAngleIn(BaseModel):
     source_still: str = ""
     resolution: str = ""
     aspect: str = ""
+    extra_refs: list[str] = Field(default_factory=list)
+
+
+class AssetSaveIn(BaseModel):
+    asset_id: str
+    name: str = ""
+    notes: str = ""
+    fields: dict[str, Any] = Field(default_factory=dict)
+    require_front: bool = True
+
+
+class AssetPatchIn(BaseModel):
+    name: str | None = None
+    notes: str | None = None
+    fields: dict[str, Any] | None = None
+    primary_slot: str | None = None
+
+
+class AssetSlotPathIn(BaseModel):
+    slot: str = "front"
+    path: str = ""
+
+
+class AssetDressIn(BaseModel):
+    character_id: str
+    costume_id: str
+    name: str = ""
+    notes: str = ""
 
 
 class AssetSheetEstimateIn(BaseModel):
@@ -1188,6 +1226,7 @@ def assets_sheet_angle(body: AssetSheetAngleIn) -> dict[str, Any]:
             source_still=body.source_still,
             resolution=body.resolution,
             aspect=body.aspect,
+            extra_refs=list(body.extra_refs or []),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=short_generate_error(exc)) from exc
@@ -1224,13 +1263,128 @@ def assets_sheet_prompt(body: AssetSheetPromptIn) -> dict[str, Any]:
     return {"ok": True, "prompt": text}
 
 
+@app.post("/assets/sheet/save")
+def assets_sheet_save(body: AssetSaveIn) -> dict[str, Any]:
+    try:
+        row = save_sheet(
+            body.asset_id,
+            name=body.name,
+            notes=body.notes,
+            fields=dict(body.fields or {}),
+            require_front=body.require_front,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/dress")
+def assets_dress(body: AssetDressIn) -> dict[str, Any]:
+    char = public_asset(body.character_id)
+    costume = public_asset(body.costume_id)
+    if not char or char.get("kind") != "character":
+        raise HTTPException(status_code=400, detail="Pick a saved Character.")
+    ident = char.get("identity") if isinstance(char.get("identity"), dict) else {}
+    if not ident.get("front"):
+        raise HTTPException(status_code=400, detail="Character needs a Front still.")
+    if not costume or costume.get("kind") != "costume":
+        raise HTTPException(status_code=400, detail="Pick a saved Costume.")
+    cfields = costume.get("fields") if isinstance(costume.get("fields"), dict) else {}
+    pfields = char.get("fields") if isinstance(char.get("fields"), dict) else {}
+    outfit = str(cfields.get("wardrobe") or "").strip()
+    label = (body.name or "").strip() or (
+        f"{char.get('name') or 'Character'} / {costume.get('name') or 'Costume'}"
+    )
+    try:
+        row = create_asset(
+            kind="character",
+            name=label,
+            notes=body.notes or str(costume.get("notes") or ""),
+            parent_id=str(char["id"]),
+            fields={
+                **{str(k): str(v) for k, v in pfields.items() if v is not None},
+                "wardrobe": outfit,
+                "costume_id": str(costume["id"]),
+                "costume_name": str(costume.get("name") or ""),
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row, "character": char, "costume": costume}
+
+
+@app.get("/assets/{asset_id}")
+def assets_one(asset_id: str) -> dict[str, Any]:
+    row = public_asset(asset_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Asset not found.")
+    return {"ok": True, "item": row}
+
+
+@app.patch("/assets/{asset_id}")
+def assets_patch(asset_id: str, body: AssetPatchIn) -> dict[str, Any]:
+    try:
+        row = update_asset(
+            asset_id,
+            name=body.name,
+            notes=body.notes,
+            fields=body.fields,
+            primary_slot=body.primary_slot,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/{asset_id}/slot")
+async def assets_slot_upload(
+    asset_id: str,
+    slot: str = Form(default="front"),
+    files: list[UploadFile] | None = File(default=None),
+) -> dict[str, Any]:
+    upload = (files or [None])[0]
+    if upload is None:
+        raise HTTPException(status_code=400, detail="Upload an image.")
+    data = await upload.read()
+    try:
+        row = attach_identity_bytes(
+            asset_id, slot, upload.filename or f"{slot}.png", data
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/{asset_id}/slot/path")
+def assets_slot_path(asset_id: str, body: AssetSlotPathIn) -> dict[str, Any]:
+    try:
+        row = attach_identity_still(asset_id, body.slot, body.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.post("/assets/{asset_id}/primary")
+def assets_primary(asset_id: str, body: AssetPatchIn) -> dict[str, Any]:
+    slot = (body.primary_slot or "").strip()
+    if not slot:
+        raise HTTPException(status_code=400, detail="primary_slot is required.")
+    try:
+        row = update_asset(asset_id, primary_slot=slot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
 @app.get("/assets")
 def assets_get(kind: str | None = Query(default=None)) -> dict[str, Any]:
     want = (kind or "").strip().lower() or None
     if want in ("all",):
         want = None
-    if want and want not in ("character", "scene", "prop"):
-        raise HTTPException(status_code=400, detail="kind must be character, scene, or prop")
+    if want and want not in ("character", "scene", "prop", "costume"):
+        raise HTTPException(
+            status_code=400, detail="kind must be character, scene, prop, or costume"
+        )
     return {"ok": True, "items": list_assets(want)}
 
 

@@ -130,6 +130,8 @@ SCENE_TIMES = ("dawn", "day", "golden hour", "dusk", "night")
 SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful")
 PROP_TYPES = ("object", "handheld", "furniture", "vehicle", "food", "other")
 PROP_MATERIALS = ("metal", "wood", "plastic", "glass", "fabric", "ceramic", "mixed")
+COSTUME_TAGS = ("everyday", "hero", "era", "fantasy", "formal", "sport", "workwear")
+COSTUME_SLOTS: tuple[str, ...] = ("front", "side", "back")
 
 
 def default_wardrobe(gender: str) -> str:
@@ -161,6 +163,23 @@ def builder_fields(kind: str) -> dict[str, Any]:
                 "ptype": {"label": "Type", "choices": list(PROP_TYPES)},
                 "material": {"label": "Material", "choices": list(PROP_MATERIALS)},
                 "color": {"label": "Color", "type": "text"},
+                "notes": {"label": "Notes", "type": "text"},
+            },
+        }
+    if k == "costume":
+        return {
+            "ok": True,
+            "kind": "costume",
+            "slots": [
+                {"id": s, "label": SLOT_LABELS.get(s, s), "core": True}
+                for s in COSTUME_SLOTS
+            ],
+            "fields": {
+                "tag": {"label": "Look", "choices": list(COSTUME_TAGS)},
+                "top": {"label": "Top", "type": "text"},
+                "bottom": {"label": "Bottom", "type": "text"},
+                "footwear": {"label": "Footwear", "type": "text"},
+                "wardrobe": {"label": "Outfit", "type": "text"},
                 "notes": {"label": "Notes", "type": "text"},
             },
         }
@@ -352,17 +371,48 @@ def character_angle_prompt(
 
 
 def costume_prompt(slot: str, outfit: str, extra: str = "") -> str:
+    """Standalone costume plate — mannequin / no face identity."""
+    key = slot if slot in PROFILE_VIEWS else "front"
+    view = PROFILE_VIEWS[key]
+    outfit_s = _nv(outfit) or "the described costume"
+    framing = {
+        "front": (
+            "Front full-body costume plate on a faceless mannequin or headless dress form. "
+            "Entire garment visible including hems and footwear."
+        ),
+        "side": (
+            "Side-view costume plate on a faceless mannequin or headless dress form. "
+            "Clean silhouette of the outfit, entire garment visible."
+        ),
+        "back": (
+            "Back-view costume plate on a faceless mannequin. Entire garment visible."
+        ),
+        "closeup": (
+            "Close-up of garment details — fabric, closures, trim. No face, no person identity."
+        ),
+    }.get(key, view)
+    return (
+        f"Studio costume reference still of: {outfit_s}. {framing} "
+        "No face, no human identity, no model, no head. Faceless mannequin only. "
+        "Photoreal garment, even studio lighting. "
+        + CLEAN_PLATE
+        + (f" {_nv(extra)}" if _nv(extra) else "")
+    )
+
+
+def dress_prompt(slot: str, outfit: str, extra: str = "") -> str:
+    """Put a saved costume onto a saved character (keep identity)."""
     key = slot if slot in PROFILE_VIEWS else "front"
     view = PROFILE_VIEWS[key]
     outfit_s = _nv(outfit) or "the costume described by the reference"
     lock = (
-        " Same outfit as the costume reference(s). Match color, cut, fabric, details exactly."
+        " Same outfit as the costume reference plates. Match color, cut, fabric, details exactly."
         if key != "front"
         else ""
     )
     return (
         "Keep the same person identity, face, hair, age, skin tone, and body "
-        "proportions from the reference images. Do not change who they are. "
+        "proportions from the character reference images. Do not change who they are. "
         f"Change only the wardrobe / outfit / clothing to: {outfit_s}.{lock} "
         f"Generate a character-reference still: {view}. "
         + CLEAN_PLATE
@@ -489,8 +539,11 @@ def compose_angle_prompt(
         return scene_prompt(merged, detail=key != "front")
     if kind == "prop":
         return prop_prompt(merged)
-    if is_costume:
-        return costume_prompt(key, wardrobe or _nv((fields or {}).get("wardrobe")), extra)
+    outfit = wardrobe or _nv((fields or {}).get("wardrobe"))
+    if kind == "costume":
+        return costume_prompt(key, outfit, extra)
+    if is_costume or _nv((fields or {}).get("costume_id")):
+        return dress_prompt(key, outfit, extra)
     if key == "front":
         return character_front_prompt(fields, extra)
     return character_angle_prompt(key, fields, extra)
@@ -791,6 +844,7 @@ def generate_angle(
     source_still: str = "",
     resolution: str = "",
     aspect: str = "",
+    extra_refs: list[str] | None = None,
 ) -> dict[str, Any]:
     from app.config import OUTPUT_DIR
     from app.create import generate
@@ -806,8 +860,14 @@ def generate_angle(
     kind = str(row.get("kind") or "character")
     fields = row.get("fields") if isinstance(row.get("fields"), dict) else {}
     parent = get_asset(str(row.get("parent_id") or "")) if row.get("parent_id") else None
-    is_costume = bool(row.get("parent_id"))
+    costume_id = _nv(fields.get("costume_id"))
+    costume_row = get_asset(costume_id) if costume_id else None
+    is_dress = kind == "character" and bool(parent or costume_row)
+    is_costume = kind == "costume"
     outfit = _nv(wardrobe) or _nv(fields.get("wardrobe"))
+    if not outfit and costume_row:
+        cfields = costume_row.get("fields") if isinstance(costume_row.get("fields"), dict) else {}
+        outfit = _nv(cfields.get("wardrobe"))
 
     refs: list[str] = []
     prior = _nv(source_still)
@@ -816,23 +876,31 @@ def generate_angle(
     cref = _nv(costume_ref)
     if cref and Path(cref).is_file() and cref not in refs:
         refs.append(cref)
+    for raw in extra_refs or []:
+        p = _nv(raw)
+        if p and Path(p).is_file() and p not in refs:
+            refs.append(p)
     for path in _identity_refs(row, parent):
         if path not in refs:
             refs.append(path)
+    if costume_row:
+        for path in _identity_refs(costume_row, None):
+            if path not in refs:
+                refs.append(path)
 
     text = _nv(prompt) or compose_angle_prompt(
         kind=kind,
         slot=key,
         fields=fields,
         name=str(row.get("name") or ""),
-        is_costume=is_costume,
+        is_costume=is_dress or is_costume,
         wardrobe=outfit,
         extra=extra,
     )
 
     modality = "t2i"
     if refs:
-        modality = "r2i" if kind == "character" else "i2i"
+        modality = "r2i" if kind in ("character", "costume") else "i2i"
     mid = _nv(model_id)
     entry = resolve_model(mid, mode="image", modality=modality) if mid else None
     if entry is None or (modality not in (entry.modalities or ())):

@@ -1,18 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import NodeErrorBoundary from "./NodeErrorBoundary";
 import { spawnAngleResult } from "./angleSpawn";
 import { readJson as readJsonSafe } from "./http";
 import { toast } from "./toast";
+import { importOsFiles, isOsFileDrag } from "./osImport";
 import {
   CORE_SLOTS,
+  COSTUME_SLOTS,
+  COSTUME_TAGS,
   EXTRA_SLOTS,
   SLOT_LABEL,
   WARDROBE_F,
   WARDROBE_M,
   composeAnglePrompt,
   composeCharacterIdentity,
+  composeCostumePrompt,
+  composeDressPrompt,
   pickDefaultResolution,
   qualityChoices,
   sizeChoices,
@@ -75,11 +80,13 @@ export default function CreatorBuilderNode({
         <span>
           {kind === "costume"
             ? "Costume Designer"
-            : kind === "scene"
-              ? "Scene Builder"
-              : kind === "prop"
-                ? "Prop Builder"
-                : "Character Builder"}
+            : kind === "dress"
+              ? "Dress Character"
+              : kind === "scene"
+                ? "Scene Builder"
+                : kind === "prop"
+                  ? "Prop Builder"
+                  : "Character Builder"}
         </span>
         <NodeClose onClose={safe.onClose} />
       </div>
@@ -87,20 +94,24 @@ export default function CreatorBuilderNode({
         label={
           kind === "costume"
             ? "Costume Designer"
-            : kind === "scene"
-              ? "Scene Builder"
-              : kind === "prop"
-                ? "Prop Builder"
-                : "Character Builder"
+            : kind === "dress"
+              ? "Dress Character"
+              : kind === "scene"
+                ? "Scene Builder"
+                : kind === "prop"
+                  ? "Prop Builder"
+                  : "Character Builder"
         }
       >
         <div className="node-body nodrag">
           {kind === "scene" ? (
-            <SceneForm data={safe} />
+            <SceneForm data={safe} builderId={builderId} />
           ) : kind === "prop" ? (
-            <PropForm data={safe} />
+            <PropForm data={safe} builderId={builderId} />
           ) : kind === "costume" ? (
-            <CostumeForm data={safe} />
+            <CostumeForm data={safe} builderId={builderId} />
+          ) : kind === "dress" ? (
+            <DressForm data={safe} builderId={builderId} />
           ) : (
             <CharacterForm data={safe} builderId={builderId} />
           )}
@@ -197,6 +208,9 @@ function CharacterForm({
   const [identityPrompt, setIdentityPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<"generate" | "upload" | "ref">("generate");
+  const [refStill, setRefStill] = useState("");
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const haveFront = Boolean(data.doneSlots?.front);
@@ -327,11 +341,41 @@ function CharacterForm({
     };
   }
 
+  async function ensureDraft(ident: string, label: string): Promise<string> {
+    if (data.sessionAssetId) return data.sessionAssetId;
+    const created = await fetch("/assets/sheet/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "character",
+        name: label,
+        notes: notes.trim(),
+        fields: { ...identityFields, identity_prompt: ident },
+      }),
+    });
+    const draft = await readJson<GenBody>(created);
+    if (!created.ok || !draft.item?.id) {
+      throw new Error(errOf(draft, "Could not create character draft.", created));
+    }
+    data.onSession?.(sessionPayload(draft.item.id, ident, label));
+    return draft.item.id;
+  }
+
   function openAngle(slot: string) {
     try {
       const label = name.trim() || "Character";
       const ident = ensureIdentity();
+      if (mode === "ref" && slot === "front" && !refStill) {
+        setError("Upload a face/body ref first.");
+        return;
+      }
       const anglePrompt = composeAnglePrompt(slot, ident, { hasFront: haveFront });
+      const sourceStill =
+        slot === "front"
+          ? mode === "ref"
+            ? refStill
+            : ""
+          : data.doneSlots?.front || "";
       const patch = {
         slot,
         label: SLOT_LABEL[slot] || slot,
@@ -348,7 +392,7 @@ function CharacterForm({
         t2iModel: models.t2iId,
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
-        sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        sourceStill,
         wardrobe: identityFields.wardrobe,
         name: label,
       };
@@ -375,21 +419,94 @@ function CharacterForm({
     }
   }
 
-  function save() {
-    const id = data.sessionAssetId || "";
-    if (!id || !haveFront) {
-      setError("Generate Front first.");
+  async function attachFilesToSlot(slot: string, files: File[]) {
+    const image = files.find((f) => f.type.startsWith("image/")) || files[0];
+    if (!image) return;
+    setError(null);
+    try {
+      const ident = ensureIdentity();
+      const label = name.trim() || "Character";
+      const id = await ensureDraft(ident, label);
+      const fd = new FormData();
+      fd.append("slot", slot);
+      fd.append("files", image);
+      const res = await fetch(`/assets/${id}/slot`, { method: "POST", body: fd });
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) {
+        throw new Error(errOf(body, "Upload failed.", res));
+      }
+      const path = body.item.identity?.[slot] || body.item.still_path || "";
+      data.onSession?.({
+        ...sessionPayload(id, ident, label),
+        done: { ...(data.doneSlots || {}), [slot]: path },
+      });
+      data.onAngle(slot, {
+        slot,
+        path,
+        url: body.item.identity_urls?.[slot] || body.item.url || "",
+        generating: false,
+        error: null,
+      });
+      toast(`${SLOT_LABEL[slot] || slot} attached.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Upload failed.";
+      setError(msg);
+      toast(msg, true);
+    }
+  }
+
+  async function attachRef(files: File[]) {
+    try {
+      const items = await importOsFiles(files);
+      const path = items[0]?.path || "";
+      if (!path) throw new Error("Could not import ref still.");
+      setRefStill(path);
+      toast("Ref still attached.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Ref import failed.";
+      setError(msg);
+      toast(msg, true);
+    }
+  }
+
+  async function save() {
+    if (!haveFront) {
+      setError("Need a Front still — generate, upload, or ref-edit Front first.");
       return;
     }
-    data.onSaved({
-      id,
-      name: name.trim(),
-      kind: "character",
-      has_still: true,
-      still_path: data.doneSlots?.front || id,
-      identity: { ...(data.doneSlots || {}) },
-      url: `/assets/${id}/still`,
-    });
+    const ident = ensureIdentity();
+    const label = name.trim() || "Character";
+    setSaving(true);
+    setError(null);
+    try {
+      const id = await ensureDraft(ident, label);
+      const res = await fetch("/assets/sheet/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_id: id,
+          name: label,
+          notes: notes.trim(),
+          fields: { ...identityFields, identity_prompt: ident },
+          require_front: true,
+        }),
+      });
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) {
+        throw new Error(errOf(body, "Save failed.", res));
+      }
+      const missing = CORE_SLOTS.filter((s) => !data.doneSlots?.[s] && !body.item?.identity?.[s]);
+      if (missing.length) {
+        toast(`Saved with Front. Prefer also ${missing.map((s) => SLOT_LABEL[s] || s).join(", ")}.`);
+      }
+      data.onSaved(body.item);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Save failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onEnhance() {
@@ -431,9 +548,21 @@ function CharacterForm({
   return (
     <>
       <p className="hint">
-        Apply selection builds the identity prompt. Generate Front opens a Result node —
-        run Generate on the node. Side / Close-up use Front as R2I after Front exists.
+        Generate opens a Result node — run Generate on the node. Upload drops stills
+        into Front / Side / Close-up. Ref edit I2I’s Front from a face/body still.
       </p>
+      <div className="pills chips">
+        {(["generate", "upload", "ref"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={mode === id ? "pill modality on" : "pill modality"}
+            onClick={() => setMode(id)}
+          >
+            {id === "generate" ? "Generate" : id === "upload" ? "Upload" : "Ref edit"}
+          </button>
+        ))}
+      </div>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
@@ -707,40 +836,86 @@ function CharacterForm({
         />
       </label>
       <p className="estimate">{estimate}</p>
-      <p className="hint">Opens a Result node immediately — Generate on the node runs the still.</p>
-      <div className="prompt-actions">
-        {ANGLE_ACTIONS.slice(0, 3).map((slot) => (
-          <button
-            key={slot}
-            type="button"
-            className="generate"
-            onClick={() => openAngle(slot)}
-          >
-            Generate {SLOT_LABEL[slot]}
-          </button>
-        ))}
-      </div>
-      <span className="field-label">Extra angles</span>
-      <div className="prompt-actions">
-        {ANGLE_ACTIONS.slice(3).map((slot) => (
-          <button
-            key={slot}
-            type="button"
-            className="ghost"
-            onClick={() => openAngle(slot)}
-          >
-            Generate {SLOT_LABEL[slot]}
-          </button>
-        ))}
-      </div>
+      {mode === "upload" ? (
+        <>
+          <p className="hint">Drop 1–3 stills into Front / Side / Close-up, then Save.</p>
+          <div className="sheet-progress">
+            {CORE_SLOTS.map((slot) => (
+              <SlotDrop
+                key={slot}
+                label={SLOT_LABEL[slot] || slot}
+                filled={Boolean(data.doneSlots?.[slot])}
+                onFiles={(files) => void attachFilesToSlot(slot, files)}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+      {mode === "ref" ? (
+        <>
+          <p className="hint">Upload a face/body ref, Apply identity, then Generate Front (I2I).</p>
+          <SlotDrop
+            label={refStill ? "Ref still attached" : "Drop face/body ref"}
+            filled={Boolean(refStill)}
+            onFiles={(files) => void attachRef(files)}
+          />
+        </>
+      ) : null}
+      {mode !== "upload" ? (
+        <>
+          <p className="hint">Opens a Result node immediately — Generate on the node runs the still.</p>
+          <div className="prompt-actions">
+            {ANGLE_ACTIONS.slice(0, 3).map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                className="generate"
+                onClick={() => openAngle(slot)}
+              >
+                Generate {SLOT_LABEL[slot]}
+              </button>
+            ))}
+          </div>
+          <span className="field-label">Extra angles</span>
+          <div className="prompt-actions">
+            {ANGLE_ACTIONS.slice(3).map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                className="ghost"
+                onClick={() => openAngle(slot)}
+              >
+                Generate {SLOT_LABEL[slot]}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="hint">Optional: after one hero upload, Generate Side / Close-up from Front.</p>
+      )}
+      {mode === "upload" ? (
+        <div className="prompt-actions">
+          {CORE_SLOTS.slice(1).map((slot) => (
+            <button
+              key={slot}
+              type="button"
+              className="ghost"
+              disabled={!haveFront}
+              onClick={() => openAngle(slot)}
+            >
+              Generate {SLOT_LABEL[slot]}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="prompt-actions">
         <button
           type="button"
           className="ghost"
-          disabled={!haveFront || !data.sessionAssetId}
-          onClick={save}
+          disabled={!haveFront || saving}
+          onClick={() => void save()}
         >
-          Save Character
+          {saving ? "Saving…" : "Save Character"}
         </button>
       </div>
       {error ? (
@@ -752,235 +927,470 @@ function CharacterForm({
   );
 }
 
-function CostumeForm({ data }: { data: CreatorBuilderNodeData }) {
-  const [bases, setBases] = useState<StudioAsset[]>(data.bases ?? []);
-  const [parentId, setParentId] = useState(data.bases?.[0]?.id || "");
+function SlotDrop({
+  label,
+  filled,
+  onFiles,
+}: {
+  label: string;
+  filled?: boolean;
+  onFiles: (files: File[]) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [hot, setHot] = useState(false);
+  function take(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name));
+    if (images.length) onFiles(images);
+  }
+  return (
+    <div
+      className={hot ? "slot-drop hot" : "slot-drop"}
+      onDragOver={(e: DragEvent<HTMLDivElement>) => {
+        if (!isOsFileDrag(e.dataTransfer)) return;
+        e.preventDefault();
+        setHot(true);
+      }}
+      onDragLeave={() => setHot(false)}
+      onDrop={(e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setHot(false);
+        take(Array.from(e.dataTransfer.files || []));
+      }}
+    >
+      <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
+        {filled ? `✓ ${label}` : label}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        hidden
+        accept="image/*"
+        onChange={(e) => {
+          const list = e.target.files ? Array.from(e.target.files) : [];
+          if (list.length) take(list);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
+function CostumeForm({
+  data,
+  builderId,
+}: {
+  data: CreatorBuilderNodeData;
+  builderId: string;
+}) {
   const [name, setName] = useState("");
+  const [tag, setTag] = useState("everyday");
   const [top, setTop] = useState("");
   const [bottom, setBottom] = useState("");
   const [footwear, setFootwear] = useState("");
   const [extra, setExtra] = useState("");
-  const [costumeRef, setCostumeRef] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assetId, setAssetId] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
   const models = useSheetModels();
+  const haveFront = Boolean(data.doneSlots?.front);
+  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
+  const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
+  const frontSizes = sizeChoices(t2iRow);
+  const angleSizes = sizeChoices(r2iRow);
+  const frontQualities = qualityChoices(t2iRow);
+  const angleQualities = qualityChoices(r2iRow);
   const estimate = useSheetEstimate(
     "costume",
     models.t2iId,
     models.r2iId,
-    [...CORE_SLOTS],
+    [...COSTUME_SLOTS],
     models,
   );
+
+  function outfitText() {
+    return [tag && `${tag} look`, top, bottom, footwear, extra]
+      .map((s) => String(s || "").trim())
+      .filter(Boolean)
+      .join(". ");
+  }
+
+  async function ensureDraft() {
+    const label = name.trim() || "Costume";
+    const outfit = outfitText();
+    if (data.sessionAssetId) return data.sessionAssetId;
+    const created = await fetch("/assets/sheet/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "costume",
+        name: label,
+        notes: extra.trim(),
+        fields: { tag, top, bottom, footwear, wardrobe: outfit, notes: extra.trim() },
+      }),
+    });
+    const draft = await readJson<GenBody>(created);
+    if (!created.ok || !draft.item?.id) throw new Error(errOf(draft, "Create failed.", created));
+    data.onSession?.({
+      assetId: draft.item.id,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      slots: [...COSTUME_SLOTS],
+      name: label,
+      fields: { wardrobe: outfit },
+      notes: extra.trim(),
+    });
+    return draft.item.id;
+  }
+
+  function openPlate(slot: string) {
+    const outfit = outfitText();
+    if (!outfit) {
+      setError("Describe the outfit (tags, top/bottom, or notes).");
+      return;
+    }
+    try {
+      const label = name.trim() || "Costume";
+      void ensureDraft().then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot,
+          label: SLOT_LABEL[slot] || slot,
+          prompt: composeCostumePrompt(slot, outfit, extra),
+          generating: false,
+          error: null,
+          focus: true,
+          resolution: slot === "front" ? pickDefaultResolution(frontQualities) || pickDefaultResolution(frontSizes) : pickDefaultResolution(angleSizes),
+          resolutionChoices: slot === "front" ? frontSizes : angleSizes,
+          aspect: slot === "front" ? pickDefaultResolution(frontSizes) : pickDefaultResolution(angleSizes),
+          quality: slot === "front" ? pickDefaultResolution(frontQualities) : pickDefaultResolution(angleQualities),
+          qualityChoices: slot === "front" ? frontQualities : angleQualities,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+          wardrobe: outfit,
+          name: label,
+        });
+      });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open plate.";
+      setError(msg);
+    }
+  }
+
+  async function save() {
+    if (!haveFront) {
+      setError("Generate a Front mannequin plate first.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const id = await ensureDraft();
+      const res = await fetch("/assets/sheet/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_id: id,
+          name: name.trim() || "Costume",
+          notes: extra.trim(),
+          fields: { tag, top, bottom, footwear, wardrobe: outfitText() },
+          require_front: true,
+        }),
+      });
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) throw new Error(errOf(body, "Save failed.", res));
+      data.onSaved(body.item);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Save failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="hint">
+        Costume plates are faceless mannequins — no identity. Generate 2–3 angles, then Save.
+      </p>
+      <label className="builder-field">
+        <span className="field-label">Costume name</span>
+        <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label className="param">
+        <span>Look</span>
+        <select className="model" value={tag} onChange={(e) => setTag(e.target.value)}>
+          {COSTUME_TAGS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="builder-field">
+        <span className="field-label">Top</span>
+        <input className="model" value={top} onChange={(e) => setTop(e.target.value)} placeholder="jacket, blouse…" />
+      </label>
+      <label className="builder-field">
+        <span className="field-label">Bottom</span>
+        <input className="model" value={bottom} onChange={(e) => setBottom(e.target.value)} placeholder="trousers, skirt…" />
+      </label>
+      <label className="builder-field">
+        <span className="field-label">Footwear</span>
+        <input className="model" value={footwear} onChange={(e) => setFootwear(e.target.value)} />
+      </label>
+      <label className="builder-field">
+        <span className="field-label">Notes</span>
+        <textarea
+          className="prompt nowheel"
+          rows={2}
+          placeholder="Era, fabric, colors, accessories…"
+          value={extra}
+          onChange={(e) => setExtra(e.target.value)}
+        />
+      </label>
+      <ModelPickers models={models} />
+      <p className="estimate">{estimate}</p>
+      <div className="prompt-actions">
+        {COSTUME_SLOTS.map((slot) => (
+          <button
+            key={slot}
+            type="button"
+            className="generate"
+            onClick={() => openPlate(slot)}
+          >
+            Generate {SLOT_LABEL[slot] || slot}
+          </button>
+        ))}
+      </div>
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="ghost"
+          disabled={!haveFront || saving}
+          onClick={() => void save()}
+        >
+          {saving ? "Saving…" : "Save Costume"}
+        </button>
+      </div>
+      {error ? (
+        <p className="hint warn" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function DressForm({
+  data,
+  builderId,
+}: {
+  data: CreatorBuilderNodeData;
+  builderId: string;
+}) {
+  const [characters, setCharacters] = useState<StudioAsset[]>([]);
+  const [costumes, setCostumes] = useState<StudioAsset[]>([]);
+  const [characterId, setCharacterId] = useState(data.seedCharacterId || "");
+  const [costumeId, setCostumeId] = useState(data.seedCostumeId || "");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const models = useSheetModels();
+  const haveFront = Boolean(data.doneSlots?.front);
+  const char = characters.find((c) => c.id === characterId);
+  const costume = costumes.find((c) => c.id === costumeId);
+  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
+  const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
+  const estimate = useSheetEstimate("character", models.t2iId, models.r2iId, [...CORE_SLOTS], models);
 
   useEffect(() => {
     fetch("/assets?kind=character")
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((body: { items?: StudioAsset[] }) => {
         const rows = (body.items ?? []).filter((a) => !a.parent_id && a.has_still);
-        setBases(rows);
-        setParentId((cur) => cur || rows[0]?.id || "");
+        setCharacters(rows);
+        setCharacterId((cur) => cur || data.seedCharacterId || rows[0]?.id || "");
       })
       .catch(() => undefined);
-  }, []);
+    fetch("/assets?kind=costume")
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((body: { items?: StudioAsset[] }) => {
+        const rows = body.items ?? [];
+        setCostumes(rows);
+        setCostumeId((cur) => cur || data.seedCostumeId || rows[0]?.id || "");
+      })
+      .catch(() => undefined);
+  }, [data.seedCharacterId, data.seedCostumeId]);
 
-  async function generate() {
-    const outfitName = name.trim();
-    const outfit = [top, bottom, footwear, extra].map((s) => s.trim()).filter(Boolean).join(". ");
-    if (!outfitName) {
-      setError("Costume name is required.");
+  function extraRefs(): string[] {
+    const out: string[] = [];
+    const add = (p?: string) => {
+      if (p && !out.includes(p)) out.push(p);
+    };
+    if (char?.identity) {
+      for (const slot of CORE_SLOTS) add(char.identity[slot]);
+    } else add(char?.still_path || "");
+    if (costume?.identity) {
+      for (const slot of COSTUME_SLOTS) add(costume.identity[slot]);
+    } else add(costume?.still_path || "");
+    return out;
+  }
+
+  async function ensureVariant() {
+    if (data.sessionAssetId) return data.sessionAssetId;
+    if (!characterId || !costumeId) throw new Error("Pick a Character and a Costume.");
+    const res = await fetch("/assets/dress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        character_id: characterId,
+        costume_id: costumeId,
+        name: name.trim(),
+      }),
+    });
+    const body = await readJson<GenBody>(res);
+    if (!res.ok || !body.item?.id) throw new Error(errOf(body, "Dress draft failed.", res));
+    data.onSession?.({
+      assetId: body.item.id,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      slots: [...CORE_SLOTS],
+      name: body.item.name,
+      wardrobe: costume?.fields?.wardrobe || "",
+    });
+    return body.item.id;
+  }
+
+  function openAngle(slot: string) {
+    if (!char) {
+      setError("Pick a saved Character.");
       return;
     }
-    if (!parentId) {
-      setError("Pick a base character.");
+    if (!costume) {
+      setError("Pick a saved Costume.");
       return;
     }
-    if (!outfit && !costumeRef) {
-      setError("Describe the wardrobe or upload a costume still.");
+    const ident =
+      char.fields?.identity_prompt ||
+      composeCharacterIdentity(char.fields || {}, char.notes || "");
+    const outfit = costume.fields?.wardrobe || costume.name;
+    const refs = extraRefs();
+    const front = char.identity?.front || char.still_path || "";
+    void ensureVariant()
+      .then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot,
+          label: SLOT_LABEL[slot] || slot,
+          prompt: composeDressPrompt(slot, ident, outfit, { hasFront: haveFront || slot !== "front" }),
+          generating: false,
+          error: null,
+          focus: true,
+          resolution: pickDefaultResolution(qualityChoices(slot === "front" ? t2iRow : r2iRow)) || pickDefaultResolution(sizeChoices(slot === "front" ? t2iRow : r2iRow)),
+          resolutionChoices: sizeChoices(slot === "front" ? t2iRow : r2iRow),
+          aspect: pickDefaultResolution(sizeChoices(slot === "front" ? t2iRow : r2iRow)),
+          quality: pickDefaultResolution(qualityChoices(slot === "front" ? t2iRow : r2iRow)),
+          qualityChoices: qualityChoices(slot === "front" ? t2iRow : r2iRow),
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          sourceStill: slot === "front" ? front : data.doneSlots?.front || front,
+          extraRefs: refs,
+          wardrobe: outfit,
+          name: name.trim() || `${char.name} / ${costume.name}`,
+        });
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Could not open angle.";
+        setError(msg);
+        toast(msg, true);
+      });
+  }
+
+  async function save() {
+    if (!haveFront) {
+      setError("Generate costumed Front first.");
       return;
     }
-    setBusy(true);
+    setSaving(true);
     setError(null);
-    setReady(false);
     try {
-      const created = await fetch("/assets/sheet/create", {
+      const id = await ensureVariant();
+      const res = await fetch("/assets/sheet/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          kind: "character",
-          name: outfitName,
-          parent_id: parentId,
-          notes: extra.trim(),
-          fields: { wardrobe: outfit },
+          asset_id: id,
+          name: name.trim() || `${char?.name || "Character"} / ${costume?.name || "Costume"}`,
+          fields: { costume_id: costumeId },
+          require_front: true,
         }),
       });
-      const draft = await readJson<GenBody>(created);
-      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
-      setAssetId(draft.item.id);
-      data.onSession?.({
-        assetId: draft.item.id,
-        t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
-        slots: [...CORE_SLOTS],
-      });
-      const parent = bases.find((b) => b.id === parentId);
-      let prior = parent?.still_path || "";
-      let last = draft.item;
-      for (const slot of CORE_SLOTS) {
-        data.onAngle(slot, {
-          slot,
-          label: SLOT_LABEL[slot] || slot,
-          generating: true,
-          error: null,
-        });
-        const res = await fetch("/assets/sheet/angle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            asset_id: draft.item.id,
-            slot,
-            model_id: models.r2iId || models.t2iId,
-            source_still: prior,
-            costume_ref: costumeRef,
-            wardrobe: outfit,
-          }),
-        });
-        const body = await readJson<GenBody>(res);
-        if (!res.ok || !body.item) {
-          data.onAngle(slot, {
-            slot,
-            generating: false,
-            error: errOf(body, `${slot} failed.`),
-          });
-          throw new Error(errOf(body, `${slot} failed.`));
-        }
-        last = body.item;
-        const path = body.item.identity?.[slot] || body.item.still_path || "";
-        const url = body.item.identity_urls?.[slot] || body.item.url || "";
-        prior = path;
-        data.onAngle(slot, {
-          slot,
-          prompt: body.item.prompt || "",
-          path,
-          url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
-          generating: false,
-          error: null,
-        });
-      }
-      setReady(CORE_SLOTS.every((s) => last.identity?.[s]));
-      toast(`Generated costume ${outfitName}.`);
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) throw new Error(errOf(body, "Save failed.", res));
+      data.onSaved(body.item);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Costume generate failed.";
+      const msg = err instanceof Error ? err.message : "Save failed.";
       setError(msg);
       toast(msg, true);
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
   return (
     <>
+      <p className="hint">
+        Multi-ref dresses the character in the costume. Fallback: costumed Front, then Side /
+        Close-up from that Front.
+      </p>
       <label className="builder-field">
-        <span className="field-label">Base character</span>
-        <select
-          className="model"
-          value={parentId}
-          onChange={(e) => setParentId(e.target.value)}
-        >
-          {bases.length === 0 ? (
-            <option value="">No base sheets yet</option>
-          ) : (
-            bases.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.label || b.name}
-              </option>
-            ))
-          )}
+        <span className="field-label">Character</span>
+        <select className="model" value={characterId} onChange={(e) => setCharacterId(e.target.value)}>
+          {characters.length === 0 ? <option value="">No saved characters</option> : null}
+          {characters.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label || c.name}
+            </option>
+          ))}
         </select>
       </label>
       <label className="builder-field">
-        <span className="field-label">Costume name</span>
-        <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
+        <span className="field-label">Costume</span>
+        <select className="model" value={costumeId} onChange={(e) => setCostumeId(e.target.value)}>
+          {costumes.length === 0 ? <option value="">No saved costumes</option> : null}
+          {costumes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label || c.name}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="builder-field">
-        <span className="field-label">Top</span>
-        <input className="model" value={top} onChange={(e) => setTop(e.target.value)} />
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Bottom</span>
-        <input className="model" value={bottom} onChange={(e) => setBottom(e.target.value)} />
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Footwear</span>
+        <span className="field-label">Variant name</span>
         <input
           className="model"
-          value={footwear}
-          onChange={(e) => setFootwear(e.target.value)}
+          value={name}
+          placeholder={char && costume ? `${char.name} / ${costume.name}` : ""}
+          onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <label className="builder-field">
-        <span className="field-label">Extra</span>
-        <textarea
-          className="prompt nowheel"
-          rows={2}
-          value={extra}
-          onChange={(e) => setExtra(e.target.value)}
-        />
-      </label>
-      <div className="library-actions">
-        <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>
-          {costumeRef ? "Costume still attached" : "Upload costume still"}
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          hidden
-          accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const fd = new FormData();
-            fd.append("files", file);
-            void fetch("/library/import", { method: "POST", body: fd })
-              .then((res) => res.json())
-              .then((body: { items?: { path?: string }[] }) => {
-                setCostumeRef(body.items?.[0]?.path || "");
-              });
-            e.target.value = "";
-          }}
-        />
-      </div>
-      <ModelPickers models={models} r2iOnly />
+      <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
-        <button
-          type="button"
-          className="generate"
-          disabled={busy}
-          onClick={() => void generate()}
-        >
-          {busy ? "Generating…" : "Generate costume sheet"}
-        </button>
-        <button
-          type="button"
-          className="ghost"
-          disabled={busy || !ready || !assetId}
-          onClick={() =>
-            assetId &&
-            data.onSaved({
-              id: assetId,
-              name: name.trim(),
-              kind: "character",
-              parent_id: parentId,
-              is_costume: true,
-              has_still: true,
-              url: `/assets/${assetId}/still`,
-            })
-          }
-        >
-          Save costume
+        {CORE_SLOTS.map((slot) => (
+          <button key={slot} type="button" className="generate" onClick={() => openAngle(slot)}>
+            Generate {SLOT_LABEL[slot]}
+          </button>
+        ))}
+      </div>
+      <div className="prompt-actions">
+        <button type="button" className="ghost" disabled={!haveFront || saving} onClick={() => void save()}>
+          {saving ? "Saving…" : "Save variant"}
         </button>
       </div>
       {error ? (
@@ -992,7 +1402,13 @@ function CostumeForm({ data }: { data: CreatorBuilderNodeData }) {
   );
 }
 
-function SceneForm({ data }: { data: CreatorBuilderNodeData }) {
+function SceneForm({
+  data,
+  builderId,
+}: {
+  data: CreatorBuilderNodeData;
+  builderId: string;
+}) {
   const [name, setName] = useState("");
   const [setting, setSetting] = useState("interior");
   const [time, setTime] = useState("day");
@@ -1000,83 +1416,92 @@ function SceneForm({ data }: { data: CreatorBuilderNodeData }) {
   const [elements, setElements] = useState("");
   const [notes, setNotes] = useState("");
   const [sheet, setSheet] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
   const slots = sheet ? ["front", "side"] : ["front"];
   const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots, models);
+  const haveFront = Boolean(data.doneSlots?.front);
 
-  async function generate() {
+  async function ensureDraft() {
     const label = name.trim();
-    if (!label) {
-      setError("Name is required.");
+    if (!label) throw new Error("Name is required.");
+    if (data.sessionAssetId) return data.sessionAssetId;
+    const created = await fetch("/assets/sheet/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "scene",
+        name: label,
+        notes: notes.trim(),
+        fields: { setting, time, mood, elements: elements.trim(), notes: notes.trim() },
+      }),
+    });
+    const draft = await readJson<GenBody>(created);
+    if (!created.ok || !draft.item?.id) throw new Error(errOf(draft, "Create failed.", created));
+    data.onSession?.({
+      assetId: draft.item.id,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      slots,
+      name: label,
+    });
+    return draft.item.id;
+  }
+
+  function openAngle(slot: string) {
+    void ensureDraft()
+      .then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot,
+          label: slot === "front" ? "Hero" : "Detail",
+          prompt: `${name.trim() || "the location"}. ${setting} ${time} ${mood}. ${elements}`.trim(),
+          generating: false,
+          error: null,
+          focus: true,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+          name: name.trim() || "Scene",
+        });
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Could not open Result.";
+        setError(msg);
+      });
+  }
+
+  async function save() {
+    if (!haveFront) {
+      setError("Generate the hero still first.");
       return;
     }
-    setBusy(true);
-    setError(null);
+    setSaving(true);
     try {
-      const created = await fetch("/assets/sheet/create", {
+      const id = await ensureDraft();
+      const res = await fetch("/assets/sheet/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          kind: "scene",
-          name: label,
+          asset_id: id,
+          name: name.trim(),
           notes: notes.trim(),
-          fields: { setting, time, mood, elements: elements.trim(), notes: notes.trim() },
+          fields: { setting, time, mood, elements: elements.trim() },
+          require_front: true,
         }),
       });
-      const draft = await readJson<GenBody>(created);
-      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
-      data.onSession?.({
-        assetId: draft.item.id,
-        t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
-        slots,
-      });
-      let prior = "";
-      let last = draft.item;
-      for (const slot of slots) {
-        data.onAngle(slot, {
-          slot,
-          label: slot === "front" ? "Hero" : "Detail",
-          generating: true,
-          error: null,
-        });
-        const res = await fetch("/assets/sheet/angle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            asset_id: draft.item.id,
-            slot,
-            model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
-            source_still: prior,
-          }),
-        });
-        const body = await readJson<GenBody>(res);
-        if (!res.ok || !body.item) {
-          data.onAngle(slot, { slot, generating: false, error: errOf(body, "Failed.") });
-          throw new Error(errOf(body, "Failed."));
-        }
-        last = body.item;
-        const path = body.item.identity?.[slot] || body.item.still_path || "";
-        const url = body.item.identity_urls?.[slot] || body.item.url || "";
-        prior = path;
-        data.onAngle(slot, {
-          slot,
-          prompt: body.item.prompt || "",
-          path,
-          url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
-          generating: false,
-          error: null,
-        });
-      }
-      data.onSaved(last);
+      const body = await readJson<GenBody>(res);
+      if (!res.ok || !body.item) throw new Error(errOf(body, "Save failed.", res));
+      data.onSaved(body.item);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Scene generate failed.";
+      const msg = err instanceof Error ? err.message : "Save failed.";
       setError(msg);
       toast(msg, true);
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
@@ -1133,13 +1558,16 @@ function SceneForm({ data }: { data: CreatorBuilderNodeData }) {
       <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
-        <button
-          type="button"
-          className="generate"
-          disabled={busy || !name.trim()}
-          onClick={() => void generate()}
-        >
-          {busy ? "Generating…" : "Generate scene"}
+        <button type="button" className="generate" onClick={() => openAngle("front")}>
+          Generate Hero
+        </button>
+        {sheet ? (
+          <button type="button" className="generate" disabled={!haveFront} onClick={() => openAngle("side")}>
+            Generate Detail
+          </button>
+        ) : null}
+        <button type="button" className="ghost" disabled={!haveFront || saving} onClick={() => void save()}>
+          {saving ? "Saving…" : "Save Scene"}
         </button>
       </div>
       {error ? (
@@ -1151,80 +1579,101 @@ function SceneForm({ data }: { data: CreatorBuilderNodeData }) {
   );
 }
 
-function PropForm({ data }: { data: CreatorBuilderNodeData }) {
+function PropForm({
+  data,
+  builderId,
+}: {
+  data: CreatorBuilderNodeData;
+  builderId: string;
+}) {
   const [name, setName] = useState("");
   const [ptype, setPtype] = useState("object");
   const [material, setMaterial] = useState("metal");
   const [color, setColor] = useState("");
   const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
+  const haveFront = Boolean(data.doneSlots?.front);
   const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"], models);
 
-  async function generate() {
+  async function ensureDraft() {
     const label = name.trim();
-    if (!label) {
-      setError("Name is required.");
+    if (!label) throw new Error("Name is required.");
+    if (data.sessionAssetId) return data.sessionAssetId;
+    const created = await fetch("/assets/sheet/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "prop",
+        name: label,
+        notes: notes.trim(),
+        fields: { ptype, material, color: color.trim(), notes: notes.trim() },
+      }),
+    });
+    const draft = await readJson<GenBody>(created);
+    if (!created.ok || !draft.item?.id) throw new Error(errOf(draft, "Create failed.", created));
+    data.onSession?.({
+      assetId: draft.item.id,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      slots: ["front"],
+      name: label,
+    });
+    return draft.item.id;
+  }
+
+  function openStill() {
+    void ensureDraft()
+      .then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot: "front",
+          label: "Still",
+          prompt: `${name.trim()}. ${ptype} ${material} ${color}`.trim(),
+          generating: false,
+          error: null,
+          focus: true,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          name: name.trim() || "Prop",
+        });
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Could not open Result.");
+      });
+  }
+
+  async function save() {
+    if (!haveFront) {
+      setError("Generate the still first.");
       return;
     }
-    setBusy(true);
-    setError(null);
+    setSaving(true);
     try {
-      const created = await fetch("/assets/sheet/create", {
+      const id = await ensureDraft();
+      const res = await fetch("/assets/sheet/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          kind: "prop",
-          name: label,
+          asset_id: id,
+          name: name.trim(),
           notes: notes.trim(),
-          fields: { ptype, material, color: color.trim(), notes: notes.trim() },
-        }),
-      });
-      const draft = await readJson<GenBody>(created);
-      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
-      data.onSession?.({
-        assetId: draft.item.id,
-        t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
-        slots: ["front"],
-      });
-      data.onAngle("front", {
-        slot: "front",
-        label: "Still",
-        generating: true,
-        error: null,
-      });
-      const res = await fetch("/assets/sheet/angle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asset_id: draft.item.id,
-          slot: "front",
-          model_id: models.t2iId,
+          fields: { ptype, material, color: color.trim() },
+          require_front: true,
         }),
       });
       const body = await readJson<GenBody>(res);
-      if (!res.ok || !body.item) {
-        data.onAngle("front", { slot: "front", generating: false, error: errOf(body, "Failed.") });
-        throw new Error(errOf(body, "Failed."));
-      }
-      const url = body.item.url || "";
-      data.onAngle("front", {
-        slot: "front",
-        prompt: body.item.prompt || "",
-        path: body.item.still_path || "",
-        url: url ? `${url}?t=${Date.now()}` : "",
-        generating: false,
-        error: null,
-      });
+      if (!res.ok || !body.item) throw new Error(errOf(body, "Save failed.", res));
       data.onSaved(body.item);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Prop generate failed.";
+      const msg = err instanceof Error ? err.message : "Save failed.";
       setError(msg);
       toast(msg, true);
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   }
 
@@ -1271,10 +1720,17 @@ function PropForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="generate"
-          disabled={busy || !name.trim()}
-          onClick={() => void generate()}
+          onClick={openStill}
         >
-          {busy ? "Generating…" : "Generate still"}
+          Generate still
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={!haveFront || saving}
+          onClick={() => void save()}
+        >
+          {saving ? "Saving…" : "Save Prop"}
         </button>
       </div>
       {error ? (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import AssetCreator from "./AssetCreator";
+import AssetEditor from "./AssetEditor";
 import { beginLibraryDrag, endLibraryDrag, peekLibraryDrag } from "./libraryDrag";
 import { filesFromDataTransfer, importOsFiles } from "./osImport";
 import { openLightbox } from "./lightbox";
@@ -8,6 +9,7 @@ import { isAudioPath, isVideoPath } from "./media";
 import {
   assetToLibraryItem,
   writeLibraryPayload,
+  type AssetKind,
   type AssetRole,
   type LibraryBucket,
   type LibraryItem,
@@ -17,7 +19,7 @@ import {
 } from "./types";
 
 type Pane = "media" | "assets";
-type AssetFilter = "all" | AssetRole;
+type AssetFilter = "all" | AssetKind;
 type Filter = "all" | MediaKind;
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -36,6 +38,7 @@ const SECTIONS: { id: LibrarySource; label: string }[] = [
 const ASSET_TABS: { id: AssetFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "character", label: "Characters" },
+  { id: "costume", label: "Costumes" },
   { id: "scene", label: "Scenes" },
   { id: "prop", label: "Props" },
 ];
@@ -44,7 +47,10 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onPick: (item: LibraryItem) => void;
-  onNewAsset?: (kind: AssetRole | "costume") => void;
+  onNewAsset?: (
+    kind: AssetRole | "costume" | "dress",
+    seeds?: { characterId?: string; costumeId?: string },
+  ) => void;
 };
 
 export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Props) {
@@ -55,6 +61,7 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
   const [assets, setAssets] = useState<StudioAsset[]>([]);
   const [assetFilter, setAssetFilter] = useState<AssetFilter>("all");
   const [creating, setCreating] = useState<AssetRole | null>(null);
+  const [editing, setEditing] = useState<StudioAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dropHot, setDropHot] = useState(false);
@@ -490,6 +497,13 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
             <button
               type="button"
               className="ghost"
+              onClick={() => onNewAsset?.("dress")}
+            >
+              Dress Character
+            </button>
+            <button
+              type="button"
+              className="ghost"
               onClick={() =>
                 onNewAsset ? onNewAsset("scene") : setCreating("scene")
               }
@@ -526,6 +540,10 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
                     onDragStart={(e) => onAssetDragStart(e, asset)}
                     onDragEnd={onDragEnd}
                     onClick={() => {
+                      if (asset.kind === "character" || asset.kind === "costume") {
+                        setEditing(asset);
+                        return;
+                      }
                       if (item) onPick(item);
                       else toast("This asset has no still yet.", true);
                     }}
@@ -573,9 +591,11 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
                     <span className="hint">
                       {asset.is_costume
                         ? "costume"
-                        : asset.kind === "character" && asset.identity_urls
-                          ? `character · ${Object.keys(asset.identity_urls).length} angles`
-                          : asset.kind}
+                        : asset.is_variant
+                          ? "variant"
+                          : asset.kind === "character" && asset.identity_urls
+                            ? `character · ${Object.keys(asset.identity_urls).length} angles`
+                            : asset.kind}
                     </span>
                   </div>
                 );
@@ -593,6 +613,20 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
             void reloadAssets();
             const item = assetToLibraryItem(asset);
             if (item) onPick(item);
+          }}
+        />
+      ) : null}
+      {editing ? (
+        <AssetEditor
+          asset={editing}
+          onClose={() => setEditing(null)}
+          onChanged={(asset) => {
+            setEditing(asset);
+            void reloadAssets();
+          }}
+          onDress={(characterId) => {
+            setEditing(null);
+            onNewAsset?.("dress", { characterId });
           }}
         />
       ) : null}

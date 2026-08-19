@@ -93,6 +93,11 @@ export type RefCatalogEntry = {
   has_still?: boolean;
   url?: string | null;
   kind?: RefRole;
+  identity?: Record<string, string>;
+  identity_urls?: Record<string, string>;
+  parent_id?: string | null;
+  is_variant?: boolean;
+  primary_slot?: string;
 };
 
 export type RefSlotState = {
@@ -101,6 +106,7 @@ export type RefSlotState = {
   note: string;
   label?: string;
   item: LibraryItem | null;
+  identityPaths?: string[];
 };
 
 export type RefRolePayload = {
@@ -234,6 +240,7 @@ export type ResultNodeData = {
   r2iModel?: string;
   assetId?: string;
   sourceStill?: string;
+  extraRefs?: string[];
   wardrobe?: string;
   name?: string;
   onPrompt?: (prompt: string) => void;
@@ -293,13 +300,14 @@ export type SourceNodeData = {
 };
 
 export type AssetRole = "character" | "scene" | "prop";
+export type AssetKind = AssetRole | "costume";
 
 export type StudioAsset = {
   id: string;
   name: string;
   label?: string;
   notes?: string;
-  kind: AssetRole;
+  kind: AssetKind;
   still_path?: string | null;
   still_paths?: string[];
   sheet_path?: string | null;
@@ -311,6 +319,8 @@ export type StudioAsset = {
   model?: string;
   parent_id?: string | null;
   is_costume?: boolean;
+  is_variant?: boolean;
+  primary_slot?: string;
   identity?: Record<string, string>;
   identity_urls?: Record<string, string>;
   fields?: Record<string, string>;
@@ -335,7 +345,7 @@ export function assetToLibraryItem(asset: StudioAsset): LibraryItem | null {
   };
 }
 
-export type CreatorKind = "character" | "costume" | "scene" | "prop";
+export type CreatorKind = "character" | "costume" | "scene" | "prop" | "dress";
 
 export type SheetAnglePatch = {
   slot: string;
@@ -356,6 +366,7 @@ export type SheetAnglePatch = {
   r2iModel?: string;
   assetId?: string;
   sourceStill?: string;
+  extraRefs?: string[];
   wardrobe?: string;
   name?: string;
 };
@@ -371,6 +382,7 @@ export type BuilderSessionInfo = {
   notes?: string;
   t2iResolution?: string;
   r2iResolution?: string;
+  done?: Record<string, string>;
 };
 
 export type CreatorBuilderNodeData = {
@@ -379,6 +391,8 @@ export type CreatorBuilderNodeData = {
   bases?: StudioAsset[];
   sessionAssetId?: string;
   doneSlots?: Record<string, string>;
+  seedCharacterId?: string;
+  seedCostumeId?: string;
   onClose?: () => void;
   onAngle: (slot: string, patch: SheetAnglePatch) => void;
   onSession?: (info: BuilderSessionInfo) => void;

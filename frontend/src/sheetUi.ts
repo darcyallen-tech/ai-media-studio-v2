@@ -2,11 +2,21 @@ import { useEffect, useState } from "react";
 import type { ModelRow } from "./types";
 
 export const CORE_SLOTS = ["front", "side", "closeup"] as const;
+export const COSTUME_SLOTS = ["front", "side", "back"] as const;
 export const EXTRA_SLOTS = [
   "back",
   "threequarter_front",
   "threequarter_back",
   "top",
+] as const;
+export const COSTUME_TAGS = [
+  "everyday",
+  "hero",
+  "era",
+  "fantasy",
+  "formal",
+  "sport",
+  "workwear",
 ] as const;
 
 export const WARDROBE_M =
@@ -122,6 +132,47 @@ export function composeCharacterIdentity(
 }
 
 /** Identity paragraph + one framing line for the angle. No API. */
+export function composeCostumePrompt(slot: string, outfit: string, extra = ""): string {
+  const framing: Record<string, string> = {
+    front:
+      "Front full-body costume plate on a faceless mannequin or headless dress form. Entire garment visible including hems and footwear.",
+    side:
+      "Side-view costume plate on a faceless mannequin or headless dress form. Clean silhouette of the outfit, entire garment visible.",
+    back: "Back-view costume plate on a faceless mannequin. Entire garment visible.",
+    closeup:
+      "Close-up of garment details — fabric, closures, trim. No face, no person identity.",
+  };
+  const view = framing[slot] || framing.front;
+  const bits = [
+    `Studio costume reference still of: ${bit(outfit) || "the described costume"}. ${view}`,
+    "No face, no human identity, no model, no head. Faceless mannequin only. Photoreal garment, even studio lighting.",
+    CLEAN_PLATE,
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join("\n\n");
+}
+
+export function composeDressPrompt(
+  slot: string,
+  identity: string,
+  outfit: string,
+  opts?: { hasFront?: boolean },
+): string {
+  const view = PROFILE_VIEWS[slot] || PROFILE_VIEWS.front;
+  const lines = [
+    bit(identity) || "photoreal adult person",
+    `Change only the wardrobe to: ${bit(outfit) || "the costume plates"}. Keep the same person.`,
+    `Framing: ${view}.`,
+  ];
+  if (slot !== "front" && opts?.hasFront) {
+    lines.push(
+      "Same person as the Front still. Use Front as the R2I identity source and costume plates for wardrobe.",
+    );
+  }
+  lines.push(CLEAN_PLATE);
+  return lines.join("\n\n");
+}
+
 export function composeAnglePrompt(
   slot: string,
   identity: string,

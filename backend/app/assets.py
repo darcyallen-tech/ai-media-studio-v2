@@ -1,4 +1,4 @@
-"""V2-owned Character / Scene / Prop store. Never writes V1 data."""
+"""V2-owned Character / Scene / Prop / Costume store. Never writes V1 data."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from typing import Any, Literal
 
 from app.config import PROJECT_ROOT
 
-Kind = Literal["character", "scene", "prop"]
-KINDS: tuple[Kind, ...] = ("character", "scene", "prop")
+Kind = Literal["character", "scene", "prop", "costume"]
+KINDS: tuple[Kind, ...] = ("character", "scene", "prop", "costume")
 
 ASSETS_DIR = PROJECT_ROOT / "data" / "assets"
 ASSETS_INDEX = ASSETS_DIR / "assets.json"
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-_MAX_STILLS = {"character": 8, "scene": 3, "prop": 1}
+_MAX_STILLS = {"character": 8, "scene": 3, "prop": 1, "costume": 8}
 IDENTITY_SLOTS: tuple[str, ...] = (
     "front",
     "side",
@@ -77,6 +77,8 @@ def _normalize_kind(raw: str | None) -> Kind | None:
         return "scene"
     if k in ("props", "objects"):
         return "prop"
+    if k in ("costume", "costumes", "outfit", "outfits"):
+        return "costume"
     return None
 
 
@@ -107,6 +109,12 @@ def _still_list(row: dict[str, Any]) -> list[str]:
 
 
 def primary_still_path(row: dict[str, Any]) -> str:
+    ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+    slot = _primary_slot_name(row)
+    for key in (slot, "front"):
+        p = str(ident.get(key) or "").strip()
+        if p and Path(p).is_file():
+            return p
     paths = _still_list(row)
     return paths[0] if paths else ""
 
@@ -144,6 +152,11 @@ def _new_id(kind: Kind) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:10]}"
 
 
+def _primary_slot_name(row: dict[str, Any]) -> str:
+    raw = str(row.get("primary_slot") or "front").strip().lower()
+    return raw if raw in IDENTITY_SLOTS else "front"
+
+
 def _parent_name(parent_id: str) -> str:
     if not parent_id:
         return ""
@@ -165,12 +178,16 @@ def _to_public(row: dict[str, Any]) -> dict[str, Any]:
         if p and Path(p).is_file():
             identity[slot] = p
             identity_urls[slot] = f"/assets/{aid}/still?slot={slot}"
-    primary = identity.get("front") or (stills[0] if stills else "")
+    primary_slot = _primary_slot_name(row)
+    primary = identity.get(primary_slot) or identity.get("front") or (stills[0] if stills else "")
     url = f"/assets/{aid}/still" if primary else None
     parent_id = str(row.get("parent_id") or "").strip() or None
     name = str(row.get("name") or "").strip() or "Untitled"
     parent = _parent_name(parent_id) if parent_id else ""
-    label = f"{parent} / {name}" if parent else name
+    is_costume = kind == "costume"
+    is_variant = kind == "character" and bool(parent_id)
+    label = f"{parent} / {name}" if parent and is_variant else name
+    thumb = identity_urls.get(primary_slot) or identity_urls.get("front") or url
     return {
         "id": aid,
         "name": name,
@@ -182,12 +199,15 @@ def _to_public(row: dict[str, Any]) -> dict[str, Any]:
         "sheet_path": str(row.get("sheet_path") or identity.get("front") or "").strip() or None,
         "has_still": bool(primary),
         "url": url,
-        "thumb_url": identity_urls.get("front") or url,
+        "thumb_url": thumb,
         "owned": True,
         "created": row.get("created"),
+        "updated": row.get("updated"),
         "model": str(row.get("model") or ""),
         "parent_id": parent_id,
-        "is_costume": bool(parent_id),
+        "is_costume": is_costume,
+        "is_variant": is_variant,
+        "primary_slot": primary_slot,
         "identity": identity,
         "identity_urls": identity_urls,
         "fields": row.get("fields") if isinstance(row.get("fields"), dict) else {},
@@ -285,7 +305,7 @@ def create_asset(
 ) -> dict[str, Any]:
     parsed = _normalize_kind(kind)
     if parsed is None:
-        raise ValueError("kind must be character, scene, or prop")
+        raise ValueError("kind must be character, scene, prop, or costume")
     label = (name or "").strip()
     if not label:
         raise ValueError("Name is required.")
@@ -325,8 +345,12 @@ def create_asset(
     if saved and "front" not in ident:
         ident["front"] = saved[0]
     parent = (parent_id or "").strip()
-    if parent and not get_asset(parent):
-        raise ValueError("Parent character not found.")
+    if parent:
+        prow = get_asset(parent)
+        if not prow:
+            raise ValueError("Parent character not found.")
+        if _normalize_kind(str(prow.get("kind") or "")) != "character":
+            raise ValueError("Dress variants must attach to a Character.")
     row = {
         "id": aid,
         "kind": parsed,
@@ -338,6 +362,7 @@ def create_asset(
         "created": _now(),
         "updated": _now(),
         "parent_id": parent or None,
+        "primary_slot": "front",
         "fields": dict(fields or {}),
         "identity": ident,
     }
@@ -409,14 +434,130 @@ def attach_identity_still(
     found["identity"] = ident
     stills = _still_list(found)
     found["still_paths"] = stills
-    found["still_path"] = ident.get("front") or (stills[0] if stills else "")
-    if key == "front":
-        found["sheet_path"] = str(dest)
+    primary = _primary_slot_name(found)
+    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
+    if key == "front" or key == primary:
+        found["sheet_path"] = str(ident.get(primary) or dest)
     if model:
         found["model"] = model
     found["updated"] = _now()
     _write_index(rows)
     return _to_public(found)
+
+
+def attach_identity_bytes(
+    asset_id: str,
+    slot: str,
+    filename: str,
+    data: bytes,
+    *,
+    model: str = "",
+) -> dict[str, Any]:
+    key = (slot or "").strip().lower()
+    if key not in IDENTITY_SLOTS:
+        raise ValueError(f"Unknown identity slot: {slot}")
+    if not data:
+        raise ValueError("Empty upload.")
+    rows = _load_index()
+    found: dict[str, Any] | None = None
+    for row in rows:
+        if str(row.get("id") or "") == asset_id:
+            found = row
+            break
+    if found is None:
+        raise ValueError("Asset not found.")
+    kind = _normalize_kind(str(found.get("kind") or ""))
+    if kind is None:
+        raise ValueError("Invalid asset kind.")
+    dest = _write_still_bytes(kind, asset_id, filename or f"{key}.png", data, IDENTITY_SLOTS.index(key) + 1)
+    ident = found.get("identity") if isinstance(found.get("identity"), dict) else {}
+    ident[key] = str(dest)
+    found["identity"] = ident
+    stills = _still_list(found)
+    found["still_paths"] = stills
+    primary = _primary_slot_name(found)
+    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
+    if key == "front" or key == primary:
+        found["sheet_path"] = str(ident.get(primary) or dest)
+    if model:
+        found["model"] = model
+    found["updated"] = _now()
+    _write_index(rows)
+    return _to_public(found)
+
+
+def update_asset(
+    asset_id: str,
+    *,
+    name: str | None = None,
+    notes: str | None = None,
+    fields: dict[str, Any] | None = None,
+    primary_slot: str | None = None,
+) -> dict[str, Any]:
+    key = (asset_id or "").strip()
+    rows = _load_index()
+    found: dict[str, Any] | None = None
+    for row in rows:
+        if str(row.get("id") or "") == key:
+            found = row
+            break
+    if found is None:
+        raise ValueError("Asset not found.")
+    if name is not None:
+        label = name.strip()
+        if not label:
+            raise ValueError("Name is required.")
+        found["name"] = label
+    if notes is not None:
+        found["notes"] = notes.strip()
+    if fields is not None:
+        cur = found.get("fields") if isinstance(found.get("fields"), dict) else {}
+        merged = dict(cur)
+        merged.update({str(k): v for k, v in fields.items()})
+        found["fields"] = merged
+    if primary_slot is not None:
+        slot = primary_slot.strip().lower()
+        if slot not in IDENTITY_SLOTS:
+            raise ValueError(f"Unknown identity slot: {primary_slot}")
+        ident = found.get("identity") if isinstance(found.get("identity"), dict) else {}
+        if not ident.get(slot):
+            raise ValueError(f"No still on {slot} to set as primary.")
+        found["primary_slot"] = slot
+        found["still_path"] = ident[slot]
+        found["sheet_path"] = ident[slot]
+    found["updated"] = _now()
+    _write_index(rows)
+    return _to_public(found)
+
+
+def save_sheet(
+    asset_id: str,
+    *,
+    name: str = "",
+    notes: str = "",
+    fields: dict[str, Any] | None = None,
+    require_front: bool = True,
+) -> dict[str, Any]:
+    row = get_asset(asset_id)
+    if not row:
+        raise ValueError("Asset not found.")
+    ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+    front = str(ident.get("front") or "").strip()
+    if require_front and not (front and Path(front).is_file()):
+        raise ValueError("Front still is required to save.")
+    return update_asset(
+        asset_id,
+        name=name or None,
+        notes=notes if notes is not None else None,
+        fields=fields,
+    )
+
+
+def public_asset(asset_id: str) -> dict[str, Any] | None:
+    row = get_asset(asset_id)
+    if not row:
+        return None
+    return _to_public(row)
 
 
 def resolve_asset_still(asset_id: str, slot: str | None = None) -> Path | None:
@@ -425,6 +566,8 @@ def resolve_asset_still(asset_id: str, slot: str | None = None) -> Path | None:
         return None
     ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
     want = (slot or "").strip().lower()
+    if not want:
+        want = _primary_slot_name(row)
     if want and want in ident:
         path = str(ident.get(want) or "").strip()
     else:
@@ -456,6 +599,11 @@ def default_sheet_prompt(kind: Kind, name: str, notes: str = "") -> str:
             f"Establishing still of {name}. Empty location, cinematic lighting, "
             "no prominent people, photoreal, no text."
         )
+    elif kind == "costume":
+        core = (
+            f"Costume / wardrobe plate of {name} on a faceless mannequin, "
+            "full garment visible, studio lighting, no face, no identity, photoreal, no text."
+        )
     else:
         core = (
             f"Product still of {name} on a clean surface, even lighting, "
@@ -475,7 +623,7 @@ def generate_asset(
 ) -> dict[str, Any]:
     parsed = _normalize_kind(kind)
     if parsed is None:
-        raise ValueError("kind must be character, scene, or prop")
+        raise ValueError("kind must be character, scene, prop, or costume")
     label = (name or "").strip()
     if not label:
         raise ValueError("Name is required.")
