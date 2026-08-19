@@ -1332,6 +1332,12 @@ function StudioCanvas() {
               resolution: patch.resolution ?? prev?.resolution ?? "",
               resolutionChoices:
                 patch.resolutionChoices ?? prev?.resolutionChoices ?? [],
+              t2iModel: patch.t2iModel ?? prev?.t2iModel,
+              r2iModel: patch.r2iModel ?? prev?.r2iModel,
+              assetId: patch.assetId ?? prev?.assetId,
+              sourceStill: patch.sourceStill ?? prev?.sourceStill,
+              wardrobe: patch.wardrobe ?? prev?.wardrobe,
+              name: patch.name ?? prev?.name,
               generating: patch.generating ?? prev?.generating ?? false,
               error: patch.error === undefined ? prev?.error ?? null : patch.error,
               result: {
@@ -2564,9 +2570,82 @@ function StudioCanvas() {
                 builderId,
                 slot,
                 dragItem: n.data.dragItem ?? itemFromResult(result),
+                resolution: n.data.resolution,
+                resolutionChoices: n.data.resolutionChoices,
+                t2iModel: n.data.t2iModel,
+                r2iModel: n.data.r2iModel,
+                assetId: n.data.assetId || builderSessions[builderId]?.assetId,
+                sourceStill:
+                  n.data.sourceStill ||
+                  (slot === "front"
+                    ? ""
+                    : builderSessions[builderId]?.done?.front || ""),
+                wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
+                name: n.data.name || builderSessions[builderId]?.name,
                 onPrompt: (prompt) =>
                   upsertSheetAngle(builderId, slot, { slot, prompt }),
+                onResolution: (resolution) =>
+                  upsertSheetAngle(builderId, slot, { slot, resolution }),
                 onRegen: () => void regenSheetAngle(builderId, slot),
+                onGenerated: (info) => {
+                  upsertSheetAngle(builderId, info.slot, {
+                    slot: info.slot,
+                    path: info.path,
+                    url: info.url,
+                    prompt: info.prompt,
+                    cost: info.cost,
+                    resolution: info.resolution,
+                    assetId: info.assetId,
+                    generating: false,
+                    error: null,
+                  });
+                  setBuilderSessions((cur) => {
+                    const prev = cur[builderId];
+                    return {
+                      ...cur,
+                      [builderId]: {
+                        assetId: info.assetId,
+                        t2iModel: prev?.t2iModel || n.data.t2iModel || "",
+                        r2iModel: prev?.r2iModel || n.data.r2iModel || "",
+                        slots: prev?.slots?.length
+                          ? prev.slots
+                          : [...CORE_SLOTS, ...EXTRA_SLOTS],
+                        attachSlotId: prev?.attachSlotId,
+                        name: prev?.name || n.data.name || "Character",
+                        fields: prev?.fields,
+                        wardrobe: prev?.wardrobe || n.data.wardrobe,
+                        notes: prev?.notes,
+                        t2iResolution: prev?.t2iResolution,
+                        r2iResolution: prev?.r2iResolution,
+                        done: {
+                          ...(prev?.done || {}),
+                          [info.slot]: info.path,
+                        },
+                      },
+                    };
+                  });
+                  if (info.slot === "front" && info.path) {
+                    setNodes((current) =>
+                      current.map((row) => {
+                        if (
+                          row.type !== "result" ||
+                          row.data.builderId !== builderId ||
+                          row.data.slot === "front"
+                        ) {
+                          return row;
+                        }
+                        return {
+                          ...row,
+                          data: {
+                            ...row.data,
+                            assetId: info.assetId,
+                            sourceStill: info.path,
+                          },
+                        };
+                      }),
+                    );
+                  }
+                },
                 onClose: () => closeNode(n.id),
               },
             };

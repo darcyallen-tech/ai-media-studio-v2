@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { requestAngleGenerate } from "./angleSpawn";
+import { readJson } from "./http";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
@@ -12,8 +12,30 @@ import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
 export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
+  const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
+  const sizeChoices = Array.isArray(data.resolutionChoices)
+    ? data.resolutionChoices.filter(Boolean)
+    : [];
+  const [size, setSize] = useState(data.resolution || sizeChoices[0] || "");
+  const [busy, setBusy] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [localUrl, setLocalUrl] = useState("");
+  useEffect(() => {
+    setAnglePrompt(data.prompt || "");
+  }, [data.prompt]);
+  useEffect(() => {
+    if (data.resolution && data.resolution !== size) setSize(data.resolution);
+  }, [data.resolution]);
+  useEffect(() => {
+    if (!data.generating) setBusy(false);
+  }, [data.generating]);
+
   const result = data.result;
-  const paths = result.result_paths ?? [];
+  const paths = (result.result_paths ?? []).length
+    ? result.result_paths ?? []
+    : localUrl
+      ? [localUrl]
+      : [];
   const local = result.local_paths ?? [];
   const copyPath = local[0] || "";
   const sample = paths[0] || copyPath;
@@ -56,17 +78,6 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const title = (data.title || "").trim() || "Result";
   const isAngle = Boolean(data.slot || data.builderId);
   const hasStill = paths.length > 0;
-  const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
-  const sizeChoices = Array.isArray(data.resolutionChoices)
-    ? data.resolutionChoices.filter(Boolean)
-    : [];
-  const [size, setSize] = useState(data.resolution || sizeChoices[0] || "");
-  useEffect(() => {
-    setAnglePrompt(data.prompt || "");
-  }, [data.prompt]);
-  useEffect(() => {
-    if (data.resolution && data.resolution !== size) setSize(data.resolution);
-  }, [data.resolution]);
 
   function enlarge() {
     const src = paths[0] || "";
@@ -78,20 +89,99 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     });
   }
 
-  function runAngleJob() {
+  async function runAngleJob(ev?: { preventDefault?: () => void; stopPropagation?: () => void }) {
+    ev?.preventDefault?.();
+    ev?.stopPropagation?.();
+    if (busy || data.generating) return;
+    const prompt = anglePrompt.trim();
+    const slot = data.slot || "front";
+    if (!prompt) {
+      setLocalError("Angle prompt is empty.");
+      return;
+    }
+    if (slot !== "front" && !data.sourceStill) {
+      setLocalError("Generate Front first");
+      return;
+    }
+    setBusy(true);
+    setLocalError(null);
     try {
-      if (data.builderId && data.slot) {
-        requestAngleGenerate({
-          builderId: data.builderId,
-          slot: data.slot,
-          prompt: anglePrompt,
-          resolution: size,
+      let assetId = data.assetId || "";
+      if (!assetId) {
+        const created = await fetch("/assets/sheet/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "character",
+            name: data.name || "Character",
+            fields: {},
+            notes: "",
+          }),
         });
-        return;
+        const draft = await readJson(created);
+        const item = (draft.item || null) as { id?: string } | null;
+        if (!created.ok || !item?.id) {
+          throw new Error(
+            (typeof draft.detail === "string" && draft.detail) ||
+              (typeof draft.error === "string" && draft.error) ||
+              "Could not create character draft.",
+          );
+        }
+        assetId = item.id;
       }
-      data.onRegen?.();
+      const res = await fetch("/assets/sheet/angle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_id: assetId,
+          slot,
+          model_id:
+            slot === "front"
+              ? data.t2iModel || ""
+              : data.r2iModel || data.t2iModel || "",
+          prompt,
+          source_still: slot === "front" ? "" : data.sourceStill || "",
+          wardrobe: data.wardrobe || "",
+          resolution: size || data.resolution || "",
+        }),
+      });
+      const body = await readJson(res);
+      const item = (body.item || null) as {
+        identity?: Record<string, string>;
+        identity_urls?: Record<string, string>;
+        still_path?: string;
+        url?: string;
+        prompt?: string;
+        cost?: string;
+      } | null;
+      if (!res.ok || !item) {
+        throw new Error(
+          (typeof body.detail === "string" && body.detail) ||
+            (typeof body.error === "string" && body.error) ||
+            "Generate failed.",
+        );
+      }
+      const path = item.identity?.[slot] || item.still_path || "";
+      const url = item.identity_urls?.[slot] || item.url || "";
+      const shown = url
+        ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`
+        : "";
+      if (shown) setLocalUrl(shown);
+      data.onGenerated?.({
+        slot,
+        assetId,
+        path,
+        url: shown,
+        prompt: item.prompt || prompt,
+        cost: item.cost,
+        resolution: size || data.resolution,
+      });
     } catch (err: unknown) {
-      console.error("Angle generate failed to start", err);
+      const msg = err instanceof Error ? err.message : "Generate failed.";
+      console.error("Angle generate failed", err);
+      setLocalError(msg);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -205,15 +295,20 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               <button
                 type="button"
                 className="generate nodrag"
-                disabled={data.generating || !anglePrompt.trim()}
-                onClick={runAngleJob}
+                disabled={busy || data.generating}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => void runAngleJob(e)}
               >
-                {data.generating ? "Generating…" : hasStill ? "Regenerate" : "Generate"}
+                {busy || data.generating
+                  ? "Generating…"
+                  : hasStill
+                    ? "Regenerate"
+                    : "Generate"}
               </button>
             </div>
-            {data.error ? (
+            {localError || data.error ? (
               <p className="hint warn" role="alert">
-                {data.error}
+                {localError || data.error}
               </p>
             ) : null}
           </>

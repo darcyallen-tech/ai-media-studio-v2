@@ -227,9 +227,24 @@ export type ResultNodeData = {
   slot?: string;
   resolution?: string;
   resolutionChoices?: string[];
+  t2iModel?: string;
+  r2iModel?: string;
+  assetId?: string;
+  sourceStill?: string;
+  wardrobe?: string;
+  name?: string;
   onPrompt?: (prompt: string) => void;
   onRegen?: () => void;
   onResolution?: (resolution: string) => void;
+  onGenerated?: (info: {
+    slot: string;
+    assetId: string;
+    path: string;
+    url: string;
+    prompt: string;
+    cost?: string;
+    resolution?: string;
+  }) => void;
   onClose?: () => void;
   onTool?: (kind: ToolKind) => void;
   onApplyToPin?: () => void;
@@ -330,6 +345,12 @@ export type SheetAnglePatch = {
   focus?: boolean;
   resolution?: string;
   resolutionChoices?: string[];
+  t2iModel?: string;
+  r2iModel?: string;
+  assetId?: string;
+  sourceStill?: string;
+  wardrobe?: string;
+  name?: string;
 };
 
 export type BuilderSessionInfo = {

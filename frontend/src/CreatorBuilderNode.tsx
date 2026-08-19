@@ -331,6 +331,12 @@ function CharacterForm({
         focus: true,
         resolution: slot === "front" ? frontRes : angleRes,
         resolutionChoices: slot === "front" ? frontSizes : angleSizes,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        wardrobe: identityFields.wardrobe,
+        name: label,
       };
       const session = sessionPayload(data.sessionAssetId || "", ident, label);
       spawnAngleResult({
