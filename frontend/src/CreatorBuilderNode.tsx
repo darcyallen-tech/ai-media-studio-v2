@@ -10,6 +10,7 @@ import {
   SLOT_LABEL,
   WARDROBE_F,
   WARDROBE_M,
+  composeAnglePrompt,
   composeCharacterIdentity,
   useSheetEstimate,
   useSheetModels,
@@ -132,6 +133,8 @@ const BODY = ["lean", "average", "muscular", "curvy", "lanky", "hourglass", "rec
 const FACE = ["oval", "round", "square", "heart", "diamond", "oblong"];
 const NOSE = ["straight", "button", "roman", "wide", "narrow", "upturned"];
 const JAW = ["soft", "defined", "square", "rounded", "pointed", "cleft"];
+const BODY_HAIR = ["none", "light", "medium", "heavy"];
+const BUST = ["small", "medium", "large"];
 
 function pickField(value?: string | null, custom?: string | null) {
   const v = String(value ?? "");
@@ -152,6 +155,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [hairColorC, setHairColorC] = useState("");
   const [facial, setFacial] = useState("none");
   const [facialC, setFacialC] = useState("");
+  const [bodyHair, setBodyHair] = useState("none");
+  const [bodyHairC, setBodyHairC] = useState("");
+  const [bust, setBust] = useState("medium");
+  const [bustC, setBustC] = useState("");
   const [eyes, setEyes] = useState("brown");
   const [eyesC, setEyesC] = useState("");
   const [skin, setSkin] = useState("medium");
@@ -173,14 +180,11 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [wardrobe, setWardrobe] = useState("");
   const [identityPrompt, setIdentityPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [busySlot, setBusySlot] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assetId, setAssetId] = useState<string | null>(null);
-  const [done, setDone] = useState<Record<string, string>>({});
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
-  const haveFront = Boolean(done.front);
+  const haveFront = Boolean(data.doneSlots?.front);
   const estimate = useSheetEstimate(
     "character",
     models.t2iId,
@@ -197,6 +201,8 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       hair_style: pickField(hairStyle, hairStyleC),
       hair_color: pickField(hairColor, hairColorC),
       facial_hair: gender === "Male" ? pickField(facial, facialC) : "",
+      body_hair: gender === "Male" ? pickField(bodyHair, bodyHairC) : "",
+      bust: gender === "Female" ? pickField(bust, bustC) : "",
       eye_color: pickField(eyes, eyesC),
       skin: pickField(skin, skinC),
       height: pickField(height, heightC),
@@ -218,6 +224,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     hairColorC,
     facial,
     facialC,
+    bodyHair,
+    bodyHairC,
+    bust,
+    bustC,
     eyes,
     eyesC,
     skin,
@@ -258,7 +268,43 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     return text;
   }
 
-  async function generateSlot(slot: string) {
+  function sessionPayload(id: string, ident: string) {
+    return {
+      assetId: id,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      slots: [...CORE_SLOTS, ...EXTRA_SLOTS],
+      name: name.trim(),
+      fields: { ...identityFields, identity_prompt: ident },
+      wardrobe: identityFields.wardrobe,
+      notes: notes.trim(),
+    };
+  }
+
+  async function ensureDraft(label: string, ident: string) {
+    const fields = { ...identityFields, identity_prompt: ident };
+    let id = assetId || data.sessionAssetId || "";
+    if (!id) {
+      const created = await fetch("/assets/sheet/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "character",
+          name: label,
+          notes: notes.trim(),
+          fields,
+        }),
+      });
+      const draft = await readJson<GenBody>(created);
+      if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed.", created));
+      id = draft.item.id;
+      setAssetId(id);
+    }
+    data.onSession?.(sessionPayload(id, ident));
+    return id;
+  }
+
+  function openAngle(slot: string) {
     const label = name.trim();
     if (!label) {
       setError("Name is required.");
@@ -268,104 +314,42 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
       setError("Generate Front first.");
       return;
     }
-    setBusy(true);
-    setBusySlot(slot);
     setError(null);
-    try {
-      const ident = ensureIdentity();
-      if (!ident) throw new Error("Apply selection first so Generate has an identity prompt.");
-      const fields = { ...identityFields, identity_prompt: ident };
-      let id = assetId;
-      if (!id) {
-        const created = await fetch("/assets/sheet/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kind: "character",
-            name: label,
-            notes: notes.trim(),
-            fields,
-          }),
-        });
-        const draft = await readJson<GenBody>(created);
-        if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed.", created));
-        id = draft.item.id;
-        setAssetId(id);
-        data.onSession?.({
-          assetId: id,
-          t2iModel: models.t2iId,
-          r2iModel: models.r2iId || models.t2iId,
-          slots: [...CORE_SLOTS, ...EXTRA_SLOTS],
-        });
-      }
-      const source = slot === "front" ? "" : done.front || "";
-      // Front / Side / Close-up use the same Result-node spawn as extras.
-      const title = `${SLOT_LABEL[slot] || slot} · ${label}`;
-      data.onAngle(slot, {
-        slot,
-        label: title,
-        prompt: ident,
-        generating: true,
-        error: null,
-      });
-      const res = await fetch("/assets/sheet/angle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asset_id: id,
-          slot,
-          model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
-          source_still: source,
-          wardrobe: identityFields.wardrobe,
-        }),
-      });
-      const body = await readJson<GenBody>(res);
-      if (!res.ok || !body.item) {
-        data.onAngle(slot, {
-          slot,
-          label: title,
-          generating: false,
-          error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`, res),
-        });
-        throw new Error(errOf(body, `${SLOT_LABEL[slot] || slot} failed.`, res));
-      }
-      const path = body.item.identity?.[slot] || body.item.still_path || "";
-      const url = body.item.identity_urls?.[slot] || body.item.url || "";
-      setDone((cur) => ({ ...cur, [slot]: path }));
-      data.onAngle(slot, {
-        slot,
-        label: title,
-        prompt: body.item.prompt || ident,
-        path,
-        url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
-        cost: body.item.cost || "",
-        generating: false,
-        error: null,
-      });
-      toast(`Generated ${SLOT_LABEL[slot] || slot}.`);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Generate failed.";
-      setError(msg);
-      toast(msg, true);
-    } finally {
-      setBusy(false);
-      setBusySlot(null);
+    const ident = ensureIdentity();
+    if (!ident) {
+      setError("Apply selection first so the angle has an identity prompt.");
+      return;
     }
+    const anglePrompt = composeAnglePrompt(slot, ident, { hasFront: haveFront });
+    data.onAngle(slot, {
+      slot,
+      label: `${SLOT_LABEL[slot] || slot} · ${label}`,
+      prompt: anglePrompt,
+      generating: false,
+      error: null,
+      cost: estimate,
+    });
+    void ensureDraft(label, ident).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Could not create character draft.";
+      setError(msg);
+      data.onSession?.(sessionPayload("", ident));
+    });
   }
 
   function save() {
-    if (!assetId || !haveFront) {
+    const id = assetId || data.sessionAssetId || "";
+    if (!id || !haveFront) {
       setError("Generate Front first.");
       return;
     }
     data.onSaved({
-      id: assetId,
+      id,
       name: name.trim(),
       kind: "character",
       has_still: true,
-      still_path: done.front || assetId,
-      identity: { ...done },
-      url: `/assets/${assetId}/still`,
+      still_path: data.doneSlots?.front || id,
+      identity: { ...(data.doneSlots || {}) },
+      url: `/assets/${id}/still`,
     });
   }
 
@@ -408,8 +392,8 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   return (
     <>
       <p className="hint">
-        Dropdowns stay. Apply selection builds the identity prompt (fields + notes + wardrobe).
-        Generate Front first (1 still). Side / Close-up use Front as reference.
+        Apply selection builds the identity prompt. Generate Front opens a Result node —
+        run Generate on the node. Side / Close-up use Front as R2I after Front exists.
       </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
@@ -472,8 +456,27 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             onValue={setFacial}
             onCustom={setFacialC}
           />
+          <FieldSelect
+            label="Body hair"
+            value={bodyHair}
+            custom={bodyHairC}
+            options={BODY_HAIR}
+            onValue={setBodyHair}
+            onCustom={setBodyHairC}
+          />
         </div>
-      ) : null}
+      ) : (
+        <div className="params">
+          <FieldSelect
+            label="Bust size"
+            value={bust}
+            custom={bustC}
+            options={BUST}
+            onValue={setBust}
+            onCustom={setBustC}
+          />
+        </div>
+      )}
       <div className="params">
         <FieldSelect
           label="Eye color"
@@ -576,7 +579,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="ghost"
-          disabled={enhancing || busy}
+          disabled={enhancing}
           onClick={applySelection}
         >
           Apply selection
@@ -584,7 +587,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="ghost enhance"
-          disabled={enhancing || busy}
+          disabled={enhancing}
           onClick={() => void onEnhance()}
         >
           {enhancing ? "Enhancing…" : "Enhance"}
@@ -601,31 +604,31 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         />
       </label>
       <p className="estimate">{estimate}</p>
-      <p className="hint">Each extra angle is billed separately (1 still).</p>
+      <p className="hint">Opens a Result node — click Generate on the node (1 still).</p>
       <div className="prompt-actions">
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || !name.trim()}
-          onClick={() => void generateSlot("front")}
+          disabled={enhancing || !name.trim()}
+          onClick={() => openAngle("front")}
         >
-          {busySlot === "front" ? "Generating Front…" : "Generate Front"}
+          Generate Front
         </button>
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || !haveFront}
-          onClick={() => void generateSlot("side")}
+          disabled={enhancing || !haveFront}
+          onClick={() => openAngle("side")}
         >
-          {busySlot === "side" ? "Generating Side…" : "Generate Side"}
+          Generate Side
         </button>
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || !haveFront}
-          onClick={() => void generateSlot("closeup")}
+          disabled={enhancing || !haveFront}
+          onClick={() => openAngle("closeup")}
         >
-          {busySlot === "closeup" ? "Generating Close-up…" : "Generate Close-up"}
+          Generate Close-up
         </button>
       </div>
       <span className="field-label">Extra angles</span>
@@ -635,15 +638,20 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             key={id}
             type="button"
             className="ghost"
-            disabled={busy || enhancing || !haveFront}
-            onClick={() => void generateSlot(id)}
+            disabled={enhancing || !haveFront}
+            onClick={() => openAngle(id)}
           >
-            {busySlot === id ? `Generating ${SLOT_LABEL[id]}…` : `Generate ${SLOT_LABEL[id]}`}
+            Generate {SLOT_LABEL[id]}
           </button>
         ))}
       </div>
       <div className="prompt-actions">
-        <button type="button" className="ghost" disabled={busy || !haveFront} onClick={save}>
+        <button
+          type="button"
+          className="ghost"
+          disabled={!haveFront || !(assetId || data.sessionAssetId)}
+          onClick={save}
+        >
           Save Character
         </button>
       </div>

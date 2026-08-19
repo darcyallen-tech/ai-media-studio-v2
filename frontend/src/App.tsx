@@ -296,6 +296,11 @@ function StudioCanvas() {
         r2iModel: string;
         slots: string[];
         attachSlotId?: string;
+        name?: string;
+        fields?: Record<string, string>;
+        wardrobe?: string;
+        notes?: string;
+        done?: Record<string, string>;
       }
     >
   >({});
@@ -1332,8 +1337,8 @@ function StudioCanvas() {
   const regenSheetAngle = useCallback(
     async (builderId: string, slot: string) => {
       const session = builderSessions[builderId];
-      if (!session?.assetId) {
-        toast("Generate the sheet first.", true);
+      if (!session) {
+        toast("Open the angle from the Character Builder first.", true);
         return;
       }
       const live = getNodes();
@@ -1358,15 +1363,46 @@ function StudioCanvas() {
           : frontPath || (priorSlot ? anglePath(`sang-${builderId}-${priorSlot}`) : "");
       upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
       try {
+        let assetId = session.assetId;
+        if (!assetId) {
+          if (!session.name) {
+            throw new Error("Character name is missing. Open the angle from the Builder.");
+          }
+          const created = await fetch("/assets/sheet/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              kind: "character",
+              name: session.name,
+              notes: session.notes || "",
+              fields: session.fields || {},
+            }),
+          });
+          const draft = (await readJson(created)) as {
+            ok?: boolean;
+            item?: StudioAsset;
+            detail?: string;
+            error?: string;
+          };
+          if (!created.ok || !draft.item) {
+            throw new Error(
+              (typeof draft.detail === "string" ? draft.detail : null) ||
+                draft.error ||
+                "Create failed.",
+            );
+          }
+          assetId = draft.item.id;
+        }
         const res = await fetch("/assets/sheet/angle", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            asset_id: session.assetId,
+            asset_id: assetId,
             slot,
             model_id: slot === "front" ? session.t2iModel : session.r2iModel,
             prompt,
             source_still: priorPath,
+            wardrobe: session.wardrobe || "",
           }),
         });
         const body = (await readJson(res)) as {
@@ -1379,21 +1415,34 @@ function StudioCanvas() {
           throw new Error(
             (typeof body.detail === "string" ? body.detail : null) ||
               body.error ||
-              "Regenerate failed.",
+              "Generate failed.",
           );
         }
         const path = body.item.identity?.[slot] || body.item.still_path || "";
         const url = body.item.identity_urls?.[slot] || body.item.url || "";
+        setBuilderSessions((cur) => {
+          const prev = cur[builderId];
+          if (!prev) return cur;
+          return {
+            ...cur,
+            [builderId]: {
+              ...prev,
+              assetId,
+              done: { ...(prev.done || {}), [slot]: path },
+            },
+          };
+        });
         upsertSheetAngle(builderId, slot, {
           slot,
           prompt: String(body.item.prompt || prompt || ""),
           path,
           url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
+          cost: body.item.cost || "",
           generating: false,
           error: null,
         });
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Regenerate failed.";
+        const msg = err instanceof Error ? err.message : "Generate failed.";
         upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
         toast(msg, true);
       }
@@ -2620,10 +2669,17 @@ function StudioCanvas() {
               attachSlotId: n.data?.attachSlotId,
               onClose: () => closeNode(n.id),
               onAngle: (slot, patch) => upsertSheetAngle(n.id, slot, patch),
+              sessionAssetId: builderSessions[n.id]?.assetId || "",
+              doneSlots: builderSessions[n.id]?.done || {},
               onSession: (info) =>
                 setBuilderSessions((cur) => ({
                   ...cur,
-                  [n.id]: { ...info, attachSlotId: n.data.attachSlotId },
+                  [n.id]: {
+                    ...cur[n.id],
+                    ...info,
+                    attachSlotId: n.data.attachSlotId,
+                    done: cur[n.id]?.done || {},
+                  },
                 })),
               onSaved: (asset) => {
                 void (async () => {

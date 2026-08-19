@@ -53,6 +53,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
 
   const title = (data.title || "").trim() || "Result";
   const isAngle = Boolean(data.slot || data.onRegen);
+  const hasStill = paths.length > 0;
 
   return (
     <div className="studio-node result-node">
@@ -118,7 +119,11 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           )}
           {paths.length === 0 ? (
             <p className="hint">
-              {data.generating ? "Generating…" : "No media paths returned."}
+              {data.generating
+                ? "Generating…"
+                : isAngle
+                  ? "Angle prompt ready. Click Generate."
+                  : "No media paths returned."}
             </p>
           ) : null}
         </div>
@@ -141,7 +146,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 disabled={data.generating || !String(data.prompt || "").trim()}
                 onClick={data.onRegen}
               >
-                {data.generating ? "Generating…" : "Regenerate"}
+                {data.generating ? "Generating…" : hasStill ? "Regenerate" : "Generate"}
               </button>
             </div>
             {data.error ? (
@@ -165,7 +170,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ))}
           </div>
         ) : null}
-        <div className="result-actions">
+        <div className="result-actions" hidden={isAngle && !hasStill}>
           {data.onApplyToPin && !isVid && !isAud ? (
             <button
               type="button"

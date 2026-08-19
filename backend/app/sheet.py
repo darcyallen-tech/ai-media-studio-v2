@@ -37,12 +37,12 @@ CLEAN_PLATE = (
 )
 
 WARDROBE_M = (
-    "minimal form-fit neutral crew-neck tee and fitted trousers, simple shoes, "
+    "minimal form-fit neutral muscle shirt and short seamed shorts, barefoot, "
     "no logos, no accessories"
 )
 WARDROBE_F = (
-    "minimal form-fit neutral tank and fitted trousers, simple shoes, "
-    "no logos, no accessories"
+    "minimal form-fit neutral high crop tank-top and short spandex shorts, "
+    "barefoot, no logos, no accessories"
 )
 
 PROFILE_VIEWS: dict[str, str] = {
@@ -125,6 +125,8 @@ CHAR_BODY = (
 CHAR_FACE = ("oval", "round", "square", "heart", "diamond", "oblong")
 CHAR_NOSE = ("straight", "button", "roman", "wide", "narrow", "upturned")
 CHAR_JAW = ("soft", "defined", "square", "rounded", "pointed", "cleft")
+CHAR_BODY_HAIR = ("none", "light", "medium", "heavy")
+CHAR_BUST = ("small", "medium", "large")
 SCENE_SETTINGS = ("interior", "exterior")
 SCENE_TIMES = ("dawn", "day", "golden hour", "dusk", "night")
 SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful")
@@ -175,6 +177,8 @@ def builder_fields(kind: str) -> dict[str, Any]:
             "hair_style": {"label": "Hair style", "choices": list(CHAR_HAIR_STYLE)},
             "hair_color": {"label": "Hair color", "choices": list(CHAR_HAIR_COLOR)},
             "facial_hair": {"label": "Facial hair", "choices": list(CHAR_FACIAL_HAIR)},
+            "body_hair": {"label": "Body hair", "choices": list(CHAR_BODY_HAIR)},
+            "bust": {"label": "Bust size", "choices": list(CHAR_BUST)},
             "eye_color": {"label": "Eye color", "choices": list(CHAR_EYES)},
             "skin": {"label": "Skin tone", "choices": list(CHAR_SKIN)},
             "height": {"label": "Height", "choices": list(CHAR_HEIGHT)},
@@ -245,6 +249,15 @@ def character_brief(fields: dict[str, Any] | None, *, costume: bool = False) -> 
             parts.append("clean-shaven, no facial hair")
         else:
             parts.append(f"facial hair: {facial}")
+    body_hair = _choice(f, "body_hair")
+    if body_hair:
+        if body_hair.lower() == "none":
+            parts.append("no body hair")
+        else:
+            parts.append(f"body hair: {body_hair}")
+    bust = _choice(f, "bust")
+    if bust:
+        parts.append(f"bust: {bust}")
     eyes = _choice(f, "eye_color")
     if eyes:
         parts.append(f"eyes: {eyes}")

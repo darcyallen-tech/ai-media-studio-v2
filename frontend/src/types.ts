@@ -326,18 +326,26 @@ export type SheetAnglePatch = {
   error?: string | null;
 };
 
+export type BuilderSessionInfo = {
+  assetId: string;
+  t2iModel: string;
+  r2iModel: string;
+  slots: string[];
+  name?: string;
+  fields?: Record<string, string>;
+  wardrobe?: string;
+  notes?: string;
+};
+
 export type CreatorBuilderNodeData = {
   kind: CreatorKind;
   attachSlotId?: string;
   bases?: StudioAsset[];
+  sessionAssetId?: string;
+  doneSlots?: Record<string, string>;
   onClose?: () => void;
   onAngle: (slot: string, patch: SheetAnglePatch) => void;
-  onSession?: (info: {
-    assetId: string;
-    t2iModel: string;
-    r2iModel: string;
-    slots: string[];
-  }) => void;
+  onSession?: (info: BuilderSessionInfo) => void;
   onSaved: (asset: StudioAsset) => void;
 };
 

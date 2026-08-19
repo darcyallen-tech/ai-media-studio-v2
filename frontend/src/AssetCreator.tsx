@@ -39,9 +39,9 @@ const PROP_TYPES = ["object", "handheld", "furniture", "vehicle", "food", "other
 const MATERIALS = ["metal", "wood", "plastic", "glass", "fabric", "ceramic", "mixed"];
 
 const WARDROBE_M =
-  "minimal form-fit neutral crew-neck tee and fitted trousers, simple shoes, no logos, no accessories";
+  "minimal form-fit neutral muscle shirt and short seamed shorts, barefoot, no logos, no accessories";
 const WARDROBE_F =
-  "minimal form-fit neutral tank and fitted trousers, simple shoes, no logos, no accessories";
+  "minimal form-fit neutral high crop tank-top and short spandex shorts, barefoot, no logos, no accessories";
 
 async function readJson<T>(res: Response): Promise<T> {
   return (await res.json()) as T;

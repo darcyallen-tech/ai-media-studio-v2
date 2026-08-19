@@ -10,9 +10,29 @@ export const EXTRA_SLOTS = [
 ] as const;
 
 export const WARDROBE_M =
-  "minimal form-fit neutral crew-neck tee and fitted trousers, simple shoes, no logos, no accessories";
+  "minimal form-fit neutral muscle shirt and short seamed shorts, barefoot, no logos, no accessories";
 export const WARDROBE_F =
-  "minimal form-fit neutral tank and fitted trousers, simple shoes, no logos, no accessories";
+  "minimal form-fit neutral high crop tank-top and short spandex shorts, barefoot, no logos, no accessories";
+
+export const CLEAN_PLATE =
+  "Pure solid black background only (#000000). Isolated subject on a clean plate — no environment, no floor, no props, no other people, no text, no logo. Clean silhouette, fully visible for the target angle.";
+
+export const PROFILE_VIEWS: Record<string, string> = {
+  front:
+    "Full-body head-to-toe front view, entire figure visible including feet, standing straight, neutral pose, arms relaxed at sides, facing the camera, subject centered, no crop at head or feet",
+  side:
+    "Full-body head-to-toe clear side profile view, entire figure visible including feet, standing straight, neutral pose, arms relaxed, clean silhouette, subject centered, no crop at head or feet",
+  closeup:
+    "Face close-up portrait, shoulders up, sharp facial features, match identity from the references, subject correctly framed",
+  back:
+    "full-body head-to-toe back view, entire figure visible including feet, standing straight, neutral pose, arms relaxed, facing away from camera",
+  threequarter_front:
+    "full-body head-to-toe three-quarter front view (about 45°), entire figure visible including feet, standing straight, neutral pose",
+  threequarter_back:
+    "full-body head-to-toe three-quarter back view (about 45° from behind), entire figure visible including feet, standing straight, neutral pose",
+  top:
+    "direct top-down view, camera directly above looking straight down, bird's-eye, full body visible including head and feet, subject centered, no three-quarter tilt",
+};
 
 export const SLOT_LABEL: Record<string, string> = {
   front: "Front",
@@ -45,6 +65,16 @@ export function composeCharacterIdentity(
   if (weight) parts.push(`build: ${weight}`);
   const body = bit(fields.body);
   if (body) parts.push(`body type: ${body}`);
+  const bodyHair = bit(fields.body_hair);
+  if (bodyHair) {
+    parts.push(
+      bodyHair.toLowerCase() === "none"
+        ? "no body hair"
+        : `body hair: ${bodyHair}`,
+    );
+  }
+  const bust = bit(fields.bust);
+  if (bust) parts.push(`bust: ${bust}`);
   const hair = [
     bit(fields.hair_length),
     bit(fields.hair_style),
@@ -75,6 +105,43 @@ export function composeCharacterIdentity(
   const extra = bit(notes);
   if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
   return head || "photoreal adult person";
+}
+
+/** Identity paragraph + camera framing for one sheet angle. No API. */
+export function composeAnglePrompt(
+  slot: string,
+  identity: string,
+  opts?: { hasFront?: boolean },
+): string {
+  const key = slot || "front";
+  const view = PROFILE_VIEWS[key] || PROFILE_VIEWS.front;
+  const ident = bit(identity) || "photoreal adult person";
+  if (key === "front") {
+    return [
+      `Photoreal character reference still of: ${ident}.`,
+      `Framing: ${view}.`,
+      "Single subject only, head unobstructed, natural expression.",
+      "Entire figure visible head to toe including feet; no crop; subject centered.",
+      CLEAN_PLATE,
+    ].join(" ");
+  }
+  const ref = opts?.hasFront
+    ? "Same person as the Front reference still. Use the Front still as the identity source. "
+    : "Same person as the reference image(s). ";
+  if (key === "closeup") {
+    return (
+      `${ref}Generate a character-reference still: ${view}. ` +
+      "Preserve face, proportions, hair, skin tone, age, and lighting from the reference stills. " +
+      "Do not invent a different person. Head unobstructed. " +
+      `${CLEAN_PLATE} Subject description guide: ${ident}.`
+    );
+  }
+  return (
+    `${ref}Generate a character-reference still: ${view}. ` +
+    "Match face and identity from the reference image(s) exactly. " +
+    "Keep wardrobe, body proportions, and lighting. Do not invent a different person. " +
+    `${CLEAN_PLATE} Subject description guide: ${ident}.`
+  );
 }
 
 export function sheetModel(row: ModelRow | null | undefined) {
