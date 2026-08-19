@@ -10,6 +10,7 @@ import {
   SLOT_LABEL,
   WARDROBE_F,
   WARDROBE_M,
+  composeCharacterIdentity,
   useSheetEstimate,
   useSheetModels,
 } from "./sheetUi";
@@ -32,12 +33,17 @@ async function readJson<T>(res: Response): Promise<T> {
   return (await readJsonSafe(res)) as T;
 }
 
-function errOf(body: GenBody, fallback: string) {
-  return (
-    (typeof body.detail === "string" ? body.detail : null) ||
-    body.error ||
-    fallback
-  );
+function errOf(body: GenBody, fallback: string, res?: Response) {
+  const error = typeof body.error === "string" ? body.error.trim() : "";
+  if (error && !/^not found$/i.test(error)) return error;
+  const detail = body.detail;
+  if (typeof detail === "string" && detail.trim() && !/^not found$/i.test(detail.trim())) {
+    return detail.trim();
+  }
+  if (res && res.status === 404) {
+    return `${fallback} (${res.status} ${res.statusText || "Not Found"}). Check POST /enhance.`;
+  }
+  return error || (typeof detail === "string" ? detail : "") || res?.statusText || fallback;
 }
 
 export default function CreatorBuilderNode({
@@ -166,7 +172,6 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [overrideWardrobe, setOverrideWardrobe] = useState(false);
   const [wardrobe, setWardrobe] = useState("");
   const [identityPrompt, setIdentityPrompt] = useState("");
-  const [applying, setApplying] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busySlot, setBusySlot] = useState<string | null>(null);
@@ -234,46 +239,21 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     locked,
   ]);
 
-  async function composeIdentity(): Promise<string> {
-    const res = await fetch("/assets/sheet/prompt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind: "character",
-        slot: "identity",
-        name: name.trim() || "character",
-        fields: identityFields,
-        extra: notes.trim(),
-      }),
-    });
-    const body = await readJson<GenBody>(res);
-    const text = (body.prompt || "").trim();
-    if (!res.ok || !text) {
-      throw new Error(errOf(body, "Could not compose identity prompt."));
-    }
-    return text;
+  function composeIdentity(): string {
+    return composeCharacterIdentity(identityFields, notes);
   }
 
-  async function applySelection() {
-    setApplying(true);
+  function applySelection() {
     setError(null);
-    try {
-      const text = await composeIdentity();
-      setIdentityPrompt(text);
-      toast("Identity prompt applied.");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Apply selection failed.";
-      setError(msg);
-      toast(msg, true);
-    } finally {
-      setApplying(false);
-    }
+    const text = composeIdentity();
+    setIdentityPrompt(text);
+    toast("Identity prompt applied.");
   }
 
-  async function ensureIdentity(): Promise<string> {
+  function ensureIdentity(): string {
     const cur = identityPrompt.trim();
     if (cur) return cur;
-    const text = await composeIdentity();
+    const text = composeIdentity();
     setIdentityPrompt(text);
     return text;
   }
@@ -292,7 +272,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     setBusySlot(slot);
     setError(null);
     try {
-      const ident = await ensureIdentity();
+      const ident = ensureIdentity();
       if (!ident) throw new Error("Apply selection first so Generate has an identity prompt.");
       const fields = { ...identityFields, identity_prompt: ident };
       let id = assetId;
@@ -308,7 +288,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
           }),
         });
         const draft = await readJson<GenBody>(created);
-        if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed."));
+        if (!created.ok || !draft.item) throw new Error(errOf(draft, "Create failed.", created));
         id = draft.item.id;
         setAssetId(id);
         data.onSession?.({
@@ -319,22 +299,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         });
       }
       const source = slot === "front" ? "" : done.front || "";
-      const promptRes = await fetch("/assets/sheet/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "character",
-          slot,
-          name: label,
-          fields,
-        }),
-      });
-      const promptBody = await readJson<GenBody>(promptRes);
-      const anglePrompt = promptBody.prompt || "";
       data.onAngle(slot, {
         slot,
         label: SLOT_LABEL[slot] || slot,
-        prompt: anglePrompt,
+        prompt: ident,
         generating: true,
         error: null,
       });
@@ -347,7 +315,6 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
           model_id: slot === "front" ? models.t2iId : models.r2iId || models.t2iId,
           source_still: source,
           wardrobe: identityFields.wardrobe,
-          prompt: anglePrompt,
         }),
       });
       const body = await readJson<GenBody>(res);
@@ -355,16 +322,16 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         data.onAngle(slot, {
           slot,
           generating: false,
-          error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`),
+          error: errOf(body, `${SLOT_LABEL[slot] || slot} failed.`, res),
         });
-        throw new Error(errOf(body, `${SLOT_LABEL[slot] || slot} failed.`));
+        throw new Error(errOf(body, `${SLOT_LABEL[slot] || slot} failed.`, res));
       }
       const path = body.item.identity?.[slot] || body.item.still_path || "";
       const url = body.item.identity_urls?.[slot] || body.item.url || "";
       setDone((cur) => ({ ...cur, [slot]: path }));
       data.onAngle(slot, {
         slot,
-        prompt: body.item.prompt || anglePrompt,
+        prompt: body.item.prompt || ident,
         path,
         url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
         generating: false,
@@ -400,7 +367,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
     setEnhancing(true);
     setError(null);
     try {
-      const raw = await ensureIdentity();
+      const raw = ensureIdentity();
       if (!raw) {
         throw new Error("Apply selection first so Enhance has identity + wardrobe text.");
       }
@@ -408,19 +375,17 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt:
-            "Rewrite this character identity and wardrobe into a strong photoreal character-reference sheet prompt. Keep every listed physical trait. No extra people, no scene environment.\n\n" +
-            raw,
+          prompt: raw,
           model_id: models.t2iId,
-          mode: "image",
           modality: "t2i",
+          mode: "image",
         }),
       });
       const body = await readJson<GenBody>(res);
       const rewritten = (body.prompt || "").trim();
       if (!res.ok || body.ok === false || !rewritten) {
         throw new Error(
-          errOf(body, "Enhance returned an empty or incomplete reply. Try again."),
+          errOf(body, "Enhance returned an empty or incomplete reply. Try again.", res),
         );
       }
       setIdentityPrompt(rewritten);
@@ -605,15 +570,15 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="ghost"
-          disabled={applying || enhancing || busy}
-          onClick={() => void applySelection()}
+          disabled={enhancing || busy}
+          onClick={applySelection}
         >
-          {applying ? "Applying…" : "Apply selection"}
+          Apply selection
         </button>
         <button
           type="button"
           className="ghost enhance"
-          disabled={enhancing || busy || applying}
+          disabled={enhancing || busy}
           onClick={() => void onEnhance()}
         >
           {enhancing ? "Enhancing…" : "Enhance"}
@@ -624,7 +589,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <textarea
           className="prompt nowheel"
           rows={5}
-          placeholder="Apply selection to compose identity + wardrobe here"
+          placeholder="Apply selection composes identity + wardrobe here. Enhance rewrites this."
           value={identityPrompt}
           onChange={(e) => setIdentityPrompt(e.target.value)}
         />
@@ -635,7 +600,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || applying || !name.trim()}
+          disabled={busy || enhancing || !name.trim()}
           onClick={() => void generateSlot("front")}
         >
           {busySlot === "front" ? "Generating Front…" : "Generate Front"}
@@ -643,7 +608,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || applying || !haveFront}
+          disabled={busy || enhancing || !haveFront}
           onClick={() => void generateSlot("side")}
         >
           {busySlot === "side" ? "Generating Side…" : "Generate Side"}
@@ -651,7 +616,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         <button
           type="button"
           className="generate"
-          disabled={busy || enhancing || applying || !haveFront}
+          disabled={busy || enhancing || !haveFront}
           onClick={() => void generateSlot("closeup")}
         >
           {busySlot === "closeup" ? "Generating Close-up…" : "Generate Close-up"}
@@ -664,7 +629,7 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
             key={id}
             type="button"
             className="ghost"
-            disabled={busy || enhancing || applying || !haveFront}
+            disabled={busy || enhancing || !haveFront}
             onClick={() => void generateSlot(id)}
           >
             {busySlot === id ? `Generating ${SLOT_LABEL[id]}…` : `Generate ${SLOT_LABEL[id]}`}

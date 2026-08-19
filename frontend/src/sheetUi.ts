@@ -24,6 +24,59 @@ export const SLOT_LABEL: Record<string, string> = {
   top: "Top",
 };
 
+function bit(v: string | undefined | null): string {
+  return String(v ?? "").trim();
+}
+
+/** Client-side identity paragraph from dropdowns + wardrobe + notes. No API. */
+export function composeCharacterIdentity(
+  fields: Record<string, string>,
+  notes = "",
+): string {
+  const parts: string[] = [];
+  const gender = bit(fields.gender);
+  const age = bit(fields.age);
+  if (gender && age) parts.push(`${gender.toLowerCase()} in their ${age}`);
+  else if (gender) parts.push(gender.toLowerCase());
+  else if (age) parts.push(`adult in their ${age}`);
+  const height = bit(fields.height);
+  if (height) parts.push(`height: ${height}`);
+  const weight = bit(fields.weight) || bit(fields.build);
+  if (weight) parts.push(`build: ${weight}`);
+  const body = bit(fields.body);
+  if (body) parts.push(`body type: ${body}`);
+  const hair = [
+    bit(fields.hair_length),
+    bit(fields.hair_style),
+    bit(fields.hair_color),
+  ].filter(Boolean);
+  if (hair.length) parts.push(`hair: ${hair.join(", ")}`);
+  const facial = bit(fields.facial_hair);
+  if (facial) {
+    parts.push(
+      facial.toLowerCase() === "none"
+        ? "clean-shaven, no facial hair"
+        : `facial hair: ${facial}`,
+    );
+  }
+  const eyes = bit(fields.eye_color);
+  if (eyes) parts.push(`eyes: ${eyes}`);
+  const skin = bit(fields.skin);
+  if (skin) parts.push(`skin tone: ${skin}`);
+  const face = bit(fields.face_shape);
+  if (face) parts.push(`face shape: ${face}`);
+  const nose = bit(fields.nose);
+  if (nose) parts.push(`nose: ${nose}`);
+  const jaw = bit(fields.jaw);
+  if (jaw) parts.push(`jaw/chin: ${jaw}`);
+  const wardrobe = bit(fields.wardrobe);
+  if (wardrobe) parts.push(`wardrobe: ${wardrobe}`);
+  let head = parts.join("; ");
+  const extra = bit(notes);
+  if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
+  return head || "photoreal adult person";
+}
+
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = `${row.id || ""} ${row.label || ""}`.toLowerCase();

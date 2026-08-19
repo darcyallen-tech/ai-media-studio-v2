@@ -14,6 +14,7 @@ export default defineConfig({
       "/library": "http://127.0.0.1:8000",
       "/resolve": "http://127.0.0.1:8000",
       "/enhance": "http://127.0.0.1:8000",
+      "/assets": "http://127.0.0.1:8000",
       "/characters": "http://127.0.0.1:8000",
       "/scenes": "http://127.0.0.1:8000",
       "/tools": "http://127.0.0.1:8000",
