@@ -6,6 +6,16 @@ import "./index.css";
 
 applyTheme(readStoredTheme());
 
+function isResizeObserverLoop(err: unknown): boolean {
+  const msg =
+    err instanceof Error
+      ? `${err.name} ${err.message}`
+      : typeof err === "string"
+        ? err
+        : "";
+  return /ResizeObserver loop/i.test(msg);
+}
+
 function paintCrash(err: unknown) {
   const root = document.getElementById("root");
   if (!root) return;
@@ -18,11 +28,24 @@ function paintCrash(err: unknown) {
     .replace(/</g, "&lt;")}</pre>`;
 }
 
-window.addEventListener("error", (event) => {
-  console.error("App error", event.error || event.message, event);
-  paintCrash(event.error || event.message);
-});
+window.addEventListener(
+  "error",
+  (event) => {
+    if (isResizeObserverLoop(event.message) || isResizeObserverLoop(event.error)) {
+      event.stopImmediatePropagation();
+      event.preventDefault();
+      return;
+    }
+    console.error("App error", event.error || event.message, event);
+    paintCrash(event.error || event.message);
+  },
+  true,
+);
 window.addEventListener("unhandledrejection", (event) => {
+  if (isResizeObserverLoop(event.reason)) {
+    event.preventDefault();
+    return;
+  }
   console.error("App unhandled rejection", event.reason);
   paintCrash(event.reason);
 });
@@ -33,6 +56,7 @@ class RootErrorBoundary extends Component<
 > {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
+    if (isResizeObserverLoop(error)) return { error: null };
     return { error };
   }
   componentDidCatch(error: Error, info: ErrorInfo) {

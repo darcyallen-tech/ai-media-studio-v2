@@ -16,7 +16,15 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const sizeChoices = Array.isArray(data.resolutionChoices)
     ? data.resolutionChoices.filter(Boolean)
     : [];
-  const [size, setSize] = useState(data.resolution || sizeChoices[0] || "");
+  const [size, setSize] = useState(
+    data.aspect || data.resolution || sizeChoices[0] || "",
+  );
+  const qualityOpts = Array.isArray(data.qualityChoices)
+    ? data.qualityChoices.filter(Boolean)
+    : [];
+  const [quality, setQuality] = useState(
+    data.quality || qualityOpts[0] || "",
+  );
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localUrl, setLocalUrl] = useState("");
@@ -142,7 +150,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           prompt,
           source_still: slot === "front" ? "" : data.sourceStill || "",
           wardrobe: data.wardrobe || "",
-          resolution: size || data.resolution || "",
+          resolution: quality || size || data.resolution || "",
+          aspect: data.aspect || size || "",
         }),
       });
       const body = await readJson(res);
@@ -202,7 +211,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         <div className="media" onDoubleClick={enlarge}>
           {paths.map((src) =>
             isVideoPath(src) ? (
-              <ResizableMedia key={src} id={`result-vid-${src}`} minHeight={140} defaultHeight={220}>
+              <ResizableMedia key={src} id={`result-vid-${src}`} minHeight={140} defaultHeight={220} locked={busy || data.generating}>
               <video
                 src={src}
                 controls
@@ -232,7 +241,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 }}
                 onDragEnd={() => endLibraryDrag()}
               >
-              <ResizableMedia id={`result-img-${src}`} minHeight={120} defaultHeight={220}>
+              <ResizableMedia id={`result-img-${src}`} minHeight={120} defaultHeight={220} locked={busy || data.generating}>
               <img
                 src={src}
                 alt="Generated result"
@@ -260,17 +269,34 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           <>
             {sizeChoices.length ? (
               <label className="builder-field">
-                <span className="field-label">Resolution</span>
+                <span className="field-label">Aspect / size</span>
                 <select
                   className="model"
                   value={sizeChoices.includes(size) ? size : sizeChoices[0]}
-                  disabled={data.generating}
+                  disabled={data.generating || busy}
                   onChange={(e) => {
                     setSize(e.target.value);
                     data.onResolution?.(e.target.value);
                   }}
                 >
                   {sizeChoices.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {qualityOpts.length ? (
+              <label className="builder-field">
+                <span className="field-label">Quality</span>
+                <select
+                  className="model"
+                  value={qualityOpts.includes(quality) ? quality : qualityOpts[0]}
+                  disabled={data.generating || busy}
+                  onChange={(e) => setQuality(e.target.value)}
+                >
+                  {qualityOpts.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>

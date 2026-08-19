@@ -1332,6 +1332,9 @@ function StudioCanvas() {
               resolution: patch.resolution ?? prev?.resolution ?? "",
               resolutionChoices:
                 patch.resolutionChoices ?? prev?.resolutionChoices ?? [],
+              aspect: patch.aspect ?? prev?.aspect,
+              quality: patch.quality ?? prev?.quality,
+              qualityChoices: patch.qualityChoices ?? prev?.qualityChoices,
               t2iModel: patch.t2iModel ?? prev?.t2iModel,
               r2iModel: patch.r2iModel ?? prev?.r2iModel,
               assetId: patch.assetId ?? prev?.assetId,
@@ -1384,8 +1387,12 @@ function StudioCanvas() {
             current,
           );
         });
-        if (panTo && (panTo.x || panTo.y)) {
-          setCenter(panTo.x + 200, panTo.y + 150, { duration: 180, zoom: 1 });
+        if (panTo && (panTo.x || panTo.y) && !patch.generating) {
+          const x = panTo.x;
+          const y = panTo.y;
+          window.setTimeout(() => {
+            setCenter(x + 200, y + 150, { duration: 180, zoom: 1 });
+          }, 50);
         }
       } catch (err: unknown) {
         console.error("Angle Result spawn failed", err);
@@ -1532,6 +1539,7 @@ function StudioCanvas() {
             source_still: sourceStill,
             wardrobe: session?.wardrobe || "",
             resolution,
+            aspect: (angle.data as ResultNodeData).aspect || resolution,
           }),
         });
         const body = (await readJson(res)) as {
@@ -3263,7 +3271,16 @@ function StudioCanvas() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={(changes) => {
+          const busy = nodes.some(
+            (n) => n.type === "result" && Boolean(n.data.generating),
+          );
+          onNodesChange(
+            busy
+              ? changes.filter((c) => c.type !== "dimensions")
+              : changes,
+          );
+        }}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onDragOver={onFlowDragOver}

@@ -13,6 +13,7 @@ type Props = {
   maxHeight?: number;
   defaultHeight?: number;
   className?: string;
+  locked?: boolean;
   children: ReactNode;
 };
 
@@ -22,6 +23,7 @@ export default function ResizableMedia({
   maxHeight = 520,
   defaultHeight = 180,
   className,
+  locked = false,
   children,
 }: Props) {
   const key = `ams-preview-${id}`;
@@ -74,6 +76,7 @@ export default function ResizableMedia({
       style={{ height }}
     >
       <div className="resize-media-body">{children}</div>
+      {locked ? null : (
       <button
         type="button"
         className="resize-handle nodrag nopan"
@@ -84,6 +87,7 @@ export default function ResizableMedia({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       />
+      )}
     </div>
   );
 }
