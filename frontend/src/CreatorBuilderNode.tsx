@@ -307,9 +307,19 @@ function CharacterForm({
         cost: estimate,
         focus: true,
       };
-      spawnAngleResult({ builderId, ...patch });
+      const session = sessionPayload(data.sessionAssetId || "", ident, label);
+      spawnAngleResult({
+        builderId,
+        ...patch,
+        t2iModel: session.t2iModel,
+        r2iModel: session.r2iModel,
+        name: session.name,
+        fields: session.fields,
+        wardrobe: session.wardrobe,
+        notes: session.notes,
+      });
       setError(null);
-      data.onSession?.(sessionPayload(data.sessionAssetId || "", ident, label));
+      data.onSession?.(session);
     } catch (err: unknown) {
       console.error("Angle Result spawn failed", err);
       const msg = err instanceof Error ? err.message : "Could not open Result node.";

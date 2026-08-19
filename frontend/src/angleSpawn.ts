@@ -3,7 +3,15 @@ import type { SheetAnglePatch } from "./types";
 export const ANGLE_SPAWN_EVENT = "ams-spawn-angle";
 export const ANGLE_GENERATE_EVENT = "ams-generate-angle";
 
-export type AngleSpawnDetail = SheetAnglePatch & { builderId: string };
+export type AngleSpawnDetail = SheetAnglePatch & {
+  builderId: string;
+  t2iModel?: string;
+  r2iModel?: string;
+  name?: string;
+  fields?: Record<string, string>;
+  wardrobe?: string;
+  notes?: string;
+};
 
 export type AngleGenerateDetail = {
   builderId: string;

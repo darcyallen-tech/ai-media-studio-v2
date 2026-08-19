@@ -63,7 +63,7 @@ import {
   type AngleGenerateDetail,
   type AngleSpawnDetail,
 } from "./angleSpawn";
-import { SLOT_LABEL } from "./sheetUi";
+import { CORE_SLOTS, EXTRA_SLOTS, SLOT_LABEL } from "./sheetUi";
 import { bindToast, toast } from "./toast";
 import {
   assetToLibraryItem,
@@ -1388,6 +1388,26 @@ function StudioCanvas() {
         return;
       }
       try {
+        setBuilderSessions((cur) => {
+          const prev = cur[detail.builderId];
+          return {
+            ...cur,
+            [detail.builderId]: {
+              assetId: prev?.assetId || "",
+              t2iModel: detail.t2iModel || prev?.t2iModel || "",
+              r2iModel: detail.r2iModel || prev?.r2iModel || "",
+              slots: prev?.slots?.length
+                ? prev.slots
+                : [...CORE_SLOTS, ...EXTRA_SLOTS],
+              attachSlotId: prev?.attachSlotId,
+              name: detail.name || prev?.name || "Character",
+              fields: detail.fields || prev?.fields,
+              wardrobe: detail.wardrobe || prev?.wardrobe,
+              notes: detail.notes || prev?.notes,
+              done: prev?.done || {},
+            },
+          };
+        });
         upsertSheetAngle(detail.builderId, detail.slot, {
           ...detail,
           focus: true,
@@ -1415,48 +1435,43 @@ function StudioCanvas() {
 
   const regenSheetAngle = useCallback(
     async (builderId: string, slot: string, promptOverride?: string) => {
-      const session = builderSessions[builderId];
-      if (!session) {
-        toast("Open the angle from the Character Builder first.", true);
+      const live = getNodes();
+      const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
+      if (!angle || angle.type !== "result") {
+        toast("Angle Result node is missing.", true);
         return;
       }
-      const live = getNodes();
+      const session = builderSessions[builderId];
       const anglePath = (id: string) => {
         const node = live.find((n) => n.id === id);
         if (!node || node.type !== "result") return "";
         const data = node.data as ResultNodeData;
         return data.result?.local_paths?.[0] || "";
       };
-      const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
       const prompt = (
         promptOverride ??
-        (angle?.type === "result"
-          ? (angle.data as ResultNodeData).prompt || ""
-          : "")
+        ((angle.data as ResultNodeData).prompt || "")
       ).trim();
-      const order = session.slots.length ? session.slots : ["front", "side", "closeup"];
-      const idx = order.indexOf(slot);
       const frontPath = anglePath(`sang-${builderId}-front`);
-      const priorSlot = idx > 0 ? order[idx - 1] : "";
-      const priorPath =
-        slot === "front"
-          ? ""
-          : frontPath || (priorSlot ? anglePath(`sang-${builderId}-${priorSlot}`) : "");
+      if (slot !== "front" && !frontPath) {
+        const msg = "Generate Front first";
+        upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
+        toast(msg, true);
+        return;
+      }
+      const sourceStill = slot === "front" ? "" : frontPath;
       upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
       try {
-        let assetId = session.assetId;
+        let assetId = session?.assetId || "";
         if (!assetId) {
-          if (!session.name) {
-            throw new Error("Character name is missing. Open the angle from the Builder.");
-          }
           const created = await fetch("/assets/sheet/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               kind: "character",
-              name: session.name,
-              notes: session.notes || "",
-              fields: session.fields || {},
+              name: session?.name || "Character",
+              notes: session?.notes || "",
+              fields: session?.fields || {},
             }),
           });
           const draft = (await readJson(created)) as {
@@ -1480,10 +1495,13 @@ function StudioCanvas() {
           body: JSON.stringify({
             asset_id: assetId,
             slot,
-            model_id: slot === "front" ? session.t2iModel : session.r2iModel,
+            model_id:
+              slot === "front"
+                ? session?.t2iModel || ""
+                : session?.r2iModel || session?.t2iModel || "",
             prompt,
-            source_still: priorPath,
-            wardrobe: session.wardrobe || "",
+            source_still: sourceStill,
+            wardrobe: session?.wardrobe || "",
           }),
         });
         const body = (await readJson(res)) as {
@@ -1503,13 +1521,21 @@ function StudioCanvas() {
         const url = body.item.identity_urls?.[slot] || body.item.url || "";
         setBuilderSessions((cur) => {
           const prev = cur[builderId];
-          if (!prev) return cur;
           return {
             ...cur,
             [builderId]: {
-              ...prev,
               assetId,
-              done: { ...(prev.done || {}), [slot]: path },
+              t2iModel: prev?.t2iModel || "",
+              r2iModel: prev?.r2iModel || "",
+              slots: prev?.slots?.length
+                ? prev.slots
+                : [...CORE_SLOTS, ...EXTRA_SLOTS],
+              attachSlotId: prev?.attachSlotId,
+              name: prev?.name || "Character",
+              fields: prev?.fields,
+              wardrobe: prev?.wardrobe,
+              notes: prev?.notes,
+              done: { ...(prev?.done || {}), [slot]: path },
             },
           };
         });
