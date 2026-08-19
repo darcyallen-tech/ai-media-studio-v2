@@ -527,6 +527,27 @@ def estimate_sheet_cost(
     slots: list[str] | None = None,
 ) -> dict[str, Any]:
     """Sum catalog estimates for the selected models × still count."""
+    try:
+        return _estimate_sheet_cost_inner(
+            kind=kind,
+            t2i_model_id=t2i_model_id,
+            r2i_model_id=r2i_model_id,
+            slots=slots,
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("sheet estimate failed")
+        return {"ok": True, "cost": "Est. cost: —", "usd": 0.0, "count": 0, "angles": []}
+
+
+def _estimate_sheet_cost_inner(
+    *,
+    kind: str = "character",
+    t2i_model_id: str = "",
+    r2i_model_id: str = "",
+    slots: list[str] | None = None,
+) -> dict[str, Any]:
     want = (kind or "character").strip().lower()
     planned = [s for s in (slots or list(CORE_SLOTS)) if s]
     if not planned:

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
+import NodeErrorBoundary from "./NodeErrorBoundary";
 import { toast } from "./toast";
 import {
   CORE_SLOTS,
@@ -41,7 +42,16 @@ function errOf(body: GenBody, fallback: string) {
 export default function CreatorBuilderNode({
   data,
 }: NodeProps<CreatorBuilderFlowNode>) {
-  const kind = data.kind;
+  const kind = data?.kind || "character";
+  const safe: CreatorBuilderNodeData = {
+    kind,
+    attachSlotId: data?.attachSlotId,
+    bases: Array.isArray(data?.bases) ? data.bases : [],
+    onClose: data?.onClose,
+    onAngle: typeof data?.onAngle === "function" ? data.onAngle : () => undefined,
+    onSession: data?.onSession,
+    onSaved: typeof data?.onSaved === "function" ? data.onSaved : () => undefined,
+  };
   return (
     <div className="studio-node creator-builder-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
@@ -55,19 +65,31 @@ export default function CreatorBuilderNode({
                 ? "Prop Builder"
                 : "Character Builder"}
         </span>
-        <NodeClose onClose={data.onClose} />
+        <NodeClose onClose={safe.onClose} />
       </div>
-      <div className="node-body nodrag">
-        {kind === "scene" ? (
-          <SceneForm data={data} />
-        ) : kind === "prop" ? (
-          <PropForm data={data} />
-        ) : kind === "costume" ? (
-          <CostumeForm data={data} />
-        ) : (
-          <CharacterForm data={data} />
-        )}
-      </div>
+      <NodeErrorBoundary
+        label={
+          kind === "costume"
+            ? "Costume Designer"
+            : kind === "scene"
+              ? "Scene Builder"
+              : kind === "prop"
+                ? "Prop Builder"
+                : "Character Builder"
+        }
+      >
+        <div className="node-body nodrag">
+          {kind === "scene" ? (
+            <SceneForm data={safe} />
+          ) : kind === "prop" ? (
+            <PropForm data={safe} />
+          ) : kind === "costume" ? (
+            <CostumeForm data={safe} />
+          ) : (
+            <CharacterForm data={safe} />
+          )}
+        </div>
+      </NodeErrorBoundary>
       <Handle type="source" position={Position.Right} className="node-handle" />
     </div>
   );
@@ -104,9 +126,11 @@ const FACE = ["oval", "round", "square", "heart", "diamond", "oblong"];
 const NOSE = ["straight", "button", "roman", "wide", "narrow", "upturned"];
 const JAW = ["soft", "defined", "square", "rounded", "pointed", "cleft"];
 
-function pickField(value: string, custom: string) {
-  if (value === "Custom") return custom.trim();
-  return value.trim();
+function pickField(value?: string | null, custom?: string | null) {
+  const v = String(value ?? "");
+  const c = String(custom ?? "");
+  if (v === "Custom") return c.trim();
+  return v.trim();
 }
 
 function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
@@ -149,7 +173,10 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   const [ready, setReady] = useState(false);
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
-  const slots = useMemo(() => [...CORE_SLOTS, ...extras], [extras]);
+  const slots = useMemo(
+    () => [...CORE_SLOTS, ...(Array.isArray(extras) ? extras : [])],
+    [extras],
+  );
   const estimate = useSheetEstimate(
     "character",
     models.t2iId,
@@ -1137,12 +1164,18 @@ function FieldSelect({
   onValue: (v: string) => void;
   onCustom: (v: string) => void;
 }) {
+  const opts = Array.isArray(options) ? options.filter(Boolean) : [];
+  const safe = opts.includes(value) || value === "Custom" ? value || opts[0] || "" : opts[0] || "";
   return (
     <label className="param">
       <span>{label}</span>
-      <select className="model" value={value} onChange={(e) => onValue(e.target.value)}>
-        {options.map((item) => (
-          <option key={item} value={item}>
+      <select
+        className="model"
+        value={safe}
+        onChange={(e) => onValue(e.target.value)}
+      >
+        {opts.map((item) => (
+          <option key={`${label}-${item}`} value={item}>
             {item}
           </option>
         ))}
@@ -1169,6 +1202,10 @@ function ModelPickers({
   t2iOnly?: boolean;
   r2iOnly?: boolean;
 }) {
+  const t2i = Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [];
+  const r2i = Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [];
+  const t2iId = t2i.some((m) => m.id === models?.t2iId) ? models.t2iId : t2i[0]?.id || "";
+  const r2iId = r2i.some((m) => m.id === models?.r2iId) ? models.r2iId : r2i[0]?.id || "";
   return (
     <div className="params">
       {!r2iOnly ? (
@@ -1176,12 +1213,13 @@ function ModelPickers({
           <span>Front model (T2I)</span>
           <select
             className="model"
-            value={models.t2iId}
+            value={t2iId}
             onChange={(e) => models.setT2iId(e.target.value)}
           >
-            {models.t2i.map((m) => (
+            {t2i.length === 0 ? <option value="">Loading models…</option> : null}
+            {t2i.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label}
+                {m.label || m.id}
               </option>
             ))}
           </select>
@@ -1192,12 +1230,13 @@ function ModelPickers({
           <span>Angle model (R2I)</span>
           <select
             className="model"
-            value={models.r2iId}
+            value={r2iId}
             onChange={(e) => models.setR2iId(e.target.value)}
           >
-            {models.r2i.map((m) => (
+            {r2i.length === 0 ? <option value="">Loading models…</option> : null}
+            {r2i.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label}
+                {m.label || m.id}
               </option>
             ))}
           </select>

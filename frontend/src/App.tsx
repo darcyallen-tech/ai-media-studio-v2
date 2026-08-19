@@ -1200,24 +1200,32 @@ function StudioCanvas() {
 
   const addCreatorBuilder = useCallback(
     (kind: CreatorKind, attachSlotId?: string) => {
-      const id = `cbuild-${kind}-${Date.now().toString(36)}`;
+      const safeKind: CreatorKind =
+        kind === "costume" || kind === "scene" || kind === "prop"
+          ? kind
+          : "character";
+      const id = `cbuild-${safeKind}-${Date.now().toString(36)}`;
+      try {
       setNodes((current) => {
         if (current.some((n) => n.id === id)) return current;
         const prompt = current.find((n) => n.id === "prompt");
         const builders = current.filter((n) => n.type === "creator-builder");
-        const y = builders.length
-          ? Math.max(...builders.map((n) => n.position.y)) + 36
+        const ys = builders
+          .map((n) => Number(n.position?.y))
+          .filter((n) => Number.isFinite(n));
+        const y = ys.length
+          ? Math.max(...ys) + 36
           : (prompt?.position.y ?? PROMPT_POS.y) - 20;
         const node: StudioNode = {
           id,
           type: "creator-builder",
           position: {
             x: Math.max(-520, (prompt?.position.x ?? PROMPT_POS.x) - 460),
-            y,
+            y: Number.isFinite(y) ? y : PROMPT_POS.y,
           },
           dragHandle: ".node-header",
           data: {
-            kind,
+            kind: safeKind,
             attachSlotId,
             onAngle: () => undefined,
             onSaved: () => undefined,
@@ -1226,6 +1234,10 @@ function StudioCanvas() {
         };
         return [...current, node];
       });
+      } catch (err) {
+        console.error("New builder failed", err);
+        toast("Could not open the builder node.", true);
+      }
     },
     [closeNode, setNodes],
   );
@@ -2535,13 +2547,13 @@ function StudioCanvas() {
           };
         }
         if (n.type === "creator-builder") {
-          const kind = n.data.kind;
+          const kind = n.data?.kind || "character";
           return {
             ...n,
             type: "creator-builder",
             data: {
               kind,
-              attachSlotId: n.data.attachSlotId,
+              attachSlotId: n.data?.attachSlotId,
               onClose: () => closeNode(n.id),
               onAngle: (slot, patch) => upsertSheetAngle(n.id, slot, patch),
               onSession: (info) =>
