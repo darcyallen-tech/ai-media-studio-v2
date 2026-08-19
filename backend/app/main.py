@@ -58,6 +58,7 @@ from app.sheet import (  # noqa: E402
     compose_angle_prompt,
     estimate_sheet_cost,
     generate_angle,
+    short_generate_error,
 )
 from app.aleph_service import (  # noqa: E402
     estimate_frame_label,
@@ -1128,6 +1129,7 @@ class AssetSheetAngleIn(BaseModel):
     wardrobe: str = ""
     prompt: str = ""
     source_still: str = ""
+    resolution: str = ""
 
 
 class AssetSheetEstimateIn(BaseModel):
@@ -1135,6 +1137,10 @@ class AssetSheetEstimateIn(BaseModel):
     t2i_model_id: str = ""
     r2i_model_id: str = ""
     slots: list[str] = Field(default_factory=list)
+    t2i_resolution: str = ""
+    r2i_resolution: str = ""
+    t2i_resolution: str = ""
+    r2i_resolution: str = ""
 
 
 class AssetSheetPromptIn(BaseModel):
@@ -1179,11 +1185,14 @@ def assets_sheet_angle(body: AssetSheetAngleIn) -> dict[str, Any]:
             wardrobe=body.wardrobe,
             prompt=body.prompt,
             source_still=body.source_still,
+            resolution=body.resolution,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=short_generate_error(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=short_generate_error(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=short_generate_error(exc)) from exc
     return {"ok": True, "item": row}
 
 
@@ -1194,6 +1203,8 @@ def assets_sheet_estimate(body: AssetSheetEstimateIn) -> dict[str, Any]:
         t2i_model_id=body.t2i_model_id,
         r2i_model_id=body.r2i_model_id,
         slots=list(body.slots or []),
+        t2i_resolution=body.t2i_resolution,
+        r2i_resolution=body.r2i_resolution,
     )
 
 

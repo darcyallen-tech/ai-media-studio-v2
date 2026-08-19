@@ -2105,8 +2105,35 @@ def build_edit_arguments(
             args[spec.resolution_param] = res
 
     if spec.image_size_param:
-        size = params.get("image_size") or other.get("image_size") or params.get("resolution") or "auto"
-        args[spec.image_size_param] = str(size) if size else "auto"
+        size = (
+            params.get("image_size")
+            or other.get("image_size")
+            or params.get("resolution")
+            or ""
+        )
+        clamped = spec.clamp_resolution(str(size) if size else None)
+        allowed = {str(a).lower(): str(a) for a in (spec.allowed_resolutions or ())}
+        if clamped and allowed and str(clamped).lower() not in allowed:
+            fallback = spec.default_resolution
+            if fallback and str(fallback).lower() in allowed:
+                clamped = allowed[str(fallback).lower()]
+            elif allowed:
+                # never send bare "auto" unless the model lists it
+                prefer = (
+                    "portrait_16_9",
+                    "portrait_4_3",
+                    "auto_2K",
+                    "2K",
+                    "square_hd",
+                    "auto_4K",
+                    "4K",
+                    "1K",
+                )
+                clamped = next(
+                    (allowed[p] for p in prefer if p in allowed),
+                    next(iter(allowed.values())),
+                )
+        args[spec.image_size_param] = str(clamped or spec.default_resolution or "auto_2K")
 
     if spec.output_format_param:
         fmt = (

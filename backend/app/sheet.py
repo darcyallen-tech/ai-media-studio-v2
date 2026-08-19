@@ -505,19 +505,26 @@ def _usd_from_label(label: str) -> float:
     return float(match.group(1)) if match else 0.0
 
 
-def _angle_usd(model_id: str, modality: str) -> tuple[str, float]:
+def _angle_usd(model_id: str, modality: str, resolution: str = "") -> tuple[str, float]:
     from app.create import estimate_create_cost
     from app.create_catalog import default_model_for, resolve_model
-    from app.create_state import CreateState
+    from app.create_state import CreateParams, CreateState
 
     mid = (model_id or "").strip()
     if not mid:
         fallback = default_model_for("image", modality)
         mid = fallback.id if fallback else ""
     usd = 0.0
+    size = character_angle_resolution(mid, modality, requested=resolution)
     if mid:
         label = estimate_create_cost(
-            CreateState(mode="image", modality=modality, model_id=mid, prompt="sheet")
+            CreateState(
+                mode="image",
+                modality=modality,
+                model_id=mid,
+                prompt="sheet",
+                params=CreateParams(resolution=size, aspect=size),
+            )
         )
         usd = _usd_from_label(label)
         if usd <= 0:
@@ -545,6 +552,8 @@ def estimate_sheet_cost(
     t2i_model_id: str = "",
     r2i_model_id: str = "",
     slots: list[str] | None = None,
+    t2i_resolution: str = "",
+    r2i_resolution: str = "",
 ) -> dict[str, Any]:
     """Sum catalog estimates for the selected models × still count."""
     try:
@@ -553,6 +562,8 @@ def estimate_sheet_cost(
             t2i_model_id=t2i_model_id,
             r2i_model_id=r2i_model_id,
             slots=slots,
+            t2i_resolution=t2i_resolution,
+            r2i_resolution=r2i_resolution,
         )
     except Exception:
         import logging
@@ -567,6 +578,8 @@ def _estimate_sheet_cost_inner(
     t2i_model_id: str = "",
     r2i_model_id: str = "",
     slots: list[str] | None = None,
+    t2i_resolution: str = "",
+    r2i_resolution: str = "",
 ) -> dict[str, Any]:
     want = (kind or "character").strip().lower()
     planned = [s for s in (slots or list(CORE_SLOTS)) if s]
@@ -588,7 +601,8 @@ def _estimate_sheet_cost_inner(
         else:
             modality = "i2i"
             mid = (r2i_model_id or t2i_model_id).strip()
-        mid, usd = _angle_usd(mid, modality)
+        size = r2i_resolution if (want == "costume" or not first) else t2i_resolution
+        mid, usd = _angle_usd(mid, modality, resolution=size)
         total += usd
         angles.append(
             {
@@ -605,6 +619,95 @@ def _estimate_sheet_cost_inner(
     return {"ok": True, "cost": cost, "usd": total, "count": n, "angles": angles}
 
 
+_PORTRAIT_SIZE_PREFER: tuple[str, ...] = (
+    "portrait_16_9",
+    "portrait_4_3",
+    "9:16 portrait",
+    "3:4 portrait",
+    "auto_2K",
+    "2K",
+    "square_hd",
+    "1:1 square HD",
+    "auto_4K",
+    "4K",
+    "1K",
+    "auto",
+)
+
+
+def short_generate_error(exc: BaseException | str) -> str:
+    """One-line user error — no traceback / pydantic dump."""
+    text = str(exc or "").strip()
+    if not text:
+        return "Generate failed."
+    low = text.lower()
+    compact = low.replace("_", "").replace("-", "").replace(" ", "")
+    if "imagesize" in compact and (
+        "auto" in low or "enum" in low or "input should be" in low
+    ):
+        return "This model rejected image_size. Pick a listed resolution (not Auto)."
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("File ") or "Traceback" in line:
+            continue
+        if "pydantic" in line.lower() or "validationerror" in line.lower():
+            continue
+        return line[:200] + ("…" if len(line) > 200 else "")
+    return "Generate failed."
+
+
+def _size_choices_for_entry(entry: Any) -> list[str]:
+    if entry is None:
+        return []
+    choices = [str(x).strip() for x in (getattr(entry, "resolution_choices", ()) or ()) if str(x).strip()]
+    if not choices:
+        choices = [str(x).strip() for x in (getattr(entry, "aspect_choices", ()) or ()) if str(x).strip()]
+    return choices
+
+
+def pick_character_resolution(
+    allowed: list[str],
+    requested: str = "",
+    default: str = "",
+) -> str:
+    opts = [a for a in allowed if a]
+    if not opts:
+        return (requested or default or "portrait_16_9").strip()
+    lower = {a.lower(): a for a in opts}
+    req = (requested or "").strip()
+    if req.lower() in lower:
+        picked = lower[req.lower()]
+        if picked.lower() != "auto" or all(k == "auto" for k in lower):
+            return picked
+    for pref in _PORTRAIT_SIZE_PREFER:
+        if pref.lower() in lower:
+            return lower[pref.lower()]
+    if default and default.lower() in lower and default.lower() != "auto":
+        return lower[default.lower()]
+    non_auto = [a for a in opts if a.lower() != "auto"]
+    return non_auto[0] if non_auto else opts[0]
+
+
+def character_angle_resolution(
+    model_id: str,
+    modality: str,
+    requested: str = "",
+) -> str:
+    from app.create_catalog import default_model_for, resolve_model
+
+    mid = (model_id or "").strip()
+    entry = resolve_model(mid, mode="image", modality=modality) if mid else None
+    if entry is None:
+        entry = default_model_for("image", modality)
+    allowed = _size_choices_for_entry(entry)
+    default = str(
+        getattr(entry, "default_resolution", "")
+        or getattr(entry, "default_aspect", "")
+        or ""
+    )
+    return pick_character_resolution(allowed, requested, default)
+
+
 def generate_angle(
     *,
     asset_id: str,
@@ -615,6 +718,7 @@ def generate_angle(
     wardrobe: str = "",
     prompt: str = "",
     source_still: str = "",
+    resolution: str = "",
 ) -> dict[str, Any]:
     from app.config import OUTPUT_DIR
     from app.create import generate
@@ -668,21 +772,27 @@ def generate_angle(
 
     start = refs[0] if refs else None
     extras = refs[1:] if len(refs) > 1 else []
+    size = character_angle_resolution(mid, modality, requested=resolution)
     state = CreateState(
         mode="image",
         modality=modality,  # type: ignore[arg-type]
         model_id=mid,
         prompt=text,
         slots=CreateSlots(start_still=start, ref_images=extras),
-        params=CreateParams(),
+        params=CreateParams(resolution=size, aspect=size),
         surface="studio",
         output_dir=OUTPUT_DIR,
     )
-    result = generate(state)
+    try:
+        result = generate(state)
+    except Exception as exc:
+        raise RuntimeError(short_generate_error(exc)) from exc
     if not result.ok:
         raise RuntimeError(
-            (result.status or "")
-            or (result.errors[0] if result.errors else "Generate failed.")
+            short_generate_error(
+                (result.status or "")
+                or (result.errors[0] if result.errors else "Generate failed.")
+            )
         )
     still = _pick_result_still(result)
     if not still:
@@ -702,4 +812,5 @@ def generate_angle(
         or getattr(result, "cost_estimate", "")
         or ""
     )
+    pub["resolution"] = size
     return pub
