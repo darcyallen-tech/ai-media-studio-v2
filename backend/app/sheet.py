@@ -126,11 +126,146 @@ CHAR_JAW = ("soft", "defined", "square", "rounded", "pointed", "cleft")
 CHAR_BODY_HAIR = ("none", "light", "medium", "heavy")
 CHAR_BUST = ("small", "medium", "large")
 SCENE_SETTINGS = ("interior", "exterior")
+SCENE_LOCATIONS = (
+    "bar",
+    "street",
+    "apartment",
+    "office",
+    "warehouse",
+    "forest",
+    "beach",
+    "castle",
+    "temple",
+    "studio",
+    "alley",
+    "diner",
+)
 SCENE_TIMES = ("dawn", "day", "golden hour", "dusk", "night")
-SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful")
-PROP_TYPES = ("object", "handheld", "furniture", "vehicle", "food", "other")
-PROP_MATERIALS = ("metal", "wood", "plastic", "glass", "fabric", "ceramic", "mixed")
-COSTUME_TAGS = ("everyday", "hero", "era", "fantasy", "formal", "sport", "workwear")
+SCENE_WEATHER = ("clear", "overcast", "rain", "fog", "snow", "storm")
+SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful", "ominous")
+SCENE_ARCHITECTURE = (
+    "modern",
+    "industrial",
+    "victorian",
+    "brutalist",
+    "timber",
+    "stone",
+    "neon",
+)
+SCENE_LIGHTING = (
+    "practical",
+    "neon",
+    "candle",
+    "moonlight",
+    "fluorescent",
+    "cinematic",
+    "window light",
+)
+SCENE_CAMERA = (
+    "wide establishing",
+    "eye-level",
+    "low angle",
+    "high angle",
+    "handheld",
+    "locked-off still",
+)
+PROP_TYPES = (
+    "object",
+    "handheld",
+    "furniture",
+    "vehicle",
+    "food",
+    "tool",
+    "weapon",
+    "other",
+)
+PROP_MATERIALS = (
+    "metal",
+    "wood",
+    "plastic",
+    "glass",
+    "fabric",
+    "ceramic",
+    "leather",
+    "mixed",
+)
+PROP_SCALES = ("miniature", "handheld", "tabletop", "life-size", "oversized")
+PROP_CONDITIONS = ("pristine", "new", "worn", "rusty", "broken")
+COSTUME_TAGS = (
+    "everyday",
+    "hero",
+    "era",
+    "fantasy",
+    "formal",
+    "sport",
+    "workwear",
+    "armor",
+    "ceremonial",
+)
+COSTUME_ERAS = (
+    "contemporary",
+    "1920s",
+    "1940s",
+    "1960s",
+    "1980s",
+    "medieval",
+    "victorian",
+    "ancient",
+    "far future",
+)
+COSTUME_REGIONS = (
+    "western",
+    "east asian",
+    "south asian",
+    "middle eastern",
+    "african",
+    "nordic",
+    "generic studio",
+)
+COSTUME_SILHOUETTES = (
+    "slim",
+    "tailored",
+    "bulky armor",
+    "flowing",
+    "layered",
+    "utilitarian",
+)
+COSTUME_MATERIALS = (
+    "cotton",
+    "linen",
+    "wool",
+    "silk",
+    "leather",
+    "denim",
+    "velvet",
+    "canvas",
+    "metal plate",
+    "chainmail",
+    "rubber",
+)
+COSTUME_COLORS = (
+    "black",
+    "white",
+    "red",
+    "blue",
+    "green",
+    "gold",
+    "silver",
+    "brown",
+    "crimson",
+    "steel",
+)
+COSTUME_FITS = ("fitted", "tailored", "loose", "oversized", "layered")
+COSTUME_CONDITIONS = ("pristine", "new", "worn", "weathered", "battle-damaged")
+COSTUME_LAYERS: tuple[str, ...] = (
+    "top",
+    "bottom",
+    "footwear",
+    "over",
+    "head",
+    "hands",
+    "accessories",
+)
 COSTUME_SLOTS: tuple[str, ...] = ("front", "side", "back")
 
 
@@ -148,9 +283,14 @@ def builder_fields(kind: str) -> dict[str, Any]:
             "ok": True,
             "kind": "scene",
             "fields": {
-                "setting": {"label": "Setting", "choices": list(SCENE_SETTINGS)},
+                "location": {"label": "Location type", "choices": list(SCENE_LOCATIONS)},
+                "setting": {"label": "Interior / exterior", "choices": list(SCENE_SETTINGS)},
                 "time": {"label": "Time of day", "choices": list(SCENE_TIMES)},
+                "weather": {"label": "Weather", "choices": list(SCENE_WEATHER)},
                 "mood": {"label": "Mood", "choices": list(SCENE_MOODS)},
+                "architecture": {"label": "Architecture", "choices": list(SCENE_ARCHITECTURE)},
+                "lighting": {"label": "Lighting", "choices": list(SCENE_LIGHTING)},
+                "camera": {"label": "Camera feel", "choices": list(SCENE_CAMERA)},
                 "elements": {"label": "Key elements", "type": "text"},
                 "notes": {"label": "Notes", "type": "text"},
             },
@@ -163,10 +303,31 @@ def builder_fields(kind: str) -> dict[str, Any]:
                 "ptype": {"label": "Type", "choices": list(PROP_TYPES)},
                 "material": {"label": "Material", "choices": list(PROP_MATERIALS)},
                 "color": {"label": "Color", "type": "text"},
+                "scale": {"label": "Scale", "choices": list(PROP_SCALES)},
+                "condition": {"label": "Condition", "choices": list(PROP_CONDITIONS)},
                 "notes": {"label": "Notes", "type": "text"},
             },
         }
     if k == "costume":
+        layer_fields: dict[str, Any] = {}
+        for layer in COSTUME_LAYERS:
+            layer_fields[layer] = {"label": layer.title(), "type": "text"}
+            layer_fields[f"{layer}_material"] = {
+                "label": f"{layer.title()} material",
+                "choices": list(COSTUME_MATERIALS),
+            }
+            layer_fields[f"{layer}_color"] = {
+                "label": f"{layer.title()} color",
+                "choices": list(COSTUME_COLORS),
+            }
+            layer_fields[f"{layer}_fit"] = {
+                "label": f"{layer.title()} fit",
+                "choices": list(COSTUME_FITS),
+            }
+            layer_fields[f"{layer}_condition"] = {
+                "label": f"{layer.title()} condition",
+                "choices": list(COSTUME_CONDITIONS),
+            }
         return {
             "ok": True,
             "kind": "costume",
@@ -175,12 +336,16 @@ def builder_fields(kind: str) -> dict[str, Any]:
                 for s in COSTUME_SLOTS
             ],
             "fields": {
-                "tag": {"label": "Look", "choices": list(COSTUME_TAGS)},
-                "top": {"label": "Top", "type": "text"},
-                "bottom": {"label": "Bottom", "type": "text"},
-                "footwear": {"label": "Footwear", "type": "text"},
+                "category": {"label": "Category", "choices": list(COSTUME_TAGS)},
+                "era": {"label": "Era", "choices": list(COSTUME_ERAS)},
+                "region": {"label": "Region", "choices": list(COSTUME_REGIONS)},
+                "silhouette": {"label": "Hero silhouette", "choices": list(COSTUME_SILHOUETTES)},
+                "palette": {"label": "Hero palette", "type": "text"},
+                "signature": {"label": "Signature piece", "type": "text"},
+                "emblem": {"label": "Emblem", "type": "text"},
                 "wardrobe": {"label": "Outfit", "type": "text"},
                 "notes": {"label": "Notes", "type": "text"},
+                **layer_fields,
             },
         }
     return {
@@ -370,6 +535,58 @@ def character_angle_prompt(
     return body
 
 
+def costume_brief(fields: dict[str, Any] | None) -> str:
+    f = fields or {}
+    override = _nv(f.get("wardrobe")) or _nv(f.get("identity_prompt"))
+    if override:
+        return override
+    parts: list[str] = []
+    cat = _choice(f, "category") or _choice(f, "tag")
+    if cat:
+        parts.append(f"{cat} costume")
+    era = _choice(f, "era")
+    if era:
+        parts.append(f"era: {era}")
+    region = _choice(f, "region")
+    if region:
+        parts.append(f"region: {region}")
+    sil = _choice(f, "silhouette")
+    if sil:
+        parts.append(f"silhouette: {sil}")
+    pal = _nv(f.get("palette"))
+    if pal:
+        parts.append(f"palette: {pal}")
+    sig = _nv(f.get("signature"))
+    if sig:
+        parts.append(f"signature piece: {sig}")
+    emblem = _nv(f.get("emblem"))
+    if emblem:
+        parts.append(f"emblem: {emblem}")
+    for layer in COSTUME_LAYERS:
+        item = _choice(f, layer) or _nv(f.get(layer))
+        if not item:
+            continue
+        bits = [item]
+        col = _choice(f, f"{layer}_color") or _nv(f.get(f"{layer}_color"))
+        mat = _choice(f, f"{layer}_material") or _nv(f.get(f"{layer}_material"))
+        fit = _choice(f, f"{layer}_fit") or _nv(f.get(f"{layer}_fit"))
+        cond = _choice(f, f"{layer}_condition") or _nv(f.get(f"{layer}_condition"))
+        if col:
+            bits.append(col)
+        if mat:
+            bits.append(mat)
+        if fit:
+            bits.append(f"{fit} fit")
+        if cond:
+            bits.append(cond)
+        parts.append(f"{layer}: {', '.join(bits)}")
+    head = "; ".join(parts)
+    extra = _nv(f.get("notes"))
+    if extra:
+        head = f"{head}. Extra: {extra}" if head else extra
+    return head
+
+
 def costume_prompt(slot: str, outfit: str, extra: str = "") -> str:
     """Standalone costume plate — mannequin / no face identity."""
     key = slot if slot in PROFILE_VIEWS else "front"
@@ -422,51 +639,83 @@ def dress_prompt(slot: str, outfit: str, extra: str = "") -> str:
 
 def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
     f = fields or {}
+    override = _nv(f.get("identity_prompt")) or _nv(f.get("prompt"))
     name = _nv(f.get("name")) or "the location"
-    setting = _nv(f.get("setting"))
-    time = _nv(f.get("time"))
-    mood = _nv(f.get("mood"))
+    loc = _choice(f, "location") or _choice(f, "setting")
+    time = _choice(f, "time")
+    weather = _choice(f, "weather")
+    mood = _choice(f, "mood")
+    arch = _choice(f, "architecture")
+    light = _choice(f, "lighting")
+    cam = _choice(f, "camera")
     elements = _nv(f.get("elements"))
     notes = _nv(f.get("notes"))
-    bits = [f"Establishing still of {name}."]
-    if setting:
-        bits.append(f"{setting.capitalize()} location.")
-    if time:
-        bits.append(f"Time of day: {time}.")
-    if mood:
-        bits.append(f"Mood: {mood}.")
-    if elements:
-        bits.append(f"Key elements: {elements}.")
-    if detail:
-        bits.append("Closer detail angle of the same space, matching lighting and architecture.")
+    if override:
+        head = override
     else:
-        bits.append("Wide hero view so we know the space.")
-    bits.append("Empty of prominent people. Photoreal. No text, no logo, no watermark.")
-    if notes:
-        bits.append(notes)
-    return " ".join(bits)
+        bits: list[str] = []
+        if loc:
+            bits.append(f"{name}, a {loc}" if name != "the location" else f"{loc} location")
+        else:
+            bits.append(f"Establishing still of {name}.")
+        if time:
+            bits.append(f"time: {time}")
+        if weather:
+            bits.append(f"weather: {weather}")
+        if mood:
+            bits.append(f"mood: {mood}")
+        if arch:
+            bits.append(f"architecture: {arch}")
+        if light:
+            bits.append(f"lighting: {light}")
+        if cam:
+            bits.append(f"camera: {cam}")
+        if elements:
+            bits.append(f"key elements: {elements}")
+        head = "; ".join(bits) if bits else f"Establishing still of {name}."
+    view = (
+        "Closer detail angle of the same space, matching lighting and architecture."
+        if detail
+        else "Wide hero establishing view so we know the space."
+    )
+    out = f"{head}. {view} Empty of prominent people. Photoreal. No text, no logo, no watermark."
+    if notes and notes not in out:
+        out = f"{out} {notes}"
+    return out
 
 
 def prop_prompt(fields: dict[str, Any] | None) -> str:
     f = fields or {}
+    override = _nv(f.get("identity_prompt")) or _nv(f.get("prompt"))
     name = _nv(f.get("name")) or "the object"
-    ptype = _nv(f.get("ptype") or f.get("type"))
-    material = _nv(f.get("material"))
-    color = _nv(f.get("color"))
+    ptype = _choice(f, "ptype") or _nv(f.get("type"))
+    material = _choice(f, "material")
+    color = _nv(f.get("color")) or _choice(f, "color")
+    scale = _choice(f, "scale")
+    condition = _choice(f, "condition")
     notes = _nv(f.get("notes"))
-    bits = [f"Product-style still of {name}."]
-    if ptype:
-        bits.append(f"Type: {ptype}.")
-    look = " ".join(x for x in (color, material) if x)
-    if look:
-        bits.append(f"{look}.")
-    bits.append(
-        "Isolated on a clean neutral studio background, even lighting, "
-        "no people, no text, no logo, no watermark."
+    if override:
+        head = override
+    else:
+        bits = [name]
+        if ptype:
+            bits.append(f"type: {ptype}")
+        if material:
+            bits.append(f"material: {material}")
+        if color:
+            bits.append(f"color: {color}")
+        if scale:
+            bits.append(f"scale: {scale}")
+        if condition:
+            bits.append(f"condition: {condition}")
+        head = "; ".join(bits)
+    out = (
+        f"Product-style still of {head}. Isolated on a clean neutral studio background, "
+        "even lighting, no people, no text, no logo, no watermark."
     )
-    if notes:
-        bits.append(notes)
-    return " ".join(bits)
+    if notes and notes not in out:
+        out = f"{out} {notes}"
+    return out
 
 
 def _identity_refs(row: dict[str, Any], parent: dict[str, Any] | None) -> list[str]:
@@ -539,7 +788,7 @@ def compose_angle_prompt(
         return scene_prompt(merged, detail=key != "front")
     if kind == "prop":
         return prop_prompt(merged)
-    outfit = wardrobe or _nv((fields or {}).get("wardrobe"))
+    outfit = wardrobe or _nv((fields or {}).get("wardrobe")) or costume_brief(fields)
     if kind == "costume":
         return costume_prompt(key, outfit, extra)
     if is_costume or _nv((fields or {}).get("costume_id")):

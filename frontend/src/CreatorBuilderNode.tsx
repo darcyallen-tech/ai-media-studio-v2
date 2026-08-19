@@ -8,16 +8,41 @@ import { toast } from "./toast";
 import { importOsFiles, isOsFileDrag } from "./osImport";
 import {
   CORE_SLOTS,
+  COSTUME_COLORS,
+  COSTUME_CONDITIONS,
+  COSTUME_ERAS,
+  COSTUME_FITS,
+  COSTUME_LAYERS,
+  COSTUME_MATERIALS,
+  COSTUME_REGIONS,
+  COSTUME_SILHOUETTES,
   COSTUME_SLOTS,
   COSTUME_TAGS,
   EXTRA_SLOTS,
+  LAYER_ITEMS,
+  PROP_CONDITIONS,
+  PROP_MATERIALS,
+  PROP_SCALES,
+  PROP_TYPES,
+  SCENE_ARCHITECTURE,
+  SCENE_CAMERA,
+  SCENE_LIGHTING,
+  SCENE_LOCATIONS,
+  SCENE_MOODS,
+  SCENE_TIMES,
+  SCENE_WEATHER,
   SLOT_LABEL,
   WARDROBE_F,
   WARDROBE_M,
   composeAnglePrompt,
   composeCharacterIdentity,
+  composeCostumeBrief,
   composeCostumePrompt,
   composeDressPrompt,
+  composePropBrief,
+  composePropStill,
+  composeSceneBrief,
+  composeSceneStill,
   pickDefaultResolution,
   qualityChoices,
   sizeChoices,
@@ -983,11 +1008,26 @@ function CostumeForm({
   builderId: string;
 }) {
   const [name, setName] = useState("");
-  const [tag, setTag] = useState("everyday");
-  const [top, setTop] = useState("");
-  const [bottom, setBottom] = useState("");
-  const [footwear, setFootwear] = useState("");
-  const [extra, setExtra] = useState("");
+  const [category, setCategory] = useState("fantasy");
+  const [categoryC, setCategoryC] = useState("");
+  const [era, setEra] = useState("medieval");
+  const [eraC, setEraC] = useState("");
+  const [region, setRegion] = useState("");
+  const [regionC, setRegionC] = useState("");
+  const [silhouette, setSilhouette] = useState("bulky armor");
+  const [silhouetteC, setSilhouetteC] = useState("");
+  const [palette, setPalette] = useState("");
+  const [paletteC, setPaletteC] = useState("");
+  const [signature, setSignature] = useState("");
+  const [signatureC, setSignatureC] = useState("");
+  const [emblem, setEmblem] = useState("");
+  const [emblemC, setEmblemC] = useState("");
+  const [layers, setLayers] = useState<Record<string, LayerState>>(() =>
+    Object.fromEntries(COSTUME_LAYERS.map((k) => [k, emptyLayer()])),
+  );
+  const [notes, setNotes] = useState("");
+  const [outfitPrompt, setOutfitPrompt] = useState("");
+  const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
@@ -1006,11 +1046,40 @@ function CostumeForm({
     models,
   );
 
+  const costumeFields = useMemo(() => {
+    const flat: Record<string, string> = {
+      category: pickField(category, categoryC),
+      era: pickField(era, eraC),
+      region: pickField(region, regionC),
+      silhouette: pickField(silhouette, silhouetteC),
+      palette: pickField(palette, paletteC),
+      signature: pickField(signature, signatureC),
+      emblem: pickField(emblem, emblemC),
+    };
+    for (const key of COSTUME_LAYERS) {
+      Object.assign(flat, flattenLayer(key, layers[key] || emptyLayer()));
+    }
+    return flat;
+  }, [
+    category,
+    categoryC,
+    era,
+    eraC,
+    region,
+    regionC,
+    silhouette,
+    silhouetteC,
+    palette,
+    paletteC,
+    signature,
+    signatureC,
+    emblem,
+    emblemC,
+    layers,
+  ]);
+
   function outfitText() {
-    return [tag && `${tag} look`, top, bottom, footwear, extra]
-      .map((s) => String(s || "").trim())
-      .filter(Boolean)
-      .join(". ");
+    return outfitPrompt.trim() || composeCostumeBrief(costumeFields, notes);
   }
 
   async function ensureDraft() {
@@ -1023,8 +1092,8 @@ function CostumeForm({
       body: JSON.stringify({
         kind: "costume",
         name: label,
-        notes: extra.trim(),
-        fields: { tag, top, bottom, footwear, wardrobe: outfit, notes: extra.trim() },
+        notes: notes.trim(),
+        fields: { ...costumeFields, wardrobe: outfit, notes: notes.trim() },
       }),
     });
     const draft = await readJson<GenBody>(created);
@@ -1035,8 +1104,8 @@ function CostumeForm({
       r2iModel: models.r2iId || models.t2iId,
       slots: [...COSTUME_SLOTS],
       name: label,
-      fields: { wardrobe: outfit },
-      notes: extra.trim(),
+      fields: { ...costumeFields, wardrobe: outfit },
+      notes: notes.trim(),
     });
     return draft.item.id;
   }
@@ -1044,7 +1113,7 @@ function CostumeForm({
   function openPlate(slot: string) {
     const outfit = outfitText();
     if (!outfit) {
-      setError("Describe the outfit (tags, top/bottom, or notes).");
+      setError("Apply selection first — pick a category or at least one layer.");
       return;
     }
     try {
@@ -1054,7 +1123,7 @@ function CostumeForm({
           builderId,
           slot,
           label: SLOT_LABEL[slot] || slot,
-          prompt: composeCostumePrompt(slot, outfit, extra),
+          prompt: composeCostumePrompt(slot, outfit),
           generating: false,
           error: null,
           focus: true,
@@ -1093,8 +1162,8 @@ function CostumeForm({
         body: JSON.stringify({
           asset_id: id,
           name: name.trim() || "Costume",
-          notes: extra.trim(),
-          fields: { tag, top, bottom, footwear, wardrobe: outfitText() },
+          notes: notes.trim(),
+          fields: { ...costumeFields, wardrobe: outfitText() },
           require_front: true,
         }),
       });
@@ -1113,42 +1182,147 @@ function CostumeForm({
   return (
     <>
       <p className="hint">
-        Costume plates are faceless mannequins — no identity. Generate 2–3 angles, then Save.
+        Faceless mannequin plates — no identity. Apply selection builds the outfit prompt.
+        Generate Front / Side / Back on Result nodes, then Save.
       </p>
       <label className="builder-field">
         <span className="field-label">Costume name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <label className="param">
-        <span>Look</span>
-        <select className="model" value={tag} onChange={(e) => setTag(e.target.value)}>
-          {COSTUME_TAGS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Top</span>
-        <input className="model" value={top} onChange={(e) => setTop(e.target.value)} placeholder="jacket, blouse…" />
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Bottom</span>
-        <input className="model" value={bottom} onChange={(e) => setBottom(e.target.value)} placeholder="trousers, skirt…" />
-      </label>
-      <label className="builder-field">
-        <span className="field-label">Footwear</span>
-        <input className="model" value={footwear} onChange={(e) => setFootwear(e.target.value)} />
-      </label>
+      <div className="params">
+        <FieldSelect
+          label="Category"
+          value={category}
+          custom={categoryC}
+          options={COSTUME_TAGS}
+          allowEmpty
+          onValue={setCategory}
+          onCustom={setCategoryC}
+        />
+        <FieldSelect
+          label="Era"
+          value={era}
+          custom={eraC}
+          options={COSTUME_ERAS}
+          allowEmpty
+          onValue={setEra}
+          onCustom={setEraC}
+        />
+        <FieldSelect
+          label="Region"
+          value={region}
+          custom={regionC}
+          options={COSTUME_REGIONS}
+          allowEmpty
+          onValue={setRegion}
+          onCustom={setRegionC}
+        />
+      </div>
+      <span className="field-label">Hero</span>
+      <div className="params">
+        <FieldSelect
+          label="Silhouette"
+          value={silhouette}
+          custom={silhouetteC}
+          options={COSTUME_SILHOUETTES}
+          allowEmpty
+          onValue={setSilhouette}
+          onCustom={setSilhouetteC}
+        />
+        <FieldSelect
+          label="Palette"
+          value={palette}
+          custom={paletteC}
+          options={COSTUME_COLORS}
+          allowEmpty
+          onValue={setPalette}
+          onCustom={setPaletteC}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Signature"
+          value={signature}
+          custom={signatureC}
+          options={LAYER_ITEMS.head}
+          allowEmpty
+          onValue={setSignature}
+          onCustom={setSignatureC}
+        />
+        <FieldSelect
+          label="Emblem"
+          value={emblem}
+          custom={emblemC}
+          options={["crest", "rune", "house mark", "none"]}
+          allowEmpty
+          onValue={setEmblem}
+          onCustom={setEmblemC}
+        />
+      </div>
+      {COSTUME_LAYERS.map((key) => (
+        <LayerBlock
+          key={key}
+          label={key}
+          itemOpts={LAYER_ITEMS[key]}
+          layer={layers[key] || emptyLayer()}
+          onChange={(next) => setLayers((cur) => ({ ...cur, [key]: next }))}
+        />
+      ))}
       <label className="builder-field">
         <span className="field-label">Notes</span>
         <textarea
           className="prompt nowheel"
           rows={2}
-          placeholder="Era, fabric, colors, accessories…"
-          value={extra}
-          onChange={(e) => setExtra(e.target.value)}
+          placeholder="Optional extras"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </label>
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            const text = composeCostumeBrief(costumeFields, notes);
+            setOutfitPrompt(text);
+            setError(null);
+            toast(text ? "Outfit prompt applied." : "Nothing to compose yet.");
+          }}
+        >
+          Apply selection
+        </button>
+        <button
+          type="button"
+          className="ghost enhance"
+          disabled={enhancing}
+          onClick={() => {
+            const raw = outfitText();
+            setEnhancing(true);
+            setError(null);
+            void enhancePrompt(raw, models.t2iId)
+              .then((text) => {
+                setOutfitPrompt(text);
+                toast("Outfit enhanced.");
+              })
+              .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : "Enhance failed.";
+                setError(msg);
+                toast(msg, true);
+              })
+              .finally(() => setEnhancing(false));
+          }}
+        >
+          {enhancing ? "Enhancing…" : "Enhance"}
+        </button>
+      </div>
+      <label className="builder-field">
+        <span className="field-label">Outfit prompt</span>
+        <textarea
+          className="prompt nowheel"
+          rows={5}
+          placeholder="Apply selection composes the mannequin outfit here. Enhance rewrites this."
+          value={outfitPrompt}
+          onChange={(e) => setOutfitPrompt(e.target.value)}
         />
       </label>
       <ModelPickers models={models} />
@@ -1410,11 +1584,26 @@ function SceneForm({
   builderId: string;
 }) {
   const [name, setName] = useState("");
+  const [location, setLocation] = useState("bar");
+  const [locationC, setLocationC] = useState("");
   const [setting, setSetting] = useState("interior");
-  const [time, setTime] = useState("day");
-  const [mood, setMood] = useState("calm");
+  const [settingC, setSettingC] = useState("");
+  const [time, setTime] = useState("night");
+  const [timeC, setTimeC] = useState("");
+  const [weather, setWeather] = useState("");
+  const [weatherC, setWeatherC] = useState("");
+  const [mood, setMood] = useState("gritty");
+  const [moodC, setMoodC] = useState("");
+  const [architecture, setArchitecture] = useState("");
+  const [architectureC, setArchitectureC] = useState("");
+  const [lighting, setLighting] = useState("neon");
+  const [lightingC, setLightingC] = useState("");
+  const [camera, setCamera] = useState("wide establishing");
+  const [cameraC, setCameraC] = useState("");
   const [elements, setElements] = useState("");
   const [notes, setNotes] = useState("");
+  const [scenePrompt, setScenePrompt] = useState("");
+  const [enhancing, setEnhancing] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1422,6 +1611,23 @@ function SceneForm({
   const slots = sheet ? ["front", "side"] : ["front"];
   const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots, models);
   const haveFront = Boolean(data.doneSlots?.front);
+  function sceneFields() {
+    return {
+      name: name.trim(),
+      location: pickField(location, locationC),
+      setting: pickField(setting, settingC),
+      time: pickField(time, timeC),
+      weather: pickField(weather, weatherC),
+      mood: pickField(mood, moodC),
+      architecture: pickField(architecture, architectureC),
+      lighting: pickField(lighting, lightingC),
+      camera: pickField(camera, cameraC),
+      elements: elements.trim(),
+    };
+  }
+  function sceneText() {
+    return scenePrompt.trim() || composeSceneBrief(sceneFields(), notes);
+  }
 
   async function ensureDraft() {
     const label = name.trim();
@@ -1434,7 +1640,7 @@ function SceneForm({
         kind: "scene",
         name: label,
         notes: notes.trim(),
-        fields: { setting, time, mood, elements: elements.trim(), notes: notes.trim() },
+        fields: { ...sceneFields(), prompt: sceneText(), notes: notes.trim() },
       }),
     });
     const draft = await readJson<GenBody>(created);
@@ -1456,7 +1662,7 @@ function SceneForm({
           builderId,
           slot,
           label: slot === "front" ? "Hero" : "Detail",
-          prompt: `${name.trim() || "the location"}. ${setting} ${time} ${mood}. ${elements}`.trim(),
+          prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
           generating: false,
           error: null,
           focus: true,
@@ -1489,7 +1695,7 @@ function SceneForm({
           asset_id: id,
           name: name.trim(),
           notes: notes.trim(),
-          fields: { setting, time, mood, elements: elements.trim() },
+          fields: { ...sceneFields(), prompt: sceneText() },
           require_front: true,
         }),
       });
@@ -1507,34 +1713,90 @@ function SceneForm({
 
   return (
     <>
+      <p className="hint">
+        Apply selection builds the location prompt. Generate Hero on a Result node, then Save.
+      </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="params">
-        <label className="param">
-          <span>Setting</span>
-          <select className="model" value={setting} onChange={(e) => setSetting(e.target.value)}>
-            <option>interior</option>
-            <option>exterior</option>
-          </select>
-        </label>
-        <label className="param">
-          <span>Time</span>
-          <select className="model" value={time} onChange={(e) => setTime(e.target.value)}>
-            {["dawn", "day", "golden hour", "dusk", "night"].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
-        <label className="param">
-          <span>Mood</span>
-          <select className="model" value={mood} onChange={(e) => setMood(e.target.value)}>
-            {["calm", "tense", "romantic", "gritty", "luxurious", "playful"].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
+        <FieldSelect
+          label="Location"
+          value={location}
+          custom={locationC}
+          options={SCENE_LOCATIONS}
+          allowEmpty
+          onValue={setLocation}
+          onCustom={setLocationC}
+        />
+        <FieldSelect
+          label="Interior / ext."
+          value={setting}
+          custom={settingC}
+          options={["interior", "exterior"]}
+          allowEmpty
+          onValue={setSetting}
+          onCustom={setSettingC}
+        />
+        <FieldSelect
+          label="Time"
+          value={time}
+          custom={timeC}
+          options={SCENE_TIMES}
+          allowEmpty
+          onValue={setTime}
+          onCustom={setTimeC}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Weather"
+          value={weather}
+          custom={weatherC}
+          options={SCENE_WEATHER}
+          allowEmpty
+          onValue={setWeather}
+          onCustom={setWeatherC}
+        />
+        <FieldSelect
+          label="Mood"
+          value={mood}
+          custom={moodC}
+          options={SCENE_MOODS}
+          allowEmpty
+          onValue={setMood}
+          onCustom={setMoodC}
+        />
+        <FieldSelect
+          label="Architecture"
+          value={architecture}
+          custom={architectureC}
+          options={SCENE_ARCHITECTURE}
+          allowEmpty
+          onValue={setArchitecture}
+          onCustom={setArchitectureC}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Lighting"
+          value={lighting}
+          custom={lightingC}
+          options={SCENE_LIGHTING}
+          allowEmpty
+          onValue={setLighting}
+          onCustom={setLightingC}
+        />
+        <FieldSelect
+          label="Camera"
+          value={camera}
+          custom={cameraC}
+          options={SCENE_CAMERA}
+          allowEmpty
+          onValue={setCamera}
+          onCustom={setCameraC}
+        />
       </div>
       <label className="builder-field">
         <span className="field-label">Key elements</span>
@@ -1547,6 +1809,52 @@ function SceneForm({
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+        />
+      </label>
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            const text = composeSceneBrief(sceneFields(), notes);
+            setScenePrompt(text);
+            setError(null);
+            toast(text ? "Scene prompt applied." : "Nothing to compose yet.");
+          }}
+        >
+          Apply selection
+        </button>
+        <button
+          type="button"
+          className="ghost enhance"
+          disabled={enhancing}
+          onClick={() => {
+            setEnhancing(true);
+            setError(null);
+            void enhancePrompt(sceneText(), models.t2iId)
+              .then((text) => {
+                setScenePrompt(text);
+                toast("Scene enhanced.");
+              })
+              .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : "Enhance failed.";
+                setError(msg);
+                toast(msg, true);
+              })
+              .finally(() => setEnhancing(false));
+          }}
+        >
+          {enhancing ? "Enhancing…" : "Enhance"}
+        </button>
+      </div>
+      <label className="builder-field">
+        <span className="field-label">Scene prompt</span>
+        <textarea
+          className="prompt nowheel"
+          rows={4}
+          placeholder="Apply selection composes the location here."
+          value={scenePrompt}
+          onChange={(e) => setScenePrompt(e.target.value)}
         />
       </label>
       <label className="builder-field">
@@ -1588,14 +1896,36 @@ function PropForm({
 }) {
   const [name, setName] = useState("");
   const [ptype, setPtype] = useState("object");
+  const [ptypeC, setPtypeC] = useState("");
   const [material, setMaterial] = useState("metal");
+  const [materialC, setMaterialC] = useState("");
   const [color, setColor] = useState("");
+  const [colorC, setColorC] = useState("");
+  const [scale, setScale] = useState("handheld");
+  const [scaleC, setScaleC] = useState("");
+  const [condition, setCondition] = useState("");
+  const [conditionC, setConditionC] = useState("");
   const [notes, setNotes] = useState("");
+  const [propPrompt, setPropPrompt] = useState("");
+  const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
   const haveFront = Boolean(data.doneSlots?.front);
   const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"], models);
+  function propFields() {
+    return {
+      name: name.trim(),
+      ptype: pickField(ptype, ptypeC),
+      material: pickField(material, materialC),
+      color: pickField(color, colorC),
+      scale: pickField(scale, scaleC),
+      condition: pickField(condition, conditionC),
+    };
+  }
+  function propText() {
+    return propPrompt.trim() || composePropBrief(propFields(), notes);
+  }
 
   async function ensureDraft() {
     const label = name.trim();
@@ -1608,7 +1938,7 @@ function PropForm({
         kind: "prop",
         name: label,
         notes: notes.trim(),
-        fields: { ptype, material, color: color.trim(), notes: notes.trim() },
+        fields: { ...propFields(), prompt: propText(), notes: notes.trim() },
       }),
     });
     const draft = await readJson<GenBody>(created);
@@ -1630,7 +1960,7 @@ function PropForm({
           builderId,
           slot: "front",
           label: "Still",
-          prompt: `${name.trim()}. ${ptype} ${material} ${color}`.trim(),
+          prompt: composePropStill(propText()),
           generating: false,
           error: null,
           focus: true,
@@ -1661,7 +1991,7 @@ function PropForm({
           asset_id: id,
           name: name.trim(),
           notes: notes.trim(),
-          fields: { ptype, material, color: color.trim() },
+          fields: { ...propFields(), prompt: propText() },
           require_front: true,
         }),
       });
@@ -1679,32 +2009,62 @@ function PropForm({
 
   return (
     <>
+      <p className="hint">
+        Apply selection builds the prop prompt. Generate the still on a Result node, then Save.
+      </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <div className="params">
-        <label className="param">
-          <span>Type</span>
-          <select className="model" value={ptype} onChange={(e) => setPtype(e.target.value)}>
-            {["object", "handheld", "furniture", "vehicle", "food", "other"].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
-        <label className="param">
-          <span>Material</span>
-          <select className="model" value={material} onChange={(e) => setMaterial(e.target.value)}>
-            {["metal", "wood", "plastic", "glass", "fabric", "ceramic", "mixed"].map((x) => (
-              <option key={x}>{x}</option>
-            ))}
-          </select>
-        </label>
+        <FieldSelect
+          label="Type"
+          value={ptype}
+          custom={ptypeC}
+          options={PROP_TYPES}
+          allowEmpty
+          onValue={setPtype}
+          onCustom={setPtypeC}
+        />
+        <FieldSelect
+          label="Material"
+          value={material}
+          custom={materialC}
+          options={PROP_MATERIALS}
+          allowEmpty
+          onValue={setMaterial}
+          onCustom={setMaterialC}
+        />
+        <FieldSelect
+          label="Color"
+          value={color}
+          custom={colorC}
+          options={COSTUME_COLORS}
+          allowEmpty
+          onValue={setColor}
+          onCustom={setColorC}
+        />
       </div>
-      <label className="builder-field">
-        <span className="field-label">Color</span>
-        <input className="model" value={color} onChange={(e) => setColor(e.target.value)} />
-      </label>
+      <div className="params">
+        <FieldSelect
+          label="Scale"
+          value={scale}
+          custom={scaleC}
+          options={PROP_SCALES}
+          allowEmpty
+          onValue={setScale}
+          onCustom={setScaleC}
+        />
+        <FieldSelect
+          label="Condition"
+          value={condition}
+          custom={conditionC}
+          options={PROP_CONDITIONS}
+          allowEmpty
+          onValue={setCondition}
+          onCustom={setConditionC}
+        />
+      </div>
       <label className="builder-field">
         <span className="field-label">Notes</span>
         <textarea
@@ -1712,6 +2072,52 @@ function PropForm({
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+        />
+      </label>
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            const text = composePropBrief(propFields(), notes);
+            setPropPrompt(text);
+            setError(null);
+            toast(text ? "Prop prompt applied." : "Nothing to compose yet.");
+          }}
+        >
+          Apply selection
+        </button>
+        <button
+          type="button"
+          className="ghost enhance"
+          disabled={enhancing}
+          onClick={() => {
+            setEnhancing(true);
+            setError(null);
+            void enhancePrompt(propText(), models.t2iId)
+              .then((text) => {
+                setPropPrompt(text);
+                toast("Prop enhanced.");
+              })
+              .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : "Enhance failed.";
+                setError(msg);
+                toast(msg, true);
+              })
+              .finally(() => setEnhancing(false));
+          }}
+        >
+          {enhancing ? "Enhancing…" : "Enhance"}
+        </button>
+      </div>
+      <label className="builder-field">
+        <span className="field-label">Prop prompt</span>
+        <textarea
+          className="prompt nowheel"
+          rows={4}
+          placeholder="Apply selection composes the prop here."
+          value={propPrompt}
+          onChange={(e) => setPropPrompt(e.target.value)}
         />
       </label>
       <ModelPickers models={models} t2iOnly />
@@ -1742,6 +2148,65 @@ function PropForm({
   );
 }
 
+async function enhancePrompt(text: string, modelId: string): Promise<string> {
+  const raw = text.trim();
+  if (!raw) throw new Error("Apply selection first so Enhance has text to rewrite.");
+  const res = await fetch("/enhance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: raw,
+      model_id: modelId,
+      modality: "t2i",
+      mode: "image",
+    }),
+  });
+  const body = await readJson<GenBody>(res);
+  const rewritten = (body.prompt || "").trim();
+  if (!res.ok || body.ok === false || !rewritten) {
+    throw new Error(errOf(body, "Enhance returned an empty reply.", res));
+  }
+  return rewritten;
+}
+
+type LayerState = {
+  item: string;
+  itemC: string;
+  material: string;
+  materialC: string;
+  color: string;
+  colorC: string;
+  fit: string;
+  fitC: string;
+  condition: string;
+  conditionC: string;
+};
+
+function emptyLayer(): LayerState {
+  return {
+    item: "",
+    itemC: "",
+    material: "",
+    materialC: "",
+    color: "",
+    colorC: "",
+    fit: "",
+    fitC: "",
+    condition: "",
+    conditionC: "",
+  };
+}
+
+function flattenLayer(key: string, layer: LayerState): Record<string, string> {
+  return {
+    [key]: pickField(layer.item, layer.itemC),
+    [`${key}_material`]: pickField(layer.material, layer.materialC),
+    [`${key}_color`]: pickField(layer.color, layer.colorC),
+    [`${key}_fit`]: pickField(layer.fit, layer.fitC),
+    [`${key}_condition`]: pickField(layer.condition, layer.conditionC),
+  };
+}
+
 function FieldSelect({
   label,
   value,
@@ -1749,16 +2214,19 @@ function FieldSelect({
   options,
   onValue,
   onCustom,
+  allowEmpty,
 }: {
   label: string;
   value: string;
   custom: string;
-  options: string[];
+  options: readonly string[] | string[];
   onValue: (v: string) => void;
   onCustom: (v: string) => void;
+  allowEmpty?: boolean;
 }) {
   const opts = Array.isArray(options) ? options.filter(Boolean) : [];
-  const safe = opts.includes(value) || value === "Custom" ? value || opts[0] || "" : opts[0] || "";
+  const known = opts.includes(value) || value === "Custom" || (allowEmpty && value === "");
+  const safe = known ? value : allowEmpty ? "" : opts[0] || "";
   return (
     <label className="param">
       <span>{label}</span>
@@ -1767,6 +2235,7 @@ function FieldSelect({
         value={safe}
         onChange={(e) => onValue(e.target.value)}
       >
+        {allowEmpty ? <option value="">—</option> : null}
         {opts.map((item) => (
           <option key={`${label}-${item}`} value={item}>
             {item}
@@ -1783,6 +2252,74 @@ function FieldSelect({
         />
       ) : null}
     </label>
+  );
+}
+
+function LayerBlock({
+  label,
+  itemOpts,
+  layer,
+  onChange,
+}: {
+  label: string;
+  itemOpts: readonly string[];
+  layer: LayerState;
+  onChange: (next: LayerState) => void;
+}) {
+  const set = (patch: Partial<LayerState>) => onChange({ ...layer, ...patch });
+  return (
+    <div className="layer-block">
+      <span className="field-label">{label}</span>
+      <div className="params">
+        <FieldSelect
+          label="Item"
+          value={layer.item}
+          custom={layer.itemC}
+          options={itemOpts}
+          allowEmpty
+          onValue={(v) => set({ item: v })}
+          onCustom={(v) => set({ itemC: v })}
+        />
+        <FieldSelect
+          label="Material"
+          value={layer.material}
+          custom={layer.materialC}
+          options={COSTUME_MATERIALS}
+          allowEmpty
+          onValue={(v) => set({ material: v })}
+          onCustom={(v) => set({ materialC: v })}
+        />
+        <FieldSelect
+          label="Color"
+          value={layer.color}
+          custom={layer.colorC}
+          options={COSTUME_COLORS}
+          allowEmpty
+          onValue={(v) => set({ color: v })}
+          onCustom={(v) => set({ colorC: v })}
+        />
+      </div>
+      <div className="params">
+        <FieldSelect
+          label="Fit"
+          value={layer.fit}
+          custom={layer.fitC}
+          options={COSTUME_FITS}
+          allowEmpty
+          onValue={(v) => set({ fit: v })}
+          onCustom={(v) => set({ fitC: v })}
+        />
+        <FieldSelect
+          label="Condition"
+          value={layer.condition}
+          custom={layer.conditionC}
+          options={COSTUME_CONDITIONS}
+          allowEmpty
+          onValue={(v) => set({ condition: v })}
+          onCustom={(v) => set({ conditionC: v })}
+        />
+      </div>
+    </div>
   );
 }
 

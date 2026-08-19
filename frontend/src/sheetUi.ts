@@ -17,7 +17,171 @@ export const COSTUME_TAGS = [
   "formal",
   "sport",
   "workwear",
+  "armor",
+  "ceremonial",
 ] as const;
+
+export const COSTUME_LAYERS = [
+  "top",
+  "bottom",
+  "footwear",
+  "over",
+  "head",
+  "hands",
+  "accessories",
+] as const;
+
+export const COSTUME_ERAS = [
+  "contemporary",
+  "1920s",
+  "1940s",
+  "1960s",
+  "1980s",
+  "medieval",
+  "victorian",
+  "ancient",
+  "far future",
+] as const;
+
+export const COSTUME_REGIONS = [
+  "western",
+  "east asian",
+  "south asian",
+  "middle eastern",
+  "african",
+  "nordic",
+  "generic studio",
+] as const;
+
+export const COSTUME_SILHOUETTES = [
+  "slim",
+  "tailored",
+  "bulky armor",
+  "flowing",
+  "layered",
+  "utilitarian",
+] as const;
+
+export const COSTUME_MATERIALS = [
+  "cotton",
+  "linen",
+  "wool",
+  "silk",
+  "leather",
+  "denim",
+  "velvet",
+  "canvas",
+  "metal plate",
+  "chainmail",
+  "rubber",
+] as const;
+
+export const COSTUME_COLORS = [
+  "black",
+  "white",
+  "red",
+  "blue",
+  "green",
+  "gold",
+  "silver",
+  "brown",
+  "crimson",
+  "steel",
+] as const;
+
+export const COSTUME_FITS = ["fitted", "tailored", "loose", "oversized", "layered"] as const;
+export const COSTUME_CONDITIONS = [
+  "pristine",
+  "new",
+  "worn",
+  "weathered",
+  "battle-damaged",
+] as const;
+
+export const LAYER_ITEMS: Record<(typeof COSTUME_LAYERS)[number], readonly string[]> = {
+  top: ["shirt", "blouse", "tunic", "jacket", "cuirass", "robe"],
+  bottom: ["trousers", "skirt", "shorts", "greaves", "leggings"],
+  footwear: ["boots", "shoes", "sandals", "barefoot"],
+  over: ["cloak", "coat", "cape", "overcoat", "pauldron set"],
+  head: ["helmet", "hood", "hat", "crown", "circlet"],
+  hands: ["gloves", "gauntlets", "rings"],
+  accessories: ["belt", "jewelry", "bag", "sheath", "amulet"],
+};
+
+export const SCENE_LOCATIONS = [
+  "bar",
+  "street",
+  "apartment",
+  "office",
+  "warehouse",
+  "forest",
+  "beach",
+  "castle",
+  "temple",
+  "studio",
+  "alley",
+  "diner",
+] as const;
+export const SCENE_TIMES = ["dawn", "day", "golden hour", "dusk", "night"] as const;
+export const SCENE_WEATHER = ["clear", "overcast", "rain", "fog", "snow", "storm"] as const;
+export const SCENE_MOODS = [
+  "calm",
+  "tense",
+  "romantic",
+  "gritty",
+  "luxurious",
+  "playful",
+  "ominous",
+] as const;
+export const SCENE_ARCHITECTURE = [
+  "modern",
+  "industrial",
+  "victorian",
+  "brutalist",
+  "timber",
+  "stone",
+  "neon",
+] as const;
+export const SCENE_LIGHTING = [
+  "practical",
+  "neon",
+  "candle",
+  "moonlight",
+  "fluorescent",
+  "cinematic",
+  "window light",
+] as const;
+export const SCENE_CAMERA = [
+  "wide establishing",
+  "eye-level",
+  "low angle",
+  "high angle",
+  "handheld",
+  "locked-off still",
+] as const;
+
+export const PROP_TYPES = [
+  "object",
+  "handheld",
+  "furniture",
+  "vehicle",
+  "food",
+  "tool",
+  "weapon",
+  "other",
+] as const;
+export const PROP_MATERIALS = [
+  "metal",
+  "wood",
+  "plastic",
+  "glass",
+  "fabric",
+  "ceramic",
+  "leather",
+  "mixed",
+] as const;
+export const PROP_SCALES = ["miniature", "handheld", "tabletop", "life-size", "oversized"] as const;
+export const PROP_CONDITIONS = ["pristine", "new", "worn", "rusty", "broken"] as const;
 
 export const WARDROBE_M =
   "simple neutral athletic wear, non-revealing, studio character reference";
@@ -129,6 +293,118 @@ export function composeCharacterIdentity(
   const extra = bit(notes);
   if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
   return head || "photoreal adult person";
+}
+
+export function composeCostumeBrief(
+  fields: Record<string, string>,
+  notes = "",
+): string {
+  const parts: string[] = [];
+  const cat = bit(fields.category) || bit(fields.tag);
+  if (cat) parts.push(`${cat} costume`);
+  const era = bit(fields.era);
+  if (era) parts.push(`era: ${era}`);
+  const region = bit(fields.region);
+  if (region) parts.push(`region: ${region}`);
+  const sil = bit(fields.silhouette);
+  if (sil) parts.push(`silhouette: ${sil}`);
+  const pal = bit(fields.palette);
+  if (pal) parts.push(`palette: ${pal}`);
+  const sig = bit(fields.signature);
+  if (sig) parts.push(`signature piece: ${sig}`);
+  const emblem = bit(fields.emblem);
+  if (emblem) parts.push(`emblem: ${emblem}`);
+  for (const layer of COSTUME_LAYERS) {
+    const item = bit(fields[layer]);
+    if (!item) continue;
+    const bits = [item];
+    const col = bit(fields[`${layer}_color`]);
+    const mat = bit(fields[`${layer}_material`]);
+    const fit = bit(fields[`${layer}_fit`]);
+    const cond = bit(fields[`${layer}_condition`]);
+    if (col) bits.push(col);
+    if (mat) bits.push(mat);
+    if (fit) bits.push(`${fit} fit`);
+    if (cond) bits.push(cond);
+    parts.push(`${layer}: ${bits.join(", ")}`);
+  }
+  let head = parts.join("; ");
+  const extra = bit(notes) || bit(fields.notes);
+  if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
+  return head;
+}
+
+export function composeSceneBrief(
+  fields: Record<string, string>,
+  notes = "",
+): string {
+  const parts: string[] = [];
+  const name = bit(fields.name);
+  const loc = bit(fields.location) || bit(fields.setting);
+  if (name && loc) parts.push(`${name}, a ${loc}`);
+  else if (name) parts.push(name);
+  else if (loc) parts.push(`${loc} location`);
+  const time = bit(fields.time);
+  if (time) parts.push(`time: ${time}`);
+  const weather = bit(fields.weather);
+  if (weather) parts.push(`weather: ${weather}`);
+  const mood = bit(fields.mood);
+  if (mood) parts.push(`mood: ${mood}`);
+  const arch = bit(fields.architecture);
+  if (arch) parts.push(`architecture: ${arch}`);
+  const light = bit(fields.lighting);
+  if (light) parts.push(`lighting: ${light}`);
+  const cam = bit(fields.camera);
+  if (cam) parts.push(`camera: ${cam}`);
+  const els = bit(fields.elements);
+  if (els) parts.push(`key elements: ${els}`);
+  let head = parts.join("; ");
+  const extra = bit(notes) || bit(fields.notes);
+  if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
+  return head;
+}
+
+export function composePropBrief(
+  fields: Record<string, string>,
+  notes = "",
+): string {
+  const parts: string[] = [];
+  const name = bit(fields.name);
+  if (name) parts.push(name);
+  const ptype = bit(fields.ptype) || bit(fields.type);
+  if (ptype) parts.push(`type: ${ptype}`);
+  const mat = bit(fields.material);
+  if (mat) parts.push(`material: ${mat}`);
+  const col = bit(fields.color);
+  if (col) parts.push(`color: ${col}`);
+  const scale = bit(fields.scale);
+  if (scale) parts.push(`scale: ${scale}`);
+  const cond = bit(fields.condition);
+  if (cond) parts.push(`condition: ${cond}`);
+  let head = parts.join("; ");
+  const extra = bit(notes) || bit(fields.notes);
+  if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
+  return head;
+}
+
+export function composeSceneStill(brief: string, opts?: { detail?: boolean }): string {
+  const head = bit(brief) || "a photoreal location";
+  const view = opts?.detail
+    ? "Closer detail angle of the same space, matching lighting and architecture."
+    : "Wide hero establishing view so we know the space.";
+  return [
+    `Establishing still of ${head}.`,
+    view,
+    "Empty of prominent people. Photoreal. No text, no logo, no watermark.",
+  ].join(" ");
+}
+
+export function composePropStill(brief: string): string {
+  const head = bit(brief) || "the object";
+  return [
+    `Product-style still of ${head}.`,
+    "Isolated on a clean neutral studio background, even lighting, no people, no text, no logo, no watermark.",
+  ].join(" ");
 }
 
 /** Identity paragraph + one framing line for the angle. No API. */

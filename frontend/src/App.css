@@ -919,6 +919,16 @@
   gap: 6px;
 }
 
+.layer-block {
+  margin: 8px 0 4px;
+  padding-top: 8px;
+  border-top: 1px solid #c5d0dc;
+}
+
+html[data-theme="night"] .layer-block {
+  border-top-color: #3a4554;
+}
+
 .slot-drop {
   border: 1px dashed #8aa4c2;
   border-radius: 8px;
