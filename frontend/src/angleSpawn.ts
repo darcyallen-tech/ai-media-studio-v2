@@ -11,12 +11,15 @@ export type AngleSpawnDetail = SheetAnglePatch & {
   fields?: Record<string, string>;
   wardrobe?: string;
   notes?: string;
+  t2iResolution?: string;
+  r2iResolution?: string;
 };
 
 export type AngleGenerateDetail = {
   builderId: string;
   slot: string;
   prompt?: string;
+  resolution?: string;
 };
 
 export function spawnAngleResult(detail: AngleSpawnDetail) {

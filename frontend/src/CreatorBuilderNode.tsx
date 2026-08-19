@@ -13,6 +13,8 @@ import {
   WARDROBE_M,
   composeAnglePrompt,
   composeCharacterIdentity,
+  pickDefaultResolution,
+  sizeChoices,
   useSheetEstimate,
   useSheetModels,
 } from "./sheetUi";
@@ -197,12 +199,31 @@ function CharacterForm({
   const models = useSheetModels();
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const haveFront = Boolean(data.doneSlots?.front);
+  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
+  const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
+  const frontSizes = sizeChoices(t2iRow);
+  const angleSizes = sizeChoices(r2iRow);
+  const frontSizeKey = frontSizes.join("|");
+  const angleSizeKey = angleSizes.join("|");
+  const [frontRes, setFrontRes] = useState("");
+  const [angleRes, setAngleRes] = useState("");
+  useEffect(() => {
+    setFrontRes((cur) =>
+      frontSizes.includes(cur) ? cur : pickDefaultResolution(frontSizes),
+    );
+  }, [models.t2iId, frontSizeKey]);
+  useEffect(() => {
+    setAngleRes((cur) =>
+      angleSizes.includes(cur) ? cur : pickDefaultResolution(angleSizes),
+    );
+  }, [models.r2iId, angleSizeKey]);
   const estimate = useSheetEstimate(
     "character",
     models.t2iId,
     models.r2iId,
     ["front"],
     models,
+    { t2i: frontRes, r2i: angleRes },
   );
   const identityFields = useMemo(() => {
     const clothes = overrideWardrobe ? wardrobe.trim() : locked;
@@ -290,6 +311,8 @@ function CharacterForm({
       fields: { ...identityFields, identity_prompt: ident },
       wardrobe: identityFields.wardrobe,
       notes: notes.trim(),
+      t2iResolution: frontRes,
+      r2iResolution: angleRes,
     };
   }
 
@@ -306,6 +329,8 @@ function CharacterForm({
         error: null as string | null,
         cost: estimate,
         focus: true,
+        resolution: slot === "front" ? frontRes : angleRes,
+        resolutionChoices: slot === "front" ? frontSizes : angleSizes,
       };
       const session = sessionPayload(data.sessionAssetId || "", ident, label);
       spawnAngleResult({
@@ -317,6 +342,8 @@ function CharacterForm({
         fields: session.fields,
         wardrobe: session.wardrobe,
         notes: session.notes,
+        t2iResolution: session.t2iResolution,
+        r2iResolution: session.r2iResolution,
       });
       setError(null);
       data.onSession?.(session);
@@ -567,6 +594,38 @@ function CharacterForm({
         />
       </label>
       <ModelPickers models={models} />
+      <div className="params">
+        <label className="param">
+          <span>Front size</span>
+          <select
+            className="model"
+            value={frontRes}
+            onChange={(e) => setFrontRes(e.target.value)}
+          >
+            {frontSizes.length === 0 ? <option value="">Default</option> : null}
+            {frontSizes.map((s) => (
+              <option key={`front-${s}`} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="param">
+          <span>Angle size</span>
+          <select
+            className="model"
+            value={angleRes}
+            onChange={(e) => setAngleRes(e.target.value)}
+          >
+            {angleSizes.length === 0 ? <option value="">Default</option> : null}
+            {angleSizes.map((s) => (
+              <option key={`angle-${s}`} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="prompt-actions">
         <button
           type="button"

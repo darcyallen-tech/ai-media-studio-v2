@@ -225,8 +225,11 @@ export type ResultNodeData = {
   error?: string | null;
   builderId?: string;
   slot?: string;
+  resolution?: string;
+  resolutionChoices?: string[];
   onPrompt?: (prompt: string) => void;
   onRegen?: () => void;
+  onResolution?: (resolution: string) => void;
   onClose?: () => void;
   onTool?: (kind: ToolKind) => void;
   onApplyToPin?: () => void;
@@ -325,6 +328,8 @@ export type SheetAnglePatch = {
   generating?: boolean;
   error?: string | null;
   focus?: boolean;
+  resolution?: string;
+  resolutionChoices?: string[];
 };
 
 export type BuilderSessionInfo = {
@@ -336,6 +341,8 @@ export type BuilderSessionInfo = {
   fields?: Record<string, string>;
   wardrobe?: string;
   notes?: string;
+  t2iResolution?: string;
+  r2iResolution?: string;
 };
 
 export type CreatorBuilderNodeData = {

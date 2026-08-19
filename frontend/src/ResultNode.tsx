@@ -57,9 +57,16 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const isAngle = Boolean(data.slot || data.builderId);
   const hasStill = paths.length > 0;
   const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
+  const sizeChoices = Array.isArray(data.resolutionChoices)
+    ? data.resolutionChoices.filter(Boolean)
+    : [];
+  const [size, setSize] = useState(data.resolution || sizeChoices[0] || "");
   useEffect(() => {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
+  useEffect(() => {
+    if (data.resolution && data.resolution !== size) setSize(data.resolution);
+  }, [data.resolution]);
 
   function enlarge() {
     const src = paths[0] || "";
@@ -78,6 +85,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           builderId: data.builderId,
           slot: data.slot,
           prompt: anglePrompt,
+          resolution: size,
         });
         return;
       }
@@ -160,6 +168,26 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         </div>
         {isAngle ? (
           <>
+            {sizeChoices.length ? (
+              <label className="builder-field">
+                <span className="field-label">Resolution</span>
+                <select
+                  className="model"
+                  value={sizeChoices.includes(size) ? size : sizeChoices[0]}
+                  disabled={data.generating}
+                  onChange={(e) => {
+                    setSize(e.target.value);
+                    data.onResolution?.(e.target.value);
+                  }}
+                >
+                  {sizeChoices.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="builder-field">
               <span className="field-label">Angle prompt</span>
               <textarea

@@ -306,6 +306,8 @@ function StudioCanvas() {
         fields?: Record<string, string>;
         wardrobe?: string;
         notes?: string;
+        t2iResolution?: string;
+        r2iResolution?: string;
         done?: Record<string, string>;
       }
     >
@@ -1257,7 +1259,7 @@ function StudioCanvas() {
     (builderId: string, slot: string, patch: SheetAnglePatch) => void
   >(() => undefined);
   const regenSheetAngleRef = useRef<
-    (builderId: string, slot: string, prompt?: string) => void
+    (builderId: string, slot: string, prompt?: string, resolution?: string) => void
   >(() => undefined);
 
   const upsertSheetAngle = useCallback(
@@ -1305,6 +1307,9 @@ function StudioCanvas() {
                   ...n.data,
                   title: patch.label || n.data.title,
                   prompt: nextPrompt,
+                  resolution: patch.resolution ?? n.data.resolution,
+                  resolutionChoices:
+                    patch.resolutionChoices ?? n.data.resolutionChoices,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
               };
@@ -1324,6 +1329,9 @@ function StudioCanvas() {
               builderId,
               slot,
               prompt: patch.prompt ?? prev?.prompt ?? "",
+              resolution: patch.resolution ?? prev?.resolution ?? "",
+              resolutionChoices:
+                patch.resolutionChoices ?? prev?.resolutionChoices ?? [],
               generating: patch.generating ?? prev?.generating ?? false,
               error: patch.error === undefined ? prev?.error ?? null : patch.error,
               result: {
@@ -1345,6 +1353,8 @@ function StudioCanvas() {
                 : prev?.dragItem ?? null,
               onPrompt: (prompt) =>
                 upsertSheetAngleRef.current(builderId, slot, { slot, prompt }),
+              onResolution: (resolution) =>
+                upsertSheetAngleRef.current(builderId, slot, { slot, resolution }),
               onRegen: () => regenSheetAngleRef.current(builderId, slot),
               onClose: () => closeNode(angleId),
             },
@@ -1404,6 +1414,8 @@ function StudioCanvas() {
               fields: detail.fields || prev?.fields,
               wardrobe: detail.wardrobe || prev?.wardrobe,
               notes: detail.notes || prev?.notes,
+              t2iResolution: detail.t2iResolution || prev?.t2iResolution,
+              r2iResolution: detail.r2iResolution || prev?.r2iResolution,
               done: prev?.done || {},
             },
           };
@@ -1434,7 +1446,12 @@ function StudioCanvas() {
   }, [upsertSheetAngle]);
 
   const regenSheetAngle = useCallback(
-    async (builderId: string, slot: string, promptOverride?: string) => {
+    async (
+      builderId: string,
+      slot: string,
+      promptOverride?: string,
+      resolutionOverride?: string,
+    ) => {
       const live = getNodes();
       const angle = live.find((n) => n.id === `sang-${builderId}-${slot}`);
       if (!angle || angle.type !== "result") {
@@ -1460,6 +1477,12 @@ function StudioCanvas() {
         return;
       }
       const sourceStill = slot === "front" ? "" : frontPath;
+      const resolution = (
+        resolutionOverride ||
+        (angle.data as ResultNodeData).resolution ||
+        (slot === "front" ? session?.t2iResolution : session?.r2iResolution) ||
+        ""
+      ).trim();
       upsertSheetAngle(builderId, slot, { slot, generating: true, error: null });
       try {
         let assetId = session?.assetId || "";
@@ -1502,6 +1525,7 @@ function StudioCanvas() {
             prompt,
             source_still: sourceStill,
             wardrobe: session?.wardrobe || "",
+            resolution,
           }),
         });
         const body = (await readJson(res)) as {
@@ -1535,6 +1559,8 @@ function StudioCanvas() {
               fields: prev?.fields,
               wardrobe: prev?.wardrobe,
               notes: prev?.notes,
+              t2iResolution: prev?.t2iResolution,
+              r2iResolution: prev?.r2iResolution,
               done: { ...(prev?.done || {}), [slot]: path },
             },
           };
@@ -1562,7 +1588,12 @@ function StudioCanvas() {
     function onGenerate(ev: Event) {
       const detail = (ev as CustomEvent<AngleGenerateDetail>).detail;
       if (!detail?.builderId || !detail.slot) return;
-      void regenSheetAngle(detail.builderId, detail.slot, detail.prompt);
+      void regenSheetAngle(
+        detail.builderId,
+        detail.slot,
+        detail.prompt,
+        detail.resolution,
+      );
     }
     window.addEventListener(ANGLE_GENERATE_EVENT, onGenerate);
     return () => window.removeEventListener(ANGLE_GENERATE_EVENT, onGenerate);

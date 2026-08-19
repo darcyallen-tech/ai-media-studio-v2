@@ -126,6 +126,41 @@ export function composeAnglePrompt(
   return lines.join("\n\n");
 }
 
+export function sizeChoices(row: ModelRow | null | undefined): string[] {
+  if (!row) return [];
+  const res = (row.resolution_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+  if (res.length) return res;
+  return (row.aspect_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+}
+
+export function pickDefaultResolution(choices: string[]): string {
+  const opts = (Array.isArray(choices) ? choices : []).filter(Boolean);
+  if (!opts.length) return "";
+  const lower = new Map(opts.map((c) => [c.toLowerCase(), c]));
+  const prefer = [
+    "portrait_16_9",
+    "portrait_4_3",
+    "9:16 portrait",
+    "3:4 portrait",
+    "auto_2k",
+    "2k",
+    "square_hd",
+    "1:1 square hd",
+    "auto_4k",
+    "4k",
+    "1k",
+    "auto",
+  ];
+  for (const p of prefer) {
+    const hit = lower.get(p);
+    if (hit && (hit.toLowerCase() !== "auto" || opts.every((c) => c.toLowerCase() === "auto"))) {
+      return hit;
+    }
+  }
+  const nonAuto = opts.find((c) => c.toLowerCase() !== "auto");
+  return nonAuto || opts[0] || "";
+}
+
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = `${row.id || ""} ${row.label || ""}`.toLowerCase();
@@ -219,8 +254,10 @@ export function useSheetEstimate(
   r2iId: string,
   slots: string[],
   models?: { t2i: ModelRow[]; r2i: ModelRow[] },
+  resolutions?: { t2i?: string; r2i?: string },
 ) {
   const key = Array.isArray(slots) ? slots.filter(Boolean).join("|") : "";
+  const resKey = `${resolutions?.t2i || ""}|${resolutions?.r2i || ""}`;
   let local = "Est. cost: —";
   try {
     const t2iRows = Array.isArray(models?.t2i) ? models.t2i : [];
@@ -247,6 +284,8 @@ export function useSheetEstimate(
         t2i_model_id: t2iId || "",
         r2i_model_id: r2iId || "",
         slots: Array.isArray(slots) ? slots.filter(Boolean) : ["front"],
+        t2i_resolution: resolutions?.t2i || "",
+        r2i_resolution: resolutions?.r2i || "",
       }),
       signal: ac.signal,
     })
@@ -260,6 +299,6 @@ export function useSheetEstimate(
         setEstimate("Est. cost: —");
       });
     return () => ac.abort();
-  }, [kind, t2iId, r2iId, key, local]);
+  }, [kind, t2iId, r2iId, key, local, resKey]);
   return estimate || "Est. cost: —";
 }
