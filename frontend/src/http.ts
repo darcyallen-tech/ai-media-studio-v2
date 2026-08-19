@@ -31,6 +31,27 @@ export function extractPromptLoose(text: string): string {
   return "";
 }
 
+/** Short human error from a FastAPI / fetch body — never dump raw JSON. */
+export function errorFromBody(
+  body: unknown,
+  fallback = "Generate failed.",
+): string {
+  if (!body || typeof body !== "object") return fallback;
+  const rec = body as Record<string, unknown>;
+  const detail = rec.detail;
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (Array.isArray(detail) && detail.length) {
+    const first = detail[0];
+    if (typeof first === "string" && first.trim()) return first.trim();
+    if (first && typeof first === "object") {
+      const row = first as Record<string, unknown>;
+      if (typeof row.msg === "string" && row.msg.trim()) return row.msg.trim();
+    }
+  }
+  if (typeof rec.error === "string" && rec.error.trim()) return rec.error.trim();
+  return fallback;
+}
+
 export async function readJson(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   if (!text.trim()) {

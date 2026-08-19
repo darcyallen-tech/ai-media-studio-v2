@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { readJson } from "./http";
+import { errorFromBody, readJson } from "./http";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
@@ -17,7 +17,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     ? data.resolutionChoices.filter(Boolean)
     : [];
   const [size, setSize] = useState(
-    data.aspect || data.resolution || sizeChoices[0] || "",
+    data.aspect ||
+      (sizeChoices.includes(data.resolution || "") ? data.resolution : "") ||
+      sizeChoices[0] ||
+      "",
   );
   const qualityOpts = Array.isArray(data.qualityChoices)
     ? data.qualityChoices.filter(Boolean)
@@ -32,8 +35,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
   useEffect(() => {
-    if (data.resolution && data.resolution !== size) setSize(data.resolution);
-  }, [data.resolution]);
+    if (data.aspect && data.aspect !== size) setSize(data.aspect);
+  }, [data.aspect]);
   useEffect(() => {
     if (!data.generating) setBusy(false);
   }, [data.generating]);
@@ -113,6 +116,9 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     }
     setBusy(true);
     setLocalError(null);
+    data.onBusy?.(true, null);
+    const pickedAspect = size || data.aspect || "";
+    const pickedQuality = quality || "";
     try {
       let assetId = data.assetId || "";
       if (!assetId) {
@@ -130,9 +136,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         const item = (draft.item || null) as { id?: string } | null;
         if (!created.ok || !item?.id) {
           throw new Error(
-            (typeof draft.detail === "string" && draft.detail) ||
-              (typeof draft.error === "string" && draft.error) ||
-              "Could not create character draft.",
+            errorFromBody(draft, "Could not create character draft."),
           );
         }
         assetId = item.id;
@@ -150,8 +154,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           prompt,
           source_still: slot === "front" ? "" : data.sourceStill || "",
           wardrobe: data.wardrobe || "",
-          resolution: quality || size || data.resolution || "",
-          aspect: data.aspect || size || "",
+          resolution: pickedQuality || pickedAspect || data.resolution || "",
+          aspect: pickedAspect,
         }),
       });
       const body = await readJson(res);
@@ -164,11 +168,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         cost?: string;
       } | null;
       if (!res.ok || !item) {
-        throw new Error(
-          (typeof body.detail === "string" && body.detail) ||
-            (typeof body.error === "string" && body.error) ||
-            "Generate failed.",
-        );
+        throw new Error(errorFromBody(body, "Generate failed."));
       }
       const path = item.identity?.[slot] || item.still_path || "";
       const url = item.identity_urls?.[slot] || item.url || "";
@@ -189,6 +189,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       const msg = err instanceof Error ? err.message : "Generate failed.";
       console.error("Angle generate failed", err);
       setLocalError(msg);
+      data.onBusy?.(false, msg);
     } finally {
       setBusy(false);
     }

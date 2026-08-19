@@ -44,7 +44,7 @@ import {
   importOsFiles,
   isOsFileDrag,
 } from "./osImport";
-import { readJson } from "./http";
+import { errorFromBody, readJson } from "./http";
 import {
   normalizeEdgeStyle,
   normalizeSnap,
@@ -441,6 +441,7 @@ function StudioCanvas() {
   const { screenToFlowPosition, getNodes, fitView, setCenter } = useReactFlow();
   const nodesReady = useNodesInitialized();
   const didCenterPrompt = useRef(false);
+  const dimChangeTimer = useRef(0);
 
   useEffect(() => {
     if (didCenterPrompt.current || !nodesReady) return;
@@ -1310,6 +1311,10 @@ function StudioCanvas() {
                   resolution: patch.resolution ?? n.data.resolution,
                   resolutionChoices:
                     patch.resolutionChoices ?? n.data.resolutionChoices,
+                  aspect: patch.aspect ?? n.data.aspect,
+                  quality: patch.quality ?? n.data.quality,
+                  qualityChoices: patch.qualityChoices ?? n.data.qualityChoices,
+                  sourceStill: patch.sourceStill || n.data.sourceStill,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
               };
@@ -1363,7 +1368,17 @@ function StudioCanvas() {
               onPrompt: (prompt) =>
                 upsertSheetAngleRef.current(builderId, slot, { slot, prompt }),
               onResolution: (resolution) =>
-                upsertSheetAngleRef.current(builderId, slot, { slot, resolution }),
+                upsertSheetAngleRef.current(builderId, slot, {
+                  slot,
+                  resolution,
+                  aspect: resolution,
+                }),
+              onBusy: (busy, error) =>
+                upsertSheetAngleRef.current(builderId, slot, {
+                  slot,
+                  generating: busy,
+                  error: error === undefined ? null : error,
+                }),
               onRegen: () => regenSheetAngleRef.current(builderId, slot),
               onClose: () => closeNode(angleId),
             },
@@ -1492,6 +1507,7 @@ function StudioCanvas() {
       const sourceStill = slot === "front" ? "" : frontPath;
       const resolution = (
         resolutionOverride ||
+        (angle.data as ResultNodeData).aspect ||
         (angle.data as ResultNodeData).resolution ||
         (slot === "front" ? session?.t2iResolution : session?.r2iResolution) ||
         ""
@@ -1517,11 +1533,7 @@ function StudioCanvas() {
             error?: string;
           };
           if (!created.ok || !draft.item) {
-            throw new Error(
-              (typeof draft.detail === "string" ? draft.detail : null) ||
-                draft.error ||
-                "Create failed.",
-            );
+            throw new Error(errorFromBody(draft, "Create failed."));
           }
           assetId = draft.item.id;
         }
@@ -1549,11 +1561,7 @@ function StudioCanvas() {
           error?: string;
         };
         if (!res.ok || body.ok === false || !body.item) {
-          throw new Error(
-            (typeof body.detail === "string" ? body.detail : null) ||
-              body.error ||
-              "Generate failed.",
-          );
+          throw new Error(errorFromBody(body, "Generate failed."));
         }
         const path = body.item.identity?.[slot] || body.item.still_path || "";
         const url = body.item.identity_urls?.[slot] || body.item.url || "";
@@ -2593,7 +2601,17 @@ function StudioCanvas() {
                 onPrompt: (prompt) =>
                   upsertSheetAngle(builderId, slot, { slot, prompt }),
                 onResolution: (resolution) =>
-                  upsertSheetAngle(builderId, slot, { slot, resolution }),
+                  upsertSheetAngle(builderId, slot, {
+                    slot,
+                    resolution,
+                    aspect: resolution,
+                  }),
+                onBusy: (busy, error) =>
+                  upsertSheetAngle(builderId, slot, {
+                    slot,
+                    generating: busy,
+                    error: error === undefined ? null : error,
+                  }),
                 onRegen: () => void regenSheetAngle(builderId, slot),
                 onGenerated: (info) => {
                   upsertSheetAngle(builderId, info.slot, {
@@ -3275,11 +3293,14 @@ function StudioCanvas() {
           const busy = nodes.some(
             (n) => n.type === "result" && Boolean(n.data.generating),
           );
-          onNodesChange(
-            busy
-              ? changes.filter((c) => c.type !== "dimensions")
-              : changes,
-          );
+          const rest = changes.filter((c) => c.type !== "dimensions");
+          const dims = changes.filter((c) => c.type === "dimensions");
+          if (rest.length) onNodesChange(rest);
+          if (busy || !dims.length) return;
+          window.clearTimeout(dimChangeTimer.current);
+          dimChangeTimer.current = window.setTimeout(() => {
+            onNodesChange(dims);
+          }, 80);
         }}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

@@ -395,8 +395,8 @@ function CharacterBuilder({
                 />
               </label>
               <p className="hint">
-                Base wardrobe stays locked minimal form-fit unless you override. Costume
-                Designer is for outfits.
+                Base wardrobe stays simple neutral athletic wear unless you override.
+                Costume Designer is for outfits.
               </p>
               <span className="field-label">Extra angles</span>
               <div className="chip-row">

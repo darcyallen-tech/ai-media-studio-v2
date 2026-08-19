@@ -660,11 +660,15 @@ def short_generate_error(exc: BaseException | str) -> str:
         )
     ):
         return "The model declined this prompt (content policy). Soften wardrobe/body notes and retry."
+    if text.lstrip()[:1] in "{[":
+        return "Generate failed."
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("File ") or "Traceback" in line:
             continue
         if "pydantic" in line.lower() or "validationerror" in line.lower():
+            continue
+        if line[:1] in "{[":
             continue
         return line[:200] + ("…" if len(line) > 200 else "")
     return "Generate failed."

@@ -252,6 +252,8 @@ def clamp_nano_aspect(aspect_label: str | None) -> str:
     """Exact Nano Banana aspect_ratio enum — never '9:16 portrait'."""
     allowed = {a.lower(): a for a in T2I_NANO_ASPECT_CHOICES}
     raw = (aspect_label or "").strip()
+    if raw.lower().replace(" ", "") in ("0.5k", "1k", "2k", "4k"):
+        return "9:16"
     if raw.lower() in allowed:
         return allowed[raw.lower()]
     colon = map_t2i_aspect_colon(raw)

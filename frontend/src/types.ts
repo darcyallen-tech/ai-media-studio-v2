@@ -239,6 +239,7 @@ export type ResultNodeData = {
   onPrompt?: (prompt: string) => void;
   onRegen?: () => void;
   onResolution?: (resolution: string) => void;
+  onBusy?: (busy: boolean, error?: string | null) => void;
   onGenerated?: (info: {
     slot: string;
     assetId: string;
