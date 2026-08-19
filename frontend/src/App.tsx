@@ -57,6 +57,7 @@ import {
   type GridSnap,
 } from "./canvasPrefs";
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
+import { ANGLE_SPAWN_EVENT, type AngleSpawnDetail } from "./angleSpawn";
 import { SLOT_LABEL } from "./sheetUi";
 import { bindToast, toast } from "./toast";
 import {
@@ -1333,6 +1334,24 @@ function StudioCanvas() {
     },
     [closeNode, setEdges, setNodes],
   );
+
+  useEffect(() => {
+    function onSpawn(ev: Event) {
+      const detail = (ev as CustomEvent<AngleSpawnDetail>).detail;
+      if (!detail?.builderId || !detail.slot) {
+        toast("Could not open Result node (missing builder or slot).", true);
+        return;
+      }
+      try {
+        upsertSheetAngle(detail.builderId, detail.slot, detail);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Could not open Result node.";
+        toast(msg, true);
+      }
+    }
+    window.addEventListener(ANGLE_SPAWN_EVENT, onSpawn);
+    return () => window.removeEventListener(ANGLE_SPAWN_EVENT, onSpawn);
+  }, [upsertSheetAngle]);
 
   const regenSheetAngle = useCallback(
     async (builderId: string, slot: string) => {

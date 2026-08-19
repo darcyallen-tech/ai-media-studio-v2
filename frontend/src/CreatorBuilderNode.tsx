@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import NodeErrorBoundary from "./NodeErrorBoundary";
+import { spawnAngleResult } from "./angleSpawn";
 import { readJson as readJsonSafe } from "./http";
 import { toast } from "./toast";
 import {
@@ -49,17 +50,21 @@ function errOf(body: GenBody, fallback: string, res?: Response) {
 
 export default function CreatorBuilderNode({
   data,
+  id,
 }: NodeProps<CreatorBuilderFlowNode>) {
   const kind = data?.kind || "character";
   const safe: CreatorBuilderNodeData = {
     kind,
     attachSlotId: data?.attachSlotId,
     bases: Array.isArray(data?.bases) ? data.bases : [],
+    sessionAssetId: data?.sessionAssetId,
+    doneSlots: data?.doneSlots,
     onClose: data?.onClose,
     onAngle: typeof data?.onAngle === "function" ? data.onAngle : () => undefined,
     onSession: data?.onSession,
     onSaved: typeof data?.onSaved === "function" ? data.onSaved : () => undefined,
   };
+  const builderId = id || "";
   return (
     <div className="studio-node creator-builder-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
@@ -94,7 +99,7 @@ export default function CreatorBuilderNode({
           ) : kind === "costume" ? (
             <CostumeForm data={safe} />
           ) : (
-            <CharacterForm data={safe} />
+            <CharacterForm data={safe} builderId={builderId} />
           )}
         </div>
       </NodeErrorBoundary>
@@ -143,7 +148,15 @@ function pickField(value?: string | null, custom?: string | null) {
   return v.trim();
 }
 
-function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
+const ANGLE_ACTIONS = [...CORE_SLOTS, ...EXTRA_SLOTS] as const;
+
+function CharacterForm({
+  data,
+  builderId,
+}: {
+  data: CreatorBuilderNodeData;
+  builderId: string;
+}) {
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"Male" | "Female">("Male");
   const [age, setAge] = useState("30s");
@@ -305,35 +318,34 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
   }
 
   function openAngle(slot: string) {
-    const label = name.trim();
-    if (!label) {
-      setError("Name is required.");
-      return;
-    }
-    if (slot !== "front" && !haveFront) {
-      setError("Generate Front first.");
-      return;
-    }
-    setError(null);
-    const ident = ensureIdentity();
-    if (!ident) {
-      setError("Apply selection first so the angle has an identity prompt.");
-      return;
-    }
-    const anglePrompt = composeAnglePrompt(slot, ident, { hasFront: haveFront });
-    data.onAngle(slot, {
-      slot,
-      label: `${SLOT_LABEL[slot] || slot} · ${label}`,
-      prompt: anglePrompt,
-      generating: false,
-      error: null,
-      cost: estimate,
-    });
-    void ensureDraft(label, ident).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : "Could not create character draft.";
+    try {
+      const label = name.trim() || "Character";
+      const ident = ensureIdentity();
+      const anglePrompt = composeAnglePrompt(slot, ident, { hasFront: haveFront });
+      const patch = {
+        slot,
+        label: `${SLOT_LABEL[slot] || slot} · ${label}`,
+        prompt: anglePrompt,
+        generating: false,
+        error: null as string | null,
+        cost: estimate,
+      };
+      spawnAngleResult({ builderId, ...patch });
+      if (typeof data.onAngle === "function" && data.onAngle.length >= 2) {
+        data.onAngle(slot, patch);
+      }
+      setError(null);
+      toast(`${SLOT_LABEL[slot] || slot} Result opened.`);
+      void ensureDraft(label, ident).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Could not create character draft.";
+        setError(msg);
+        data.onSession?.(sessionPayload("", ident));
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Result node.";
       setError(msg);
-      data.onSession?.(sessionPayload("", ident));
-    });
+      toast(msg, true);
+    }
   }
 
   function save() {
@@ -604,44 +616,29 @@ function CharacterForm({ data }: { data: CreatorBuilderNodeData }) {
         />
       </label>
       <p className="estimate">{estimate}</p>
-      <p className="hint">Opens a Result node — click Generate on the node (1 still).</p>
+      <p className="hint">Opens a Result node immediately — Generate on the node runs the still.</p>
       <div className="prompt-actions">
-        <button
-          type="button"
-          className="generate"
-          disabled={enhancing || !name.trim()}
-          onClick={() => openAngle("front")}
-        >
-          Generate Front
-        </button>
-        <button
-          type="button"
-          className="generate"
-          disabled={enhancing || !haveFront}
-          onClick={() => openAngle("side")}
-        >
-          Generate Side
-        </button>
-        <button
-          type="button"
-          className="generate"
-          disabled={enhancing || !haveFront}
-          onClick={() => openAngle("closeup")}
-        >
-          Generate Close-up
-        </button>
+        {ANGLE_ACTIONS.slice(0, 3).map((slot) => (
+          <button
+            key={slot}
+            type="button"
+            className="generate"
+            onClick={() => openAngle(slot)}
+          >
+            Generate {SLOT_LABEL[slot]}
+          </button>
+        ))}
       </div>
       <span className="field-label">Extra angles</span>
       <div className="prompt-actions">
-        {EXTRA_SLOTS.map((id) => (
+        {ANGLE_ACTIONS.slice(3).map((slot) => (
           <button
-            key={id}
+            key={slot}
             type="button"
             className="ghost"
-            disabled={enhancing || !haveFront}
-            onClick={() => openAngle(id)}
+            onClick={() => openAngle(slot)}
           >
-            Generate {SLOT_LABEL[id]}
+            Generate {SLOT_LABEL[slot]}
           </button>
         ))}
       </div>
