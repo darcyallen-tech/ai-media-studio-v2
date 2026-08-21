@@ -893,6 +893,10 @@
   width: 380px;
 }
 
+.builder-node.music-builder {
+  width: 420px;
+}
+
 .director-node {
   width: 320px;
 }

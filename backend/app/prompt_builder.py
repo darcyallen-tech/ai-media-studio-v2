@@ -151,7 +151,7 @@ def list_builder_scenarios(mode: str | None, modality: str | None) -> dict[str, 
             {
                 "key": "audio_music",
                 "label": "Music",
-                "description": "Style and arrangement stay out of the lyrics field.",
+                "description": "Core genre first; Flare is a secondary color only.",
                 "fields": _music_fields(),
             }
         ]
@@ -566,60 +566,84 @@ def _music_fields() -> list[dict[str, Any]]:
             "genre",
             "Genre",
             choices=[
-                "Acoustic",
-                "Ambient",
-                "Cinematic",
-                "Electronic",
-                "Folk",
-                "Hip-hop",
-                "Jazz",
-                "Pop",
+                "Hard rock",
                 "Rock",
+                "Metal",
+                "Pop",
+                "Hip-hop",
+                "Electronic",
+                "Jazz",
+                "Folk",
+                "Country",
+                "R&B / Soul",
+                "Cinematic",
+                "Ambient",
+                "Latin",
+                "World",
+                "Classical",
                 "Custom",
             ],
-            value="Acoustic",
+            value="Hard rock",
         ),
         _field(
-            "style",
-            "Style",
+            "subgenre",
+            "Sub-genre",
             kind="text",
             value="",
-            placeholder="e.g. warm intimate, fingerpicked guitar",
+            placeholder="e.g. Classic hard rock",
         ),
         _field(
-            "arrangement",
-            "Arrangement",
-            kind="text",
-            value="",
-            placeholder="e.g. intro → verse → chorus, sparse then fuller",
-        ),
-        _field(
-            "mood",
-            "Mood / tempo",
-            kind="text",
-            value="",
-            placeholder="e.g. hopeful, mid-tempo, 90 BPM",
-        ),
-        _field(
-            "energy",
-            "Energy curve",
+            "flare",
+            "Flare (color only)",
             choices=[
-                "Steady",
-                "Slow open then hit",
-                "Build throughout",
-                "Peak then settle",
+                "",
+                "Peru",
+                "Andes",
+                "Brazil",
+                "Mexico",
+                "Cuba",
+                "Jamaica",
+                "West Africa",
+                "North Africa",
+                "Middle East",
+                "India",
+                "Japan",
+                "Korea",
+                "China",
+                "Spain",
+                "Ireland",
+                "Scandinavia",
+                "Balkans",
+                "New Orleans",
+                "Custom",
             ],
-            value="Slow open then hit",
-        ),
-        _field("fade", "Fade", choices=["None", "Short", "Long"], value="None"),
-        _field("instrumental", "Instrumental (no vocals)", kind="check", value="true"),
-        _field(
-            "lyrics",
-            "Lyrics (optional)",
-            kind="textarea",
             value="",
-            placeholder="Only the words to sing — not style notes",
         ),
+        _field("era", "Era", kind="text", value=""),
+        _field("energy", "Energy", kind="text", value="driving"),
+        _field("tempo", "Tempo / BPM", kind="text", value="driving (~120 BPM)"),
+        _field("mood", "Mood", kind="text", value=""),
+        _field(
+            "instruments",
+            "Instrumentation",
+            kind="text",
+            value="electric guitar, bass, drums",
+            placeholder="comma-separated",
+        ),
+        _field(
+            "regional",
+            "Regional instruments",
+            kind="text",
+            value="",
+            placeholder="when Flare is set, e.g. charango, cajón",
+        ),
+        _field("vocals", "Vocals", kind="text", value=""),
+        _field("intro", "Intro feel", kind="text", value="cold-open riff"),
+        _field("buildup", "Buildup", kind="text", value="kick in at ~8s"),
+        _field("ending", "Ending", kind="text", value="hard stop"),
+        _field("use_case", "Use case", kind="text", value=""),
+        _field("notes", "Notes", kind="textarea", value=""),
+        _field("instrumental", "Instrumental (no vocals)", kind="check", value="true"),
     ]
 
 
@@ -1158,36 +1182,97 @@ def _apply_object(vals: dict[str, str]) -> str:
     return " ".join(parts)
 
 
+def _csv(raw: str) -> list[str]:
+    return [p.strip() for p in (raw or "").replace(";", ",").split(",") if p.strip()]
+
+
 def _apply_music(vals: dict[str, str]) -> str:
-    genre = (vals.get("genre") or "").strip()
-    style = (vals.get("style") or "").strip()
-    arrangement = (vals.get("arrangement") or "").strip()
-    mood = (vals.get("mood") or "").strip()
-    energy = (vals.get("energy") or "").strip()
-    fade = (vals.get("fade") or "None").strip()
-    instrumental = (vals.get("instrumental") or "").strip().lower() in ("true", "1", "yes", "on")
-    lyrics = (vals.get("lyrics") or "").strip()
-    parts: list[str] = []
-    if genre and genre != "Custom":
-        parts.append(f"Genre: {genre}")
-    if style:
-        parts.append(f"Style: {style}")
-    if arrangement:
-        parts.append(f"Arrangement: {arrangement}")
-    if mood:
-        parts.append(f"Mood / tempo: {mood}")
-    if energy:
-        parts.append(f"Energy curve: {energy}")
-    if fade and fade != "None":
-        parts.append(f"Fade: {fade.lower()} fade at the end.")
+    def bit(key: str) -> str:
+        v = (vals.get(key) or "").strip()
+        if not v or v.lower() in ("custom", "—", "-"):
+            return ""
+        return v
+
+    genre = bit("genre")
+    sub = bit("subgenre")
+    flare = bit("flare") or bit("flare_custom")
+    era = bit("era")
+    energy = bit("energy")
+    tempo = bit("tempo") or bit("tempo_custom")
+    mood = bit("mood")
+    intro = bit("intro")
+    buildup = bit("buildup")
+    ending = bit("ending")
+    use_case = bit("use_case") or bit("useCase")
+    notes = bit("notes")
+    vocals = bit("vocals")
+    instrumental = (vals.get("instrumental") or "true").strip().lower() in (
+        "true",
+        "1",
+        "yes",
+        "on",
+        "",
+    )
+    core = _csv(vals.get("instruments") or "")
+    regional = _csv(vals.get("regional") or "")
+
+    lines: list[str] = []
+    if genre and sub:
+        lines.append(f"{genre} track ({sub}).")
+    elif genre:
+        lines.append(f"{genre} track.")
+    elif sub:
+        lines.append(f"{sub} track.")
+    else:
+        lines.append("Instrumental music track.")
+
+    feel = ", ".join(
+        p
+        for p in (
+            f"{era} feel" if era else "",
+            f"{energy} energy" if energy else "",
+            tempo,
+            mood,
+        )
+        if p
+    )
+    if feel:
+        lines.append(feel[0].upper() + feel[1:] + ".")
+
+    if core:
+        lines.append(f"Core band: {', '.join(core)}.")
+    if regional and flare:
+        lines.append(
+            f"Optional color: {', '.join(regional)} used sparingly as texture only — not the lead sound."
+        )
+    if flare and genre:
+        lines.append(
+            f"Flare: a light {flare} color on top of the {genre.lower()} core — "
+            f"do not replace the primary genre; keep {genre.lower()} as the identity."
+        )
+    elif flare:
+        lines.append(
+            f"Flare: a light {flare} color only — secondary influence, not a genre swap."
+        )
+
+    struct: list[str] = []
+    if intro:
+        struct.append(f"Intro: {intro}")
+    if buildup:
+        struct.append(buildup)
+    if ending:
+        struct.append(f"Ending: {ending}")
+    if struct:
+        lines.append(". ".join(struct) + ".")
+    if use_case:
+        lines.append(f"Use: {use_case}.")
     if instrumental:
-        parts.append("Instrumental only — no vocals, no lyrics.")
-    style_block = "\n".join(parts).strip()
-    if instrumental or not lyrics:
-        return style_block or "Instrumental piece."
-    if style_block:
-        return f"{style_block}\n\nLyrics:\n{lyrics}"
-    return f"Lyrics:\n{lyrics}"
+        lines.append("Instrumental only — no vocals, no lyrics, no choir.")
+    elif vocals:
+        lines.append(f"Vocals: {vocals}.")
+    if notes:
+        lines.append(notes)
+    return " ".join(lines)
 
 
 def _apply_sfx(vals: dict[str, str]) -> str:

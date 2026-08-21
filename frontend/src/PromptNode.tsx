@@ -128,7 +128,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [resolution, setResolution] = useState("");
   const [audioOn, setAudioOn] = useState<boolean | null>(null);
   const [voice, setVoice] = useState("");
-  const [instrumental, setInstrumental] = useState(true);
+  const [localInstrumental, setLocalInstrumental] = useState(true);
+  const instrumental = data.instrumental ?? localInstrumental;
+  const setInstrumental = data.onInstrumental ?? setLocalInstrumental;
   const [estimate, setEstimate] = useState("Est. cost: —");
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);

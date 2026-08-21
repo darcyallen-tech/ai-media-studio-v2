@@ -160,6 +160,8 @@ export type PromptNodeData = {
   onClose?: () => void;
   onAddPromptBuilder?: () => void;
   onAddDirector?: () => void;
+  instrumental?: boolean;
+  onInstrumental?: (v: boolean) => void;
   incomingPrompt?: string | null;
   incomingPromptToken?: number;
   incomingPromptMode?: "replace" | "append";
@@ -180,6 +182,7 @@ export type PromptNodeData = {
 export type PromptBuilderNodeData = {
   mode: Mode;
   modality: string;
+  instrumental?: boolean;
   onClose?: () => void;
   onApply: (text: string) => void;
 };

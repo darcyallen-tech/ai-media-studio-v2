@@ -314,6 +314,7 @@ function StudioCanvas() {
   >({});
   const [studioMode, setStudioMode] = useState<Mode>("image");
   const [studioModality, setStudioModality] = useState("t2i");
+  const [instrumental, setInstrumental] = useState(true);
   const [appliedPrompt, setAppliedPrompt] = useState<{
     text: string;
     token: number;
@@ -988,6 +989,7 @@ function StudioCanvas() {
           modality: studioModality,
           onClose: () => closeNode(BUILDER_ID),
           onApply: applyBuilderPrompt,
+          instrumental,
         },
       };
       return [...current, node];
@@ -1007,6 +1009,7 @@ function StudioCanvas() {
   }, [
     applyBuilderPrompt,
     closeNode,
+    instrumental,
     setEdges,
     setNodes,
     studioMode,
@@ -2376,6 +2379,8 @@ function StudioCanvas() {
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => setLibraryOpen(true),
               onAddPromptBuilder: addPromptBuilder,
+              instrumental,
+              onInstrumental: setInstrumental,
               onAddDirector: addDirector,
               incomingPrompt: appliedPrompt?.text ?? null,
               incomingPromptToken: appliedPrompt?.token ?? 0,
@@ -2420,6 +2425,7 @@ function StudioCanvas() {
             data: {
               mode: studioMode,
               modality: studioModality,
+              instrumental,
               onClose: () => closeNode(BUILDER_ID),
               onApply: applyBuilderPrompt,
             },
@@ -3021,6 +3027,7 @@ function StudioCanvas() {
     hubIds,
     hubNotes,
     hubTitle,
+    instrumental,
     framePins,
     lastItem,
     loadCatalogs,
