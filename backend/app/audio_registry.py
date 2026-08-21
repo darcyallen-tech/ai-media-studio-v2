@@ -128,6 +128,25 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
             "lyrics_optimizer": False,
         },
     ),
+    "sonilo text music": AudioSpec(
+        key="sonilo text music",
+        label="Sonilo v1.1 Text-to-Music",
+        category="music",
+        endpoint="sonilo/v1.1/text-to-music",
+        cost_estimate_usd=0.225,
+        notes=(
+            "Licensed commercial-use text → music. Prompt = style/mood/arrangement. "
+            "Exact duration (max 10 min). $0.0025/s on fal."
+        ),
+        supports_duration=True,
+        duration_min_s=10.0,
+        duration_max_s=600.0,
+        duration_default_s=90.0,
+        cost_per_second=0.0025,
+        extra_defaults={
+            "num_samples": 1,
+        },
+    ),
     "elevenlabs music": AudioSpec(
         key="elevenlabs music",
         label="ElevenLabs Music",
@@ -584,6 +603,14 @@ def build_music_args(
             d = int(round(max(spec.duration_min_s, min(spec.duration_max_s, float(duration_s)))))
             # Stable Audio 2.5: seconds_total is an integer
             args["seconds_total"] = d
+    elif "sonilo" in spec.endpoint and "text-to-music" in spec.endpoint:
+        args["prompt"] = prompt
+        dur = duration_s if duration_s is not None else spec.duration_default_s
+        if dur is not None:
+            args["duration"] = int(
+                round(max(spec.duration_min_s, min(spec.duration_max_s, float(dur))))
+            )
+        args.setdefault("num_samples", 1)
     else:
         args["prompt"] = prompt
     return args

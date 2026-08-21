@@ -45,6 +45,7 @@ _MODEL_ALIASES: dict[str, str] = {
     "lyria 2": "lyria-2",
     "minimax music 2.6": "minimax-music-26",
     "minimax music 3": "minimax-music-3",
+    "sonilo text music": "sonilo-music",
     "grok imagine 2.0 t2i": "grok-imagine-2-t2i",
     "grok imagine 2.0 edit": "grok-imagine-2-edit",
     "ltx 2.5 pro t2v": "ltx-25-pro-t2v",

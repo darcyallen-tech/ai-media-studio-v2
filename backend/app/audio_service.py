@@ -130,6 +130,10 @@ def duration_tokens(spec: AudioSpec) -> tuple[list[str], str]:
         90,
         120,
         180,
+        240,
+        300,
+        420,
+        600,
     )
     toks: list[str] = []
     for val in ladder:
