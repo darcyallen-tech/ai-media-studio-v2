@@ -12,6 +12,7 @@ import {
   COSTUME_CONDITIONS,
   COSTUME_ERAS,
   COSTUME_FITS,
+  COSTUME_GENDERS,
   COSTUME_MATERIALS,
   type CostumeLayer,
   COSTUME_REGIONS,
@@ -1041,6 +1042,7 @@ function CostumeForm({
   builderId: string;
 }) {
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<"Male" | "Female">("Male");
   const [category, setCategory] = useState("fantasy");
   const [categoryC, setCategoryC] = useState("");
   const [era, setEra] = useState("medieval");
@@ -1090,25 +1092,32 @@ function CostumeForm({
     return layer;
   }
 
-  function remapBody(cat: string, eraVal: string, cur: LayerState[]) {
-    const allowed = bodyLayerItemsFor(cat, eraVal);
+  function remapBody(cat: string, eraVal: string, gen: string, cur: LayerState[]) {
+    const allowed = bodyLayerItemsFor(cat, eraVal, gen);
     return cur.map((L) => remapLayer(L, allowed));
   }
 
-  function remapSlots(cat: string, eraVal: string, cur: Record<string, LayerState>) {
+  function remapSlots(cat: string, eraVal: string, gen: string, cur: Record<string, LayerState>) {
     const next: Record<string, LayerState> = { ...cur };
     for (const key of SINGLE_SLOTS) {
-      const allowed = layerItemsFor(key as CostumeLayer, cat, eraVal);
+      const allowed = layerItemsFor(key as CostumeLayer, cat, eraVal, gen);
       next[key] = remapLayer(cur[key] || emptyLayer(), allowed);
     }
     return next;
   }
 
+  function onGender(v: string) {
+    const gen = (v === "Female" ? "Female" : "Male") as "Male" | "Female";
+    setGender(gen);
+    setBodyLayers((cur) => remapBody(catKey, eraKey, gen, cur));
+    setSlots((cur) => remapSlots(catKey, eraKey, gen, cur));
+  }
+
   function onCategory(v: string) {
     setCategory(v);
     const cat = v === "Custom" ? categoryC : v;
-    setBodyLayers((cur) => remapBody(cat, eraKey, cur));
-    setSlots((cur) => remapSlots(cat, eraKey, cur));
+    setBodyLayers((cur) => remapBody(cat, eraKey, gender, cur));
+    setSlots((cur) => remapSlots(cat, eraKey, gender, cur));
     if (signature && signature !== "Custom" && !signatureItemsFor(cat).includes(signature)) {
       setSignature("Custom");
       setSignatureC(signature);
@@ -1119,12 +1128,13 @@ function CostumeForm({
   function onEra(v: string) {
     setEra(v);
     const eraVal = v === "Custom" ? eraC : v;
-    setBodyLayers((cur) => remapBody(catKey, eraVal, cur));
-    setSlots((cur) => remapSlots(catKey, eraVal, cur));
+    setBodyLayers((cur) => remapBody(catKey, eraVal, gender, cur));
+    setSlots((cur) => remapSlots(catKey, eraVal, gender, cur));
   }
 
   const costumeFields = useMemo(() => {
     const flat: Record<string, string> = {
+      gender,
       category: pickField(category, categoryC),
       era: pickField(era, eraC),
       region: pickField(region, regionC),
@@ -1141,6 +1151,7 @@ function CostumeForm({
     }
     return flat;
   }, [
+    gender,
     category,
     categoryC,
     era,
@@ -1261,14 +1272,28 @@ function CostumeForm({
   return (
     <>
       <p className="hint">
-        Faceless mannequin plates — no identity. Stack body layers innermost first;
-        Apply selection lists them in that order. Generate Front / Side / Back on Result nodes, then Save.
+        Faceless mannequin plates — no identity. Gender filters garments with Category/Era
+        and nudges cut/fit on Apply. Stack body layers innermost first.
       </p>
       <label className="builder-field">
         <span className="field-label">Costume name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <div className="params costume-row-3">
+      <div className="params costume-row-4">
+        <label className="param">
+          <span>Gender</span>
+          <select
+            className="model"
+            value={gender}
+            onChange={(e) => onGender(e.target.value)}
+          >
+            {COSTUME_GENDERS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </label>
         <FieldSelect
           label="Category"
           value={category}
@@ -1332,7 +1357,7 @@ function CostumeForm({
           <LayerBlock
             key={`body-${i}`}
             label={i === 0 ? "Layer 1 (innermost)" : `Layer ${i + 1}`}
-            itemOpts={bodyLayerItemsFor(catKey, eraKey)}
+            itemOpts={bodyLayerItemsFor(catKey, eraKey, gender)}
             layer={layer}
             showFit
             onRemove={
@@ -1361,7 +1386,7 @@ function CostumeForm({
         <LayerBlock
           key={key}
           label={LAYER_LABEL[key] || key}
-          itemOpts={layerItemsFor(key, catKey, eraKey)}
+          itemOpts={layerItemsFor(key, catKey, eraKey, gender)}
           layer={slots[key] || emptyLayer()}
           onChange={(next) => setSlots((cur) => ({ ...cur, [key]: next }))}
         />

@@ -258,6 +258,7 @@ COSTUME_TAGS = (
     "armor",
     "ceremonial",
 )
+COSTUME_GENDERS = ("Male", "Female")
 COSTUME_ERAS = (
     "contemporary",
     "1920s",
@@ -400,6 +401,7 @@ def builder_fields(kind: str) -> dict[str, Any]:
                 for s in COSTUME_SLOTS
             ],
             "fields": {
+                "gender": {"label": "Gender", "choices": list(COSTUME_GENDERS)},
                 "category": {"label": "Category", "choices": list(COSTUME_TAGS)},
                 "era": {"label": "Era", "choices": list(COSTUME_ERAS)},
                 "region": {"label": "Region", "choices": list(COSTUME_REGIONS)},
@@ -608,6 +610,11 @@ def costume_brief(fields: dict[str, Any] | None) -> str:
     cat = _choice(f, "category") or _choice(f, "tag")
     if cat:
         parts.append(f"{cat} costume")
+    gender = _choice(f, "gender").lower()
+    if gender.startswith("f"):
+        parts.append("cut/fit: female figure, defined waist, feminine drape")
+    elif gender.startswith("m"):
+        parts.append("cut/fit: male figure, broader shoulder, straighter hang")
     era = _choice(f, "era")
     if era:
         parts.append(f"era: {era}")

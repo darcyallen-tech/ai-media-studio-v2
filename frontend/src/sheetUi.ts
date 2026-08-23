@@ -21,6 +21,8 @@ export const COSTUME_TAGS = [
   "ceremonial",
 ] as const;
 
+export const COSTUME_GENDERS = ["Male", "Female"] as const;
+
 export const COSTUME_LAYERS = [
   "top",
   "bottom",
@@ -217,6 +219,72 @@ const ERA_EXTRAS: Record<string, Partial<Record<CostumeLayer, readonly string[]>
   },
 };
 
+const FEMALE_CODED = new Set(
+  [
+    "blouse",
+    "bodice",
+    "fitted bodice",
+    "skirt",
+    "heels",
+    "flats",
+    "mary janes",
+    "fascinator",
+    "gown lower",
+    "gown",
+    "evening gown",
+    "dress",
+    "clutch",
+    "bonnet",
+    "veil",
+    "capelet",
+    "cloche hat",
+    "cloche-era blouse",
+    "drop-waist coat",
+    "kirtle",
+    "cotehardie",
+    "corset",
+    "bustle skirt",
+    "wrap",
+    "bolero",
+    "wrap top",
+    "hairpin",
+  ].map((s) => s.toLowerCase()),
+);
+
+const MALE_CODED = new Set(
+  [
+    "doublet",
+    "kilt",
+    "tuxedo shirt",
+    "dress shirt",
+    "top hat",
+    "frock coat",
+    "tie",
+    "bow tie",
+    "cufflinks",
+    "braies",
+  ].map((s) => s.toLowerCase()),
+);
+
+const GENDER_EXTRAS: Record<string, Partial<Record<CostumeLayer, readonly string[]>>> = {
+  female: {
+    top: ["blouse", "bodice", "dress", "fitted bodice", "kirtle", "gown"],
+    bottom: ["skirt"],
+    footwear: ["heels", "flats"],
+    over: ["capelet", "wrap", "bolero"],
+    head: ["bonnet", "fascinator", "veil"],
+    accessories: ["clutch", "hairpin"],
+  },
+  male: {
+    top: ["doublet", "dress shirt"],
+    bottom: ["kilt", "trousers"],
+    footwear: ["oxfords", "loafers"],
+    over: ["frock coat"],
+    head: ["top hat"],
+    accessories: ["tie", "bow tie", "cufflinks"],
+  },
+};
+
 export const ARMOR_PIECES = new Set(
   [
     "cuirass",
@@ -276,10 +344,18 @@ function stackForCategory(category: string): Record<CostumeLayer, readonly strin
   return CLOTHES;
 }
 
+function genderKey(gender: string): "female" | "male" | "" {
+  const g = gender.trim().toLowerCase();
+  if (g.startsWith("f")) return "female";
+  if (g.startsWith("m")) return "male";
+  return "";
+}
+
 export function layerItemsFor(
   layer: CostumeLayer,
   category: string,
   era = "",
+  gender = "",
 ): string[] {
   const cat = category.trim().toLowerCase();
   let items = [...(stackForCategory(cat)[layer] || [])];
@@ -287,15 +363,27 @@ export function layerItemsFor(
   if (eraKey && ERA_EXTRAS[eraKey]?.[layer]) {
     items = uniq([...items, ...(ERA_EXTRAS[eraKey][layer] || [])]);
   }
+  const g = genderKey(gender);
+  if (g && GENDER_EXTRAS[g]?.[layer]) {
+    items = uniq([...items, ...(GENDER_EXTRAS[g][layer] || [])]);
+  }
   if (cat === "everyday" || cat === "sport" || cat === "workwear" || cat === "formal") {
     items = items.filter((s) => !ARMOR_PIECES.has(s.toLowerCase()));
+  }
+  if (g === "female") {
+    items = items.filter((s) => !MALE_CODED.has(s.toLowerCase()));
+  } else if (g === "male") {
+    items = items.filter((s) => !FEMALE_CODED.has(s.toLowerCase()));
   }
   return items;
 }
 
-/** Item catalog for stacked body layers: union of Top + Over, still filtered by Category. */
-export function bodyLayerItemsFor(category: string, era = ""): string[] {
-  return uniq([...layerItemsFor("top", category, era), ...layerItemsFor("over", category, era)]);
+/** Item catalog for stacked body layers: union of Top + Over, still filtered by Category/Era/Gender. */
+export function bodyLayerItemsFor(category: string, era = "", gender = ""): string[] {
+  return uniq([
+    ...layerItemsFor("top", category, era, gender),
+    ...layerItemsFor("over", category, era, gender),
+  ]);
 }
 
 export function signatureItemsFor(category: string): string[] {
@@ -572,6 +660,10 @@ export function composeCostumeBrief(
   const parts: string[] = [];
   const cat = bit(fields.category) || bit(fields.tag);
   if (cat) parts.push(`${cat} costume`);
+  const gender = bit(fields.gender);
+  const g = genderKey(gender);
+  if (g === "female") parts.push("cut/fit: female figure, defined waist, feminine drape");
+  else if (g === "male") parts.push("cut/fit: male figure, broader shoulder, straighter hang");
   const era = bit(fields.era);
   if (era) parts.push(`era: ${era}`);
   const region = bit(fields.region);

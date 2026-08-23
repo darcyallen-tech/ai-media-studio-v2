@@ -692,6 +692,13 @@
   align-items: start;
 }
 
+.costume-builder .costume-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
+  align-items: start;
+}
+
 .costume-builder .costume-layer-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
