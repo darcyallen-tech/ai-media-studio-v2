@@ -142,6 +142,7 @@ class CreateParams:
     audio_on: bool | None = None
     negative_prompt: str | None = None
     num_images: int | None = None
+    seed: int | None = None
     draft: bool = False
     # Studio helpers already serialize a params dict — pass through unchanged
     parameters_json: str | None = None

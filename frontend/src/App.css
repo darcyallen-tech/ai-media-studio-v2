@@ -383,6 +383,27 @@
   min-width: 88px;
 }
 
+.advanced {
+  border: 1px solid #b4c2d2;
+  background: #e4ebf2;
+  border-radius: 8px;
+  padding: 6px 10px 8px;
+}
+
+.advanced summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #3a4a5c;
+}
+
+.advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .param.check {
   flex-direction: row;
   align-items: center;
@@ -1537,6 +1558,15 @@ html[data-theme="night"] input.model {
   background: #1c2430;
   border-color: #445266;
   color: #eef2f6;
+}
+
+html[data-theme="night"] .advanced {
+  background: #1c2430;
+  border-color: #445266;
+}
+
+html[data-theme="night"] .advanced summary {
+  color: #9aa8b8;
 }
 
 html[data-theme="night"] .ghost {

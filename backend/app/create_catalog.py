@@ -58,15 +58,8 @@ class ModelEntry:
     supports_strength: bool = False
     native_stereo_audio: bool = False
     hidden: bool = False
-
-    @property
-    def first_last(self) -> bool:
-        return (
-            "bridge" in self.modalities
-            or self.requires_end_frame
-            or "first→last" in self.tags
-            or "first-last" in (self.endpoint or "").lower()
-        )
+    first_last: bool = False
+    supports_draft: bool = False
 
 
 def _parse_duration_token(tok: str | None) -> int | None:
@@ -211,11 +204,12 @@ def _tags_for(
     source_key: str,
     draft: bool = False,
     native_stereo: bool = False,
+    supports_end: bool = False,
 ) -> tuple[str, ...]:
     tags: list[str] = []
     ep = (endpoint or "").lower()
     note_l = (notes or "").lower()
-    if modality == "bridge" or requires_end or "first-last" in ep:
+    if modality == "bridge" or requires_end or supports_end or "first-last" in ep:
         tags.append("first→last")
     if modality == "v2v" and (
         "video-to-video/edit" in ep or "camera" in note_l or "motion-preserv" in note_l
@@ -287,6 +281,14 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
     label = str(getattr(spec, "label", "") or key)
     endpoint = str(getattr(spec, "endpoint", "") or "")
     notes = str(getattr(spec, "notes", "") or "")
+    supports_end = bool(getattr(spec, "supports_end_frame", False)) or requires_end
+    first_last = bool(
+        requires_end
+        or supports_end
+        or short == "bridge"
+        or "first-last" in endpoint.lower()
+    )
+    supports_draft = bool(getattr(spec, "draft_endpoint", None))
     return ModelEntry(
         id=f"vision:{key}",
         label=label,
@@ -317,8 +319,9 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
             omni=omni,
             backend="vision",
             source_key=key,
-            draft=bool(getattr(spec, "draft_endpoint", None)),
+            draft=supports_draft,
             native_stereo=bool(getattr(spec, "native_stereo_audio", False)),
+            supports_end=supports_end,
         ),
         backend="vision",
         source_key=key,
@@ -327,7 +330,7 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         default_duration=str(getattr(spec, "default_duration", "") or ""),
         omni=omni,
         requires_end_frame=requires_end,
-        supports_end_frame=bool(getattr(spec, "supports_end_frame", False)) or requires_end,
+        supports_end_frame=supports_end,
         aspect_choices=tuple(getattr(spec, "aspect_choices", ()) or ()),
         resolution_choices=tuple(getattr(spec, "resolution_choices", ()) or ()),
         default_aspect=str(getattr(spec, "default_aspect", "") or ""),
@@ -336,6 +339,8 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         supports_strength=bool(getattr(spec, "supports_strength", False)),
         native_stereo_audio=bool(getattr(spec, "native_stereo_audio", False)),
         hidden=bool(getattr(spec, "hidden", False)),
+        first_last=first_last,
+        supports_draft=supports_draft,
     )
 
 
@@ -398,6 +403,8 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
         supports_strength=True,
         native_stereo_audio=False,
         hidden=bool(getattr(spec, "hidden", False)),
+        first_last=False,
+        supports_draft=False,
     )
 
 
@@ -435,6 +442,14 @@ def _entry_from_video(spec: Any) -> ModelEntry:
     label = str(getattr(spec, "label", "") or key)
     endpoint = str(getattr(spec, "endpoint", "") or "")
     notes = str(getattr(spec, "notes", "") or "")
+    supports_end = bool(getattr(spec, "supports_end_frame", False)) or requires_end
+    first_last = bool(
+        requires_end
+        or supports_end
+        or "bridge" in mods
+        or "first-last" in endpoint.lower()
+    )
+    supports_draft = bool(getattr(spec, "draft_endpoint", None))
     return ModelEntry(
         id=f"studio:vid:{key}",
         label=label,
@@ -464,8 +479,9 @@ def _entry_from_video(spec: Any) -> ModelEntry:
             omni=omni,
             backend="studio_video",
             source_key=key,
-            draft=bool(getattr(spec, "draft_endpoint", None)),
+            draft=supports_draft,
             native_stereo=bool(getattr(spec, "native_stereo_audio", False)),
+            supports_end=supports_end,
         ),
         backend="studio_video",
         source_key=key,
@@ -473,7 +489,7 @@ def _entry_from_video(spec: Any) -> ModelEntry:
         default_duration=str(getattr(spec, "default_duration", "") or ""),
         omni=omni,
         requires_end_frame=requires_end,
-        supports_end_frame=bool(getattr(spec, "supports_end_frame", False)) or requires_end,
+        supports_end_frame=supports_end,
         aspect_choices=tuple(getattr(spec, "allowed_aspect_ratios", ()) or ()),
         resolution_choices=tuple(getattr(spec, "allowed_resolutions", ()) or ()),
         default_aspect=str(getattr(spec, "default_aspect_ratio", "") or ""),
@@ -485,6 +501,8 @@ def _entry_from_video(spec: Any) -> ModelEntry:
         supports_strength=False,
         native_stereo_audio=bool(getattr(spec, "native_stereo_audio", False)),
         hidden=bool(getattr(spec, "hidden", False)),
+        first_last=first_last,
+        supports_draft=supports_draft,
     )
 
 

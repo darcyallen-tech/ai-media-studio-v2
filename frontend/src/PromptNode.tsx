@@ -135,6 +135,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seed, setSeed] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
+  const [numImages, setNumImages] = useState(1);
+  const [draft, setDraft] = useState(false);
   const [phase, setPhase] = useState<"idle" | "preparing" | "generating">("idle");
   const [localPins, setLocalPins] = useState<FramePin[]>([]);
   const pins = data.pins ?? localPins;
@@ -166,7 +170,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
 
   const missing: string[] = [];
   if (plan.first && !data.first?.path) missing.push("First Frame");
-  if (plan.last && !data.last?.path) missing.push("Last Frame");
+  if (plan.last && !plan.lastOptional && !data.last?.path) {
+    missing.push("Last Frame");
+  }
   if (plan.source && !plan.sourceOptional && !data.source?.path) {
     missing.push(plan.source === "video" ? "Source video" : "Source still");
   } else if (
@@ -366,6 +372,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setAudioOn(selectedModel.supports_audio ? true : null);
     setVoice(selectedModel.default_voice || selectedModel.voices?.[0] || "");
     setInstrumental(true);
+    setDraft(false);
+    const maxN = Math.max(
+      1,
+      Number(selectedModel.size_limits?.max_num_images) || 1,
+    );
+    setNumImages((cur) => Math.min(Math.max(1, cur), Math.min(4, maxN)));
   }, [selectedModel, isStoryboard]);
 
   useEffect(() => {
@@ -388,6 +400,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     if (audioOn != null) qs.set("generate_audio", audioOn ? "true" : "false");
     if (mode === "audio" && prompt.trim()) qs.set("prompt", prompt.trim());
     if (isFrame && clipDuration > 0) qs.set("duration", String(clipDuration));
+    if (numImages > 1) qs.set("num_images", String(numImages));
+    if (draft) qs.set("draft", "true");
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Estimate ${res.status}`);
@@ -419,6 +433,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     clipDuration,
     selectedModel,
     data.shots,
+    numImages,
+    draft,
   ]);
 
   async function onGenerate() {
@@ -496,6 +512,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               : aspect || null,
             resolution: resolution || null,
             audio_on: audioOn,
+            negative_prompt: negativePrompt.trim() || null,
+            num_images: numImages > 1 ? numImages : null,
+            seed: (() => {
+              const n = parseInt(seed, 10);
+              return seed.trim() && Number.isFinite(n) ? n : null;
+            })(),
+            draft,
             extra: isAudio
               ? { voice: voice || null, instrumental }
               : {},
@@ -762,7 +785,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </PromptErrorBoundary>
         ) : null}
 
-        {!isFrame && (durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || isAudio && modality === "music") ? (
+        {!isFrame && (durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || Boolean(selectedModel?.supports_draft) || isAudio && modality === "music") ? (
           <div className="params">
             {durs.length > 0 ? (
               <label className="param">
@@ -848,6 +871,16 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 Instrumental
               </label>
             ) : null}
+            {selectedModel?.supports_draft ? (
+              <label className="param check">
+                <input
+                  type="checkbox"
+                  checked={draft}
+                  onChange={(e) => setDraft(e.target.checked)}
+                />
+                Draft
+              </label>
+            ) : null}
           </div>
         ) : null}
 
@@ -872,6 +905,70 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
+
+        {!isFrame && !isStoryboard && !isAudio ? (
+          <details className="advanced nodrag">
+            <summary>Advanced</summary>
+            <div className="advanced-body">
+              <label className="param">
+                <span>Seed</span>
+                <input
+                  className="model nodrag"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="optional"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value)}
+                />
+              </label>
+              <label className="param">
+                <span>Negative prompt</span>
+                <input
+                  className="model nodrag"
+                  type="text"
+                  placeholder="optional"
+                  value={negativePrompt}
+                  onChange={(e) => setNegativePrompt(e.target.value)}
+                />
+              </label>
+              {Math.max(
+                1,
+                Number(selectedModel?.size_limits?.max_num_images) || 1,
+              ) > 1 ? (
+                <label className="param">
+                  <span>Images</span>
+                  <select
+                    className="model nodrag"
+                    value={String(numImages)}
+                    onChange={(e) =>
+                      setNumImages(
+                        Math.max(1, Math.min(4, Number(e.target.value) || 1)),
+                      )
+                    }
+                  >
+                    {Array.from(
+                      {
+                        length: Math.min(
+                          4,
+                          Math.max(
+                            1,
+                            Number(selectedModel?.size_limits?.max_num_images) ||
+                              1,
+                          ),
+                        ),
+                      },
+                      (_, i) => i + 1,
+                    ).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
 
         <div className="prompt-actions">
           {!isLocked && data.onAddPromptBuilder ? (

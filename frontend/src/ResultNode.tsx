@@ -16,7 +16,12 @@ import {
   sizeChoices,
   useSheetModels,
 } from "./sheetUi";
-import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types";
+import {
+  writeLibraryPayload,
+  type GenerateResponse,
+  type ResultNodeData,
+  type ToolKind,
+} from "./types";
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
@@ -66,6 +71,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localUrl, setLocalUrl] = useState("");
+  const [enhancingDraft, setEnhancingDraft] = useState(false);
   const [noLabels, setNoLabels] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const cap = isSheet ? sheetR2iRefCap(selectedModel) : Number(data.maxRefs) || 0;
@@ -110,6 +116,41 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           { id: "restore", label: "Restore" },
           { id: "deblur", label: "Deblur" },
         ];
+
+  async function runDraftEnhance() {
+    const cache = (result.draft_cache_url || "").trim();
+    if (!cache) {
+      toast("No draft cache on this result.", true);
+      return;
+    }
+    setEnhancingDraft(true);
+    setLocalError(null);
+    try {
+      const res = await fetch("/draft-enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft_cache_url: cache,
+          duration: result.duration_sec ? String(result.duration_sec) : null,
+          model_id: data.modelId || result.model || result.model_key || "",
+        }),
+      });
+      const body = (await readJson(res)) as GenerateResponse & { detail?: string };
+      if (!res.ok || body.ok === false) {
+        throw new Error(
+          errorFromBody(body, body.error || "Draft enhance failed."),
+        );
+      }
+      data.onDraftEnhance?.(body);
+      toast(body.cost ? `Enhanced · ${body.cost}` : "Enhanced to full quality.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Draft enhance failed.";
+      setLocalError(msg);
+      toast(msg, true);
+    } finally {
+      setEnhancingDraft(false);
+    }
+  }
 
   async function copyLocal() {
     if (!copyPath) return;
@@ -529,6 +570,19 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               </p>
             ) : null}
           </>
+        ) : null}
+        {result.is_draft && result.draft_cache_url ? (
+          <div className="result-tools">
+            <button
+              type="button"
+              className="generate nodrag"
+              disabled={enhancingDraft || busy || data.generating}
+              onClick={() => void runDraftEnhance()}
+            >
+              {enhancingDraft ? "Enhancing…" : "Enhance"}
+            </button>
+            <span className="hint">FLUX 3 draft preview — Enhance to full quality</span>
+          </div>
         ) : null}
         {tools.length && data.onTool && !isAngle ? (
           <div className="result-tools">

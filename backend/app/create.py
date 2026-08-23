@@ -333,6 +333,10 @@ def _studio_parameters_json(state: CreateState) -> str:
         extra.setdefault("generate_audio", p.audio_on)
     if p.num_images is not None:
         extra.setdefault("num_images", p.num_images)
+    if p.seed is not None:
+        extra.setdefault("seed", int(p.seed))
+    if p.negative_prompt:
+        extra.setdefault("negative_prompt", p.negative_prompt)
     if p.draft:
         extra["draft"] = True
         extra["draft_first"] = True
@@ -455,7 +459,8 @@ def _dispatch_vision(
         negative_prompt=p.negative_prompt,
         generate_audio=None if still else p.audio_on,
         strength=p.strength,
-        num_images=p.num_images if modality == "t2i" else None,
+        num_images=p.num_images if still else None,
+        seed=p.seed,
         draft=bool(p.draft) and not still,
         output_dir=state.output_dir or Path("."),
         on_progress=on_progress,
@@ -517,6 +522,7 @@ def estimate_create_cost(state: CreateState) -> str:
                 aspect_ratio=p.aspect,
                 generate_audio=p.audio_on,
                 num_images=p.num_images,
+                draft=bool(p.draft),
             )
     from app.pricing import live_estimate_cost
 
@@ -530,6 +536,7 @@ def estimate_create_cost(state: CreateState) -> str:
             "resolution": p.resolution,
             "generate_audio": p.audio_on,
             "num_images": p.num_images,
+            "draft": bool(p.draft),
         },
     )
 

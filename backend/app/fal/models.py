@@ -478,7 +478,21 @@ class VideoModelSpec:
         *,
         generate_audio: bool = False,
         resolution: str | None = None,
+        draft: bool = False,
     ) -> float | None:
+        if draft and self.cost_per_second_draft is not None:
+            tok = self.nearest_duration(duration_seconds)
+            if tok == "auto":
+                try:
+                    secs = float(str(self.default_duration or 5).replace("s", "").strip())
+                except (TypeError, ValueError):
+                    secs = 5.0
+            else:
+                try:
+                    secs = float(str(tok).replace("s", "").strip())
+                except (TypeError, ValueError):
+                    secs = float(duration_seconds or 5)
+            return float(self.cost_per_second_draft) * float(secs)
         rate = self.cost_per_second
         if generate_audio and self.cost_per_second_audio_on is not None:
             rate = self.cost_per_second_audio_on
@@ -1096,8 +1110,12 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         duration_param="duration",
         default_duration="5",
         max_duration_seconds=15.0,
+        supports_end_frame=True,
         cost_per_second=0.112,
-        notes="Kling 3.0 Standard image-to-video.",
+        notes=(
+            "Kling 3.0 Standard image-to-video. "
+            "Start still + optional end_image_url (Last Frame)."
+        ),
     ),
     "kling v3 pro i2v": VideoModelSpec(
         key="kling v3 pro i2v",
@@ -1110,8 +1128,12 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         duration_param="duration",
         default_duration="5",
         max_duration_seconds=15.0,
+        supports_end_frame=True,
         cost_per_second=0.14,
-        notes="Kling 3.0 Pro image-to-video.",
+        notes=(
+            "Kling 3.0 Pro image-to-video. "
+            "Start still + optional end_image_url (Last Frame)."
+        ),
     ),
     "kling 2.6 pro i2v": VideoModelSpec(
         key="kling 2.6 pro i2v",
@@ -1206,10 +1228,12 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         default_aspect_ratio="auto",
         cost_per_second=0.473,
         cost_per_second_by_resolution={"480p": 0.2205, "720p": 0.473},
+        supports_end_frame=True,
         notes=(
             "Seedance 2.5 I2V — up to 30s single-pass with native audio. "
-            "Optional end frame. 480p/720p. Token est. ~$0.0214/1k tokens "
-            "(≈$0.47/s @720p 16:9). Partner photoreal-face filter."
+            "Optional end frame via end_image_url (Last Frame). 480p/720p. "
+            "Token est. ~$0.0214/1k tokens (≈$0.47/s @720p 16:9). "
+            "Partner photoreal-face filter."
         ),
     ),
     "seedance 2.0 fast i2v": VideoModelSpec(
@@ -2197,6 +2221,13 @@ def build_edit_arguments(
         except (TypeError, ValueError):
             notes.append(f"Ignoring non-integer seed={seed!r}.")
 
+    neg = params.get("negative_prompt")
+    if neg is None and other:
+        neg = other.get("negative_prompt")
+    neg_s = str(neg or "").strip()
+    if neg_s:
+        args["negative_prompt"] = neg_s
+
     strength = params.get("strength")
     if strength is None and other:
         strength = other.get("strength")
@@ -2690,6 +2721,23 @@ def build_i2v_arguments(
         spec.endpoint
     ):
         notes.append(aspect_omit_note(spec.endpoint))
+
+    seed = params.get("seed")
+    if seed is None:
+        seed = other.get("seed")
+    if seed is not None and seed != "":
+        try:
+            args["seed"] = int(seed)
+        except (TypeError, ValueError):
+            notes.append(f"Ignoring non-integer seed={seed!r}.")
+
+    neg = params.get("negative_prompt")
+    if neg is None:
+        neg = other.get("negative_prompt")
+    neg_s = str(neg or "").strip()
+    ep = (spec.endpoint or "").lower()
+    if neg_s and "seedance" not in ep:
+        args["negative_prompt"] = neg_s
 
     from app.aspect_omit import sanitize_seedance_r2v_arguments
 

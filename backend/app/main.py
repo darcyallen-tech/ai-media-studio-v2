@@ -205,6 +205,7 @@ class ParamsIn(BaseModel):
     audio_on: bool | None = None
     negative_prompt: str | None = None
     num_images: int | None = None
+    seed: int | None = None
     draft: bool = False
     parameters_json: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
@@ -316,6 +317,7 @@ def _params_from_body(raw: ParamsIn) -> CreateParams:
         audio_on=raw.audio_on,
         negative_prompt=raw.negative_prompt,
         num_images=raw.num_images,
+        seed=raw.seed,
         draft=bool(raw.draft),
         parameters_json=raw.parameters_json,
         extra=dict(raw.extra or {}),
@@ -553,6 +555,8 @@ def estimate_get(
     prompt: str | None = Query(default=None),
     factor: str | None = Query(default=None),
     kind: str | None = Query(default=None),
+    num_images: int | None = Query(default=None),
+    draft: bool | None = Query(default=None),
 ) -> dict[str, Any]:
     """Cost-only estimate from catalog helpers (query form)."""
     extra: dict[str, Any] = {}
@@ -570,10 +574,64 @@ def estimate_get(
             aspect=aspect,
             resolution=resolution,
             audio_on=generate_audio,
+            num_images=num_images,
+            draft=bool(draft),
             extra=extra,
         ),
     )
     return _estimate_payload(body)
+
+
+class DraftEnhanceIn(BaseModel):
+    draft_cache_url: str
+    duration: str | None = None
+    model_id: str | None = None
+
+
+@app.post("/draft-enhance")
+def draft_enhance_endpoint(body: DraftEnhanceIn) -> dict[str, Any]:
+    """FLUX 3 draft-enhance: full-quality clip from a stored draft_cache_url."""
+    from app.flux3_draft import run_draft_enhance
+
+    t0 = time.perf_counter()
+    enhanced = run_draft_enhance(
+        draft_cache_url=body.draft_cache_url,
+        output_dir=OUTPUT_DIR,
+        prompt_hint="flux3-enhance",
+        model_key=body.model_id or "flux 3 enhance",
+    )
+    elapsed = time.perf_counter() - t0
+    local_paths = [enhanced.path] if enhanced.path else []
+    cost = enhanced.cost_estimate or enhanced.metrics_line or ""
+    if enhanced.ok and local_paths:
+        record_generated(
+            local_paths,
+            cost=cost,
+            duration_sec=elapsed,
+            model=body.model_id or "flux 3 enhance",
+        )
+        _log_job_spend(
+            ok=True,
+            cost=cost,
+            model_id=body.model_id or "flux 3 enhance",
+            job_kind="video",
+        )
+    return _payload(
+        ok=enhanced.ok,
+        result_paths=_public_paths(local_paths),
+        cost=cost,
+        duration_sec=elapsed,
+        error=None if enhanced.ok else (enhanced.status or "Draft enhance failed."),
+        extra={
+            "status": enhanced.status,
+            "local_paths": local_paths,
+            "job_kind": "video",
+            "notes": list(enhanced.notes or []),
+            "metrics_line": enhanced.metrics_line,
+            "is_draft": False,
+            "draft_cache_url": None,
+        },
+    )
 
 
 @app.post("/enhance")
@@ -799,6 +857,8 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "notes": list(result.notes),
             "metrics_line": result.metrics_line,
             "estimate": estimate_create_cost(state) if not result.ok else cost,
+            "is_draft": bool(result.is_draft),
+            "draft_cache_url": result.draft_cache_url,
         },
     )
 

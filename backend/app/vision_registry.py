@@ -2274,6 +2274,7 @@ def estimate_vision_cost(
     num_images: int | None = None,
     has_video_refs: bool = False,
     input_video_duration_s: float = 0.0,
+    draft: bool = False,
 ) -> float:
     """
     Conservative USD ballpark for UI (not billing).
@@ -2315,6 +2316,13 @@ def estimate_vision_cost(
     # --- Video: total = per-second rate × duration_eff (clamped to enum / max) ---
     secs, _dur_tok = vision_duration_eff(spec, duration_token)
     default_secs = duration_seconds(spec.default_duration) or 8.0
+
+    if draft and getattr(spec, "draft_endpoint", None):
+        from app.flux3_draft import estimate_draft_cost_usd
+
+        amt = estimate_draft_cost_usd(spec, duration_s=secs)
+        if amt is not None:
+            return float(amt)
 
     # Seedance 2.5 — token formula (prefer over flat $/s tables)
     if is_seedance_25_spec(spec):
@@ -2383,6 +2391,7 @@ def format_vision_cost(
     num_images: int | None = None,
     has_video_refs: bool = False,
     input_video_duration_s: float = 0.0,
+    draft: bool = False,
 ) -> str:
     """
     Human label for the **total** estimated job cost.
@@ -2402,6 +2411,7 @@ def format_vision_cost(
         num_images=num_images,
         has_video_refs=has_video_refs,
         input_video_duration_s=input_video_duration_s,
+        draft=draft,
     )
     if is_still_mode(spec.mode):
         n = clamp_vision_num_images(spec, num_images)
@@ -2413,6 +2423,8 @@ def format_vision_cost(
     secs, _dur_tok = vision_duration_eff(spec, duration_token)
     dur_txt = f"{secs:.0f}" if abs(secs - round(secs)) < 1e-6 else f"{secs:.1f}"
     unit = f"{dur_txt}s"
+    if draft and getattr(spec, "draft_endpoint", None):
+        unit = f"{dur_txt}s draft"
     if is_seedance_25_spec(spec) and has_video_refs:
         unit = f"{dur_txt}s · video-ref ×0.6"
     return format_job_cost(amt, unit=unit, model=spec.label)
@@ -2435,6 +2447,7 @@ def build_vision_arguments(
     negative_prompt: str | None = None,
     generate_audio: bool | None = None,
     num_images: int | None = None,
+    seed: int | None = None,
 ) -> dict[str, Any]:
     """Map UI fields → fal payload for the selected Vision model."""
     args: dict[str, Any] = dict(spec.extra_defaults)
@@ -2446,6 +2459,11 @@ def build_vision_arguments(
             else "Enter a motion / shot prompt."
         )
     args["prompt"] = text
+    if seed is not None:
+        try:
+            args["seed"] = int(seed)
+        except (TypeError, ValueError):
+            pass
     if "sync-lipsync" in spec.endpoint.lower():
         args.pop("prompt", None)
     if "avatar-x" in spec.endpoint.lower():

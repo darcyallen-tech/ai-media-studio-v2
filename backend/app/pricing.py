@@ -310,6 +310,7 @@ def live_estimate_cost(
     resolution = params.get("resolution") or other.get("resolution")
     aspect = params.get("aspect_ratio") or other.get("aspect_ratio")
     gen_audio = bool(params.get("generate_audio") or other.get("generate_audio"))
+    draft = bool(params.get("draft") or other.get("draft") or params.get("draft_first"))
 
     # --- Vision T2V / T2I labels (Studio modality) before fal Flux fallback ---
     try:
@@ -334,6 +335,7 @@ def live_estimate_cost(
                 resolution=str(resolution) if resolution else None,
                 aspect_ratio=str(aspect) if aspect else None,
                 generate_audio=gen_audio if getattr(vspec, "supports_audio", False) else None,
+                draft=draft,
             )
         if vspec is not None and getattr(vspec, "mode", "") == "text_to_image":
             return format_vision_cost(
@@ -376,10 +378,12 @@ def live_estimate_cost(
             secs,
             generate_audio=gen_audio,
             resolution=str(resolution) if resolution else None,
+            draft=draft,
         )
-        return format_job_cost(
-            amount, unit=f"{tok}s" if tok != "auto" else f"{secs:.0f}s", model=spec.label
-        )
+        unit = f"{tok}s" if tok != "auto" else f"{secs:.0f}s"
+        if draft and getattr(spec, "draft_endpoint", None):
+            unit = f"{unit} draft"
+        return format_job_cost(amount, unit=unit, model=spec.label)
 
     # video edit — cost often scales with source length
     spec = resolve_video_model(model_choice) or default_video_edit_model()
@@ -390,6 +394,7 @@ def live_estimate_cost(
         secs,
         generate_audio=gen_audio,
         resolution=str(resolution) if resolution else None,
+        draft=draft,
     )
     return format_job_cost(
         amount, unit=f"{tok}s" if tok != "auto" else f"{secs:.0f}s", model=spec.label

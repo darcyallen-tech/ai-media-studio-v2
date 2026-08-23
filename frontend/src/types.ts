@@ -30,11 +30,14 @@ export type ModelRow = {
   voices?: string[];
   requires_end_frame?: boolean;
   supports_end_frame?: boolean;
+  first_last?: boolean;
+  supports_draft?: boolean;
   required_slots?: string[];
   optional_slots?: string[];
   size_limits?: {
     max_ref_images?: number;
     max_refs?: number;
+    max_num_images?: number;
   };
   requires_runware?: boolean;
 };
@@ -48,6 +51,10 @@ export type GenerateResponse = {
   error?: string | null;
   status?: string;
   job_kind?: string;
+  is_draft?: boolean;
+  draft_cache_url?: string | null;
+  model?: string;
+  model_key?: string;
 };
 
 export type LibraryItem = {
@@ -78,6 +85,7 @@ export type GraphInputs = {
   sourceOptional?: boolean;
   first?: boolean;
   last?: boolean;
+  lastOptional?: boolean;
   characters?: boolean;
   scenes?: boolean;
 };
@@ -274,6 +282,7 @@ export type ResultNodeData = {
   onApplyToPin?: () => void;
   applyLabel?: string;
   dragItem?: LibraryItem | null;
+  onDraftEnhance?: (result: GenerateResponse) => void;
 };
 
 export type ToolModelRow = {
@@ -595,7 +604,13 @@ export function inputPlan(
   if (modality === "bridge" || model?.requires_end_frame) {
     return { first: true, last: true };
   }
-  if (modality === "i2v" || modality === "i2i" || modality === "region") {
+  if (modality === "i2v") {
+    const last = Boolean(
+      model?.first_last || model?.supports_end_frame,
+    );
+    return { source: "image", last, lastOptional: last };
+  }
+  if (modality === "i2i" || modality === "region") {
     return { source: "image" };
   }
   if (modality === "r2i" || modality === "r2v") {

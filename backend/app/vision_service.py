@@ -138,6 +138,7 @@ def run_vision(
     generate_audio: bool | None = None,
     strength: float | None = None,
     num_images: int | None = None,
+    seed: int | None = None,
     draft: bool = False,
     output_dir: str | Path,
     on_progress: ProgressCallback | None = None,
@@ -150,7 +151,9 @@ def run_vision(
     allows, otherwise sequential singles (per-tab busy stays on vision).
     """
     spec = find_vision_model(model_label, mode) or default_vision_model(mode)
-    want_n = clamp_vision_num_images(spec, num_images if mode == "text_to_image" else 1)
+    want_n = clamp_vision_num_images(
+        spec, num_images if is_still_mode(mode) else 1
+    )
 
     def progress(msg: str) -> None:
         if on_progress:
@@ -162,7 +165,8 @@ def run_vision(
         resolution=resolution,
         aspect_ratio=aspect_ratio,
         generate_audio=generate_audio,
-        num_images=want_n if mode == "text_to_image" else 1,
+        num_images=want_n if is_still_mode(mode) else 1,
+        draft=draft,
     )
     est_lbl = format_cost_label(est, estimate=True)
     progress(f"{spec.label} · {est_lbl}")
@@ -432,7 +436,11 @@ def run_vision(
             # Build parameters for Studio-compatible edit path
             from app.vision_registry import clamp_nano_aspect, map_t2i_aspect_colon, map_t2i_image_size
 
-            params: dict[str, Any] = {"num_images": 1}
+            params: dict[str, Any] = {"num_images": want_n}
+            if seed is not None:
+                params["seed"] = int(seed)
+            if negative_prompt:
+                params["negative_prompt"] = negative_prompt
             asp = (aspect_ratio or "").strip()
             edit_ep = (edit_spec.endpoint or "").lower()
             # "Match source" / empty → leave aspect to build_edit_arguments (source image)
@@ -493,6 +501,7 @@ def run_vision(
                 negative_prompt=negative_prompt,
                 generate_audio=generate_audio,
                 num_images=want_n if mode == "text_to_image" else 1,
+                seed=seed,
             )
             endpoint_for_run = spec.endpoint
             model_key_for_result = spec.key
@@ -632,6 +641,7 @@ def run_vision(
                     resolution=resolution,
                     negative_prompt=negative_prompt,
                     num_images=batch,
+                    seed=seed,
                 )
                 last_result = subscribe(
                     endpoint_for_run, batch_args, on_progress=progress
@@ -652,6 +662,7 @@ def run_vision(
                                 resolution=resolution,
                                 negative_prompt=negative_prompt,
                                 num_images=1,
+                                seed=seed,
                             )
                             last_result = subscribe(
                                 endpoint_for_run, one_args, on_progress=progress

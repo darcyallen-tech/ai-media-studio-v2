@@ -1087,6 +1087,7 @@ function StudioCanvas() {
           Boolean(prev.sourceOptional) === Boolean(next.sourceOptional) &&
           Boolean(prev.first) === Boolean(next.first) &&
           Boolean(prev.last) === Boolean(next.last) &&
+          Boolean(prev.lastOptional) === Boolean(next.lastOptional) &&
           Boolean(prev.characters) === Boolean(next.characters) &&
           Boolean(prev.scenes) === Boolean(next.scenes)
         ) {
@@ -2784,6 +2785,15 @@ function StudioCanvas() {
               result,
               onClose: () => closeNode(n.id),
               onTool: (kind) => spawnTool(n.id, kind, result),
+              onDraftEnhance: (next) => {
+                setNodes((cur) =>
+                  cur.map((row) =>
+                    row.id === n.id && row.type === "result"
+                      ? { ...row, data: { ...row.data, result: next } }
+                      : row,
+                  ),
+                );
+              },
               onApplyToPin: pinApply,
               applyLabel: pinApply ? "Apply to pin" : undefined,
               dragItem,
