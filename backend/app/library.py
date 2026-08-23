@@ -13,7 +13,14 @@ from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import quote
 
-from app.config import OUTPUT_DIR, PROJECT_ROOT
+from app.config import (
+    LIBRARY_DIR,
+    OUTPUT_DIR,
+    PROJECT_ROOT,
+    THUMBS_DIR,
+    UPLOADS_DIR,
+    is_dev_checkout,
+)
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"}
@@ -42,9 +49,6 @@ RAW_EXTS = {
     ".x3f",
 }
 
-UPLOADS_DIR = PROJECT_ROOT / "data" / "uploads"
-LIBRARY_DIR = PROJECT_ROOT / "data" / "library"
-THUMBS_DIR = LIBRARY_DIR / "thumbs"
 GENERATED_INDEX = LIBRARY_DIR / "generated.json"
 FLAGS_PATH = LIBRARY_DIR / "flags.json"
 
@@ -81,9 +85,22 @@ def resolve_handoff_dir() -> tuple[Path | None, str | None]:
             candidates.append(root / "data" / "resolve_handoff")
             if root.name == "resolve_handoff":
                 candidates.append(root)
-    candidates.append(
-        PROJECT_ROOT.parent / "ai-media-studio" / "data" / "resolve_handoff"
-    )
+    try:
+        from app.prefs import load_prefs
+
+        prefs = load_prefs()
+        saved_inbox = str(prefs.get("resolve_inbox") or "").strip()
+        if saved_inbox:
+            candidates.append(Path(saved_inbox).expanduser())
+        saved_v1 = str(prefs.get("v1_root") or "").strip()
+        if saved_v1:
+            candidates.append(Path(saved_v1).expanduser() / "data" / "resolve_handoff")
+    except Exception:
+        pass
+    if is_dev_checkout():
+        candidates.append(
+            PROJECT_ROOT.parent / "ai-media-studio" / "data" / "resolve_handoff"
+        )
     for path in candidates:
         try:
             if path.is_dir():
@@ -91,8 +108,8 @@ def resolve_handoff_dir() -> tuple[Path | None, str | None]:
         except OSError:
             continue
     return None, (
-        "No Resolve inbox found. Set RESOLVE_INBOX or AI_MEDIA_STUDIO_ROOT, "
-        "or keep V1 at ../ai-media-studio (data/resolve_handoff)."
+        "No Resolve inbox. Set a folder in Settings, or RESOLVE_INBOX / "
+        "AI_MEDIA_STUDIO_ROOT."
     )
 
 

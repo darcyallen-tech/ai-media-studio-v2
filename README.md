@@ -4,7 +4,25 @@ Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
 
 **V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
 
-Phase 5: I2V + Bridge First/Last nodes, video duration/aspect/audio params.
+Version **2.0.0-rc1**. Dev: Vite on :5173 + API on :8000. Production: one origin on :8000.
+
+## Production run
+
+Build the SPA, then start the production server (no `--reload`). The browser opens `http://127.0.0.1:8000/`.
+
+```powershell
+cd frontend
+npm install
+npm run build
+cd ..
+python run_server.py
+```
+
+- Same origin: UI + `/generate`, `/draft-enhance`, `/library`, `/outputs`.
+- Data (outputs, uploads, library, assets, thumbs) goes to `%LOCALAPPDATA%\AI Media Studio V2\`.
+- Keys: Settings → secrets store. Repo-root `.env` is **not** required.
+- V1 root / Resolve inbox: optional in Settings (blank = disabled).
+- Dev checkout: `cd backend; python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` plus `npm run dev` in `frontend`. Set `AMS_DEV=1` to force repo-relative `outputs/` and `data/`.
 
 ## Layout
 
@@ -23,9 +41,9 @@ ai-media-studio-v2/
 
 ## Keys
 
-Copy `.env.example` → `.env` at the **repo root** (`ai-media-studio-v2/.env`).
+**Production:** paste keys in Settings (stored under `%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). No repo `.env` required.
 
-Easiest if you already run V1: copy keys from `../ai-media-studio/.env` into this `.env`.
+**Dev checkout:** copy `.env.example` → `.env` at the repo root, or paste in Settings. Never commit real keys.
 
 | Env | Used for |
 |-----|----------|
@@ -33,17 +51,15 @@ Easiest if you already run V1: copy keys from `../ai-media-studio/.env` into thi
 | `XAI_KEY` or `XAI_API_KEY` | Optional Grok enhance / text |
 | `RUNWARE_KEY` or `RUNWARE_API_KEY` | Optional Aleph / Runware only |
 
-Never commit real keys. `.env` is gitignored.
-
 ## Backend
 
 ```powershell
 cd C:\Users\Darcy\ai-media-studio-v2\backend
 python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Run uvicorn with cwd = `backend` so `app` imports resolve.
+From a checkout this keeps repo-relative `outputs/` and `data/`. Production: `python run_server.py` from the repo root (adds `backend` to `sys.path`, `AMS_DEV=0`).
 
 | Method | Path | Notes |
 |--------|------|--------|
@@ -125,4 +141,4 @@ There is no `RESOLVE_OUTBOX` in V1; send goes straight into the open project.
 
 ## V1
 
-Production desktop (Flet) stays at `C:\Users\Darcy\ai-media-studio`. V2 does not modify it.
+Production desktop (Flet) stays in the V1 sibling checkout. V2 does not modify it. Packaged V2 does not require V1 on disk.

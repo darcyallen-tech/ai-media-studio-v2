@@ -3,13 +3,63 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from app.fal.models import catalog_for_enhance, model_dropdown_choices
 
-# backend/app/config.py → repo root is the V2 checkout (sibling of V1)
+# backend/app/config.py → code tree (checkout or later frozen extract)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
+
+
+def _truthy(raw: str | None) -> bool | None:
+    val = (raw or "").strip().lower()
+    if val in ("1", "true", "yes", "on"):
+        return True
+    if val in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
+def _repo_markers_present(root: Path) -> bool:
+    return (root / "frontend" / "package.json").is_file() and (
+        root / "backend" / "app" / "main.py"
+    ).is_file()
+
+
+def is_dev_checkout() -> bool:
+    """
+    Repo-relative data + optional .env.
+
+    AMS_DEV=1 → always checkout paths.
+    AMS_DEV=0 → portable LOCALAPPDATA paths (production / freeze-ready).
+    Unset → infer from frontend/package.json + backend/app/main.py.
+    """
+    flag = _truthy(os.environ.get("AMS_DEV"))
+    if flag is not None:
+        return flag
+    return _repo_markers_present(PROJECT_ROOT)
+
+
+def user_data_dir() -> Path:
+    from app.secrets_store import app_data_dir
+
+    return app_data_dir()
+
+
+def data_root() -> Path:
+    """outputs / data/uploads / data/library / data/assets live here."""
+    if is_dev_checkout():
+        return PROJECT_ROOT
+    return user_data_dir()
+
+
+OUTPUT_DIR = data_root() / "outputs"
+UPLOADS_DIR = data_root() / "data" / "uploads"
+LIBRARY_DIR = data_root() / "data" / "library"
+THUMBS_DIR = LIBRARY_DIR / "thumbs"
+ASSETS_DIR = data_root() / "data" / "assets"
+DIST_DIR = PROJECT_ROOT / "frontend" / "dist"
 
 ENHANCE_SYSTEM_PROMPT_PATH = (
     Path(__file__).resolve().parent / "prompts" / "enhance_system.txt"
@@ -70,12 +120,12 @@ APP_DESCRIPTION = (
 try:
     from app import __version__ as _pkg_ver
 
-    APP_VERSION = str(_pkg_ver or "0.1.2").strip() or "0.1.2"
+    APP_VERSION = str(_pkg_ver or "2.0.0-rc1").strip() or "2.0.0-rc1"
 except Exception:
-    APP_VERSION = "0.1.2"
+    APP_VERSION = "2.0.0-rc1"
 # Calendar day of this build/release (YYYY-MM-DD). Bump on tagged releases.
 # Same-day remote commits are treated as current unless the git SHA differs.
-APP_BUILD_DATE = os.environ.get("AI_MEDIA_STUDIO_BUILD_DATE", "2026-08-17").strip()
+APP_BUILD_DATE = os.environ.get("AI_MEDIA_STUDIO_BUILD_DATE", "2026-08-23").strip()
 
 
 def _resolve_app_git_sha() -> str:

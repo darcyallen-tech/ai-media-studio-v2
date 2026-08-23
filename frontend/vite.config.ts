@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Avoid colliding with FastAPI GET /assets/{id}
+    assetsDir: "static",
+  },
   server: {
     port: 5173,
     proxy: {
@@ -24,6 +28,7 @@ export default defineConfig({
       "/frame": "http://127.0.0.1:8000",
       "/extract-frame": "http://127.0.0.1:8000",
       "/prepare-aleph": "http://127.0.0.1:8000",
+      "/draft-enhance": "http://127.0.0.1:8000",
       "/builder": "http://127.0.0.1:8000",
       "/director": "http://127.0.0.1:8000",
       "/shot-builder": "http://127.0.0.1:8000",

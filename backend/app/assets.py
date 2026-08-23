@@ -9,12 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from app.config import PROJECT_ROOT
+from app.config import ASSETS_DIR
 
 Kind = Literal["character", "scene", "prop", "costume"]
 KINDS: tuple[Kind, ...] = ("character", "scene", "prop", "costume")
 
-ASSETS_DIR = PROJECT_ROOT / "data" / "assets"
 ASSETS_INDEX = ASSETS_DIR / "assets.json"
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 _MAX_STILLS = {"character": 8, "scene": 4, "prop": 3, "costume": 8}

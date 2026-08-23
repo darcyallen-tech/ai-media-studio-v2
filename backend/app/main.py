@@ -19,9 +19,19 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-# Load repo-root .env (never commit real keys)
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-load_dotenv(_REPO_ROOT / ".env")
+from app.config import (  # noqa: E402
+    APP_TITLE,
+    APP_VERSION,
+    DIST_DIR,
+    OUTPUT_DIR,
+    ensure_output_dir,
+    is_dev_checkout,
+    data_root,
+)
+
+# Repo .env only in a checkout. Production uses Settings → secrets_store.
+if is_dev_checkout():
+    load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 from app.audio_registry import default_voices_for_model  # noqa: E402
 from app.audio_service import (  # noqa: E402
@@ -37,7 +47,6 @@ from app.tools_service import (  # noqa: E402
     list_tools,
     resolve_tool,
 )
-from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.character_scene import (  # noqa: E402
     list_characters,
     list_props,
@@ -131,8 +140,6 @@ try:
 except Exception:
     pass
 
-APP_VERSION = "2.0.0-phase18"
-
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
@@ -141,6 +148,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -252,6 +261,8 @@ class SettingsPrefsIn(BaseModel):
     theme: str | None = None
     grid_snap: str | None = None
     edge_style: str | None = None
+    v1_root: str | None = None
+    resolve_inbox: str | None = None
 
 
 class BuilderApplyIn(BaseModel):
@@ -477,17 +488,20 @@ def _payload(
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    v1 = v1_root()
     return {
         "ok": True,
         "app": APP_TITLE,
         "version": APP_VERSION,
+        "dev": is_dev_checkout(),
         "output_dir": str(OUTPUT_DIR),
+        "data_root": str(data_root()),
         "keys": {
             "fal": bool(os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY")),
             "xai": bool(os.environ.get("XAI_API_KEY") or os.environ.get("XAI_KEY")),
             "runware": has_runware_key(),
         },
-        "v1_root": str(v1_root()) if v1_root() else None,
+        "v1_root": str(v1) if v1 else None,
     }
 
 
@@ -1073,6 +1087,8 @@ def settings_get() -> dict[str, Any]:
         "dashboards": dashboard_urls(),
         "paths": {
             "outputs": str(OUTPUT_DIR),
+            "data_root": str(data_root()),
+            "v1_root": str(v1_root()) if v1_root() else None,
             "resolve_inbox": str(inbox) if inbox else None,
             "resolve_inbox_note": inbox_note,
             "resolve_outbox": str(outbox_path),
@@ -1152,12 +1168,16 @@ def settings_open(body: SettingsOpenIn) -> dict[str, Any]:
     outbox = os.environ.get("RESOLVE_OUTBOX") or os.environ.get("RESOLVE_EXPORT")
     mapping = {
         "outputs": OUTPUT_DIR,
+        "data_root": data_root(),
+        "v1_root": v1_root(),
         "resolve_inbox": inbox,
         "resolve_outbox": Path(outbox).expanduser() if outbox else OUTPUT_DIR,
     }
-    path = mapping.get(which)
-    if path is None:
+    if which not in mapping:
         raise HTTPException(status_code=400, detail="Unknown path.")
+    path = mapping[which]
+    if path is None:
+        raise HTTPException(status_code=400, detail="That folder is not configured.")
     try:
         Path(path).mkdir(parents=True, exist_ok=True)
         reveal_in_folder(str(path))
@@ -1692,6 +1712,8 @@ def settings_prefs(body: SettingsPrefsIn) -> dict[str, Any]:
         theme=body.theme,
         grid_snap=body.grid_snap,
         edge_style=body.edge_style,
+        v1_root=body.v1_root,
+        resolve_inbox=body.resolve_inbox,
     )
     purged = {"purged": 0}
     try:
@@ -1793,3 +1815,38 @@ app.mount(
     StaticFiles(directory=str(OUTPUT_DIR), check_dir=False),
     name="outputs",
 )
+
+
+def _spa_index() -> Path | None:
+    index = DIST_DIR / "index.html"
+    return index if index.is_file() else None
+
+
+@app.get("/")
+def spa_root() -> FileResponse:
+    index = _spa_index()
+    if index is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Frontend not built. In a checkout run: cd frontend && npm run build",
+        )
+    return FileResponse(index)
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str) -> FileResponse:
+    """Serve the Vite production build (same origin as the API)."""
+    index = _spa_index()
+    if index is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Frontend not built. In a checkout run: cd frontend && npm run build",
+        )
+    candidate = (DIST_DIR / full_path).resolve()
+    try:
+        candidate.relative_to(DIST_DIR.resolve())
+    except ValueError:
+        return FileResponse(index)
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(index)

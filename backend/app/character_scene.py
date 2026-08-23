@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from app.config import PROJECT_ROOT
+from app.config import PROJECT_ROOT, is_dev_checkout
 
 Kind = Literal["character", "scene", "prop"]
 
@@ -29,12 +29,23 @@ def v1_root() -> Path | None:
                 return path.resolve()
         except OSError:
             continue
-    sibling = PROJECT_ROOT.parent / "ai-media-studio"
     try:
-        if sibling.is_dir():
-            return sibling.resolve()
-    except OSError:
+        from app.prefs import load_prefs
+
+        saved = str(load_prefs().get("v1_root") or "").strip()
+        if saved:
+            path = Path(saved).expanduser()
+            if path.is_dir():
+                return path.resolve()
+    except Exception:
         pass
+    if is_dev_checkout():
+        sibling = PROJECT_ROOT.parent / "ai-media-studio"
+        try:
+            if sibling.is_dir():
+                return sibling.resolve()
+        except OSError:
+            pass
     return None
 
 

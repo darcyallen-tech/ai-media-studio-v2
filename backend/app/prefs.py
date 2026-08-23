@@ -42,6 +42,8 @@ def _defaults() -> dict[str, Any]:
         "theme": DEFAULT_THEME,
         "grid_snap": DEFAULT_GRID_SNAP,
         "edge_style": DEFAULT_EDGE_STYLE,
+        "v1_root": "",
+        "resolve_inbox": "",
     }
 
 
@@ -65,6 +67,8 @@ def load_prefs() -> dict[str, Any]:
         "theme": _theme(raw.get("theme")),
         "grid_snap": _snap(raw.get("grid_snap")),
         "edge_style": _edge(raw.get("edge_style")),
+        "v1_root": str(raw.get("v1_root") or "").strip(),
+        "resolve_inbox": str(raw.get("resolve_inbox") or "").strip(),
     }
 
 
@@ -74,6 +78,8 @@ def save_prefs(
     theme: str | None = None,
     grid_snap: str | None = None,
     edge_style: str | None = None,
+    v1_root: str | None = None,
+    resolve_inbox: str | None = None,
 ) -> dict[str, Any]:
     current = load_prefs()
     if retention_days is not None:
@@ -84,6 +90,10 @@ def save_prefs(
         current["grid_snap"] = _snap(grid_snap)
     if edge_style is not None:
         current["edge_style"] = _edge(edge_style)
+    if v1_root is not None:
+        current["v1_root"] = str(v1_root).strip()
+    if resolve_inbox is not None:
+        current["resolve_inbox"] = str(resolve_inbox).strip()
     folder = app_data_dir()
     folder.mkdir(parents=True, exist_ok=True)
     prefs_path().write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")

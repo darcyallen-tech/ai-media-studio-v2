@@ -10,6 +10,8 @@ type SettingsBody = {
   dashboards?: Record<string, string>;
   paths?: {
     outputs?: string;
+    data_root?: string;
+    v1_root?: string | null;
     resolve_inbox?: string | null;
     resolve_inbox_note?: string | null;
     resolve_outbox?: string;
@@ -19,6 +21,8 @@ type SettingsBody = {
     retention_days?: number;
     grid_snap?: string;
     edge_style?: string;
+    v1_root?: string;
+    resolve_inbox?: string;
   };
 };
 
@@ -84,12 +88,18 @@ export default function SettingsPanel({
   const [error, setError] = useState<string | null>(null);
   const [retention, setRetention] = useState(90);
   const [retentionNever, setRetentionNever] = useState(false);
+  const [v1Root, setV1Root] = useState("");
+  const [inboxDraft, setInboxDraft] = useState("");
 
   async function loadSettings() {
     const res = await fetch("/settings");
     if (!res.ok) throw new Error(`Settings ${res.status}`);
     const body = (await res.json()) as SettingsBody;
     setSettings(body);
+    setV1Root(body.preferences?.v1_root || body.paths?.v1_root || "");
+    setInboxDraft(
+      body.preferences?.resolve_inbox || body.paths?.resolve_inbox || "",
+    );
     const days = body.preferences?.retention_days;
     if (days == null) {
       setRetention(90);
@@ -211,6 +221,33 @@ export default function SettingsPanel({
           ? "Auto-delete off."
           : `Auto-delete unpinned Uploads/Generated after ${saved} days.`,
       );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Save failed.", true);
+    }
+  }
+
+  async function savePaths() {
+    try {
+      const res = await fetch("/settings/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          v1_root: v1Root.trim(),
+          resolve_inbox: inboxDraft.trim(),
+        }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        detail?: string;
+        preferences?: { v1_root?: string; resolve_inbox?: string };
+      };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || "Could not save paths.");
+      }
+      setV1Root(body.preferences?.v1_root || "");
+      setInboxDraft(body.preferences?.resolve_inbox || "");
+      toast("Paths saved.");
+      void loadSettings().catch(() => undefined);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Save failed.", true);
     }
@@ -432,8 +469,31 @@ export default function SettingsPanel({
           value={paths?.outputs}
           onOpen={() => void openPath("outputs")}
         />
+        <label className="settings-field">
+          <span>V1 root (optional)</span>
+          <input
+            className="model"
+            type="text"
+            placeholder="Blank = disabled"
+            value={v1Root}
+            onChange={(e) => setV1Root(e.target.value)}
+          />
+        </label>
+        <label className="settings-field">
+          <span>Resolve inbox (optional)</span>
+          <input
+            className="model"
+            type="text"
+            placeholder="Blank = disabled"
+            value={inboxDraft}
+            onChange={(e) => setInboxDraft(e.target.value)}
+          />
+        </label>
+        <button type="button" className="ghost" onClick={() => void savePaths()}>
+          Save paths
+        </button>
         <PathRow
-          label="Resolve inbox"
+          label="Resolve inbox (active)"
           value={paths?.resolve_inbox || paths?.resolve_inbox_note || "—"}
           onOpen={
             paths?.resolve_inbox
