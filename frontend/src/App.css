@@ -576,6 +576,11 @@
   color: inherit;
 }
 
+.library-card.is-variant {
+  margin-left: 14px;
+  border-style: dashed;
+}
+
 .library-card.pinned {
   border-color: #d4a24a;
 }

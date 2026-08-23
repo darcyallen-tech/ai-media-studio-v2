@@ -522,8 +522,8 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
           </div>
           {error ? <p className="hint warn">{error}</p> : null}
           <p className="hint">
-            Saved Characters, Scenes, and Props. Drag onto a matching node or
-            click to attach.
+            Click a Character or Costume to view angles, set primary, and
+            regenerate. Drag onto a matching node to attach.
           </p>
           <div className="library-grid">
             {visibleAssets.length === 0 ? (
@@ -534,7 +534,7 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
                 return (
                   <div
                     key={asset.id}
-                    className="library-card"
+                    className={asset.parent_id ? "library-card is-variant" : "library-card"}
                     draggable={Boolean(item)}
                     title={asset.still_path || asset.name}
                     onDragStart={(e) => onAssetDragStart(e, asset)}
@@ -627,6 +627,12 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
           onDress={(characterId) => {
             setEditing(null);
             onNewAsset?.("dress", { characterId });
+          }}
+          onUseRef={(asset) => {
+            const item = assetToLibraryItem(asset);
+            setEditing(null);
+            if (item) onPick(item);
+            else toast("This asset has no still yet.", true);
           }}
         />
       ) : null}

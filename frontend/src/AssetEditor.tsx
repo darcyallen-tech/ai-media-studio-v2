@@ -18,11 +18,12 @@ type Props = {
   onClose: () => void;
   onChanged: (asset: StudioAsset) => void;
   onDress?: (characterId: string) => void;
+  onUseRef?: (asset: StudioAsset) => void;
 };
 
 const ALL = [...CORE_SLOTS, ...EXTRA_SLOTS];
 
-export default function AssetEditor({ asset, onClose, onChanged, onDress }: Props) {
+export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef }: Props) {
   const [row, setRow] = useState(asset);
   const [name, setName] = useState(asset.name || "");
   const [notes, setNotes] = useState(asset.notes || "");
@@ -106,7 +107,9 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress }: Prop
     try {
       const r2i = models.r2iId || models.t2iId;
       const t2i = models.t2iId;
-      const rowModel = slot === "front" && !row.identity?.front ? t2i : r2i;
+      const front = row.identity?.front || "";
+      const source = front;
+      const rowModel = source ? r2i : t2i;
       const sizeRow = models.r2i.find((m) => m.id === r2i) || models.t2i.find((m) => m.id === t2i);
       const res = await fetch("/assets/sheet/angle", {
         method: "POST",
@@ -115,7 +118,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress }: Prop
           asset_id: row.id,
           slot,
           model_id: rowModel,
-          source_still: slot === "front" ? "" : row.identity?.front || "",
+          source_still: source,
           resolution: pickDefaultResolution(qualityChoices(sizeRow).length ? qualityChoices(sizeRow) : sizeChoices(sizeRow)),
           aspect: pickDefaultResolution(sizeChoices(sizeRow)),
         }),
@@ -167,6 +170,15 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress }: Prop
             <button type="button" className="ghost" disabled={busy} onClick={() => void persistMeta()}>
               Save name / notes
             </button>
+            {onUseRef ? (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => onUseRef(row)}
+              >
+                Use as ref
+              </button>
+            ) : null}
             {isChar && !row.parent_id && onDress ? (
               <button type="button" className="ghost" onClick={() => onDress(row.id)}>
                 Dress Character

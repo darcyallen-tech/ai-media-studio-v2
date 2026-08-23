@@ -143,6 +143,15 @@ def _row(
         cid = name
     label = _label_for(item, names)
     has_still = bool(still_path)
+    ident_raw = item.get("identity") if isinstance(item.get("identity"), dict) else {}
+    identity: dict[str, str] = {}
+    identity_urls: dict[str, str] = {}
+    if kind == "character":
+        for slot, raw in ident_raw.items():
+            p = str(raw or "").strip()
+            if p:
+                identity[str(slot)] = p
+                identity_urls[str(slot)] = f"/{kind}s/{cid}/still?slot={slot}"
     return {
         "id": cid,
         "name": name or label,
@@ -152,7 +161,10 @@ def _row(
         "has_still": has_still,
         "parent_id": str(item.get("parent_id") or "").strip() or None,
         "url": f"/{kind}s/{cid}/still" if has_still else None,
+        "thumb_url": identity_urls.get("front") or (f"/{kind}s/{cid}/still" if has_still else None),
         "kind": kind,
+        "identity": identity,
+        "identity_urls": identity_urls,
     }
 
 

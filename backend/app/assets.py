@@ -226,20 +226,30 @@ def list_assets(kind: str | None = None) -> list[dict[str, Any]]:
             continue
         out.append(_to_public(row))
     out.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
-    if want == "character":
-        bases = [r for r in out if not r.get("parent_id")]
-        kids = [r for r in out if r.get("parent_id")]
-        grouped: list[dict[str, Any]] = []
-        by_parent: dict[str, list[dict[str, Any]]] = {}
-        for kid in kids:
-            by_parent.setdefault(str(kid.get("parent_id") or ""), []).append(kid)
-        for base in bases:
-            grouped.append(base)
-            grouped.extend(by_parent.pop(str(base.get("id") or ""), []))
-        for leftover in by_parent.values():
-            grouped.extend(leftover)
-        return grouped
-    return out
+    return _group_character_variants(out)
+
+
+def _group_character_variants(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep dress variants immediately under their parent character."""
+    kids: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if str(row.get("kind") or "") != "character":
+            continue
+        parent = str(row.get("parent_id") or "").strip()
+        if parent:
+            kids.setdefault(parent, []).append(row)
+    if not kids:
+        return rows
+    grouped: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("kind") or "") == "character" and str(row.get("parent_id") or "").strip():
+            continue
+        grouped.append(row)
+        if str(row.get("kind") or "") == "character":
+            grouped.extend(kids.pop(str(row.get("id") or ""), []))
+    for leftover in kids.values():
+        grouped.extend(leftover)
+    return grouped
 
 
 def get_asset(asset_id: str | None) -> dict[str, Any] | None:

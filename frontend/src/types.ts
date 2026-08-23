@@ -92,6 +92,7 @@ export type RefCatalogEntry = {
   still_path?: string | null;
   has_still?: boolean;
   url?: string | null;
+  thumb_url?: string | null;
   kind?: RefRole;
   identity?: Record<string, string>;
   identity_urls?: Record<string, string>;
@@ -611,8 +612,9 @@ export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
   const path = (entry.still_path || "").trim();
   if (!path) return null;
   const url = entry.url || "";
-  const owned = (entry.kind === "character" || entry.kind === "scene" || entry.kind === "prop")
-    && Boolean(url?.startsWith("/assets/"));
+  const owned =
+    (entry.kind === "character" || entry.kind === "scene" || entry.kind === "prop") &&
+    Boolean(url?.startsWith("/assets/"));
   return {
     id: `${entry.kind || "ref"}:${entry.id}`,
     name: entry.label || entry.name || entry.id,
@@ -620,7 +622,7 @@ export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
     kind: "image",
     path,
     url,
-    thumb_url: url || null,
+    thumb_url: entry.thumb_url || url || null,
   };
 }
 
