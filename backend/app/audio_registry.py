@@ -12,6 +12,10 @@ from typing import Any, Literal
 
 
 Category = Literal["music", "sfx", "ambience", "video_sfx", "voiceover", "voice_clone"]
+# per_second: cost_per_second × duration (Sonilo, ElevenLabs Music, …)
+# flat_per_track: one price per generation regardless of length (Lyria 3 Pro)
+# If fal starts billing Lyria by length, switch to per_second and set cost_per_second.
+PricingMode = Literal["per_second", "flat_per_track"]
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,7 @@ class AudioSpec:
     duration_max_s: float = 120.0
     duration_default_s: float = 30.0
     cost_per_second: float | None = None
+    pricing_mode: PricingMode | None = None
     fixed_duration_s: float | None = None
     supports_voice: bool = False
     default_voice: str = "Rachel"
@@ -178,6 +183,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         duration_min_s=15.0,
         duration_max_s=180.0,
         duration_default_s=30.0,
+        pricing_mode="flat_per_track",
         extra_defaults={},
     ),
     "lyria 2": AudioSpec(
@@ -189,6 +195,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         notes="Google Lyria 2 — ~30s clips. Great ambient / mood beds.",
         supports_duration=False,
         fixed_duration_s=30.0,
+        pricing_mode="flat_per_track",
         extra_defaults={
             "negative_prompt": "vocals, lyrics, speech, low quality",
         },
@@ -516,6 +523,10 @@ def find_audio(label_or_key: str | None, registry: dict[str, AudioSpec]) -> Audi
     return None
 
 
+def is_flat_per_track(spec: AudioSpec) -> bool:
+    return (spec.pricing_mode or "") == "flat_per_track"
+
+
 def estimate_audio_cost(
     spec: AudioSpec,
     *,
@@ -524,6 +535,8 @@ def estimate_audio_cost(
 ) -> float:
     """Rough USD estimate for UI display."""
     if spec.category == "voice_clone":
+        return spec.cost_estimate_usd
+    if is_flat_per_track(spec):
         return spec.cost_estimate_usd
     if spec.cost_per_second is not None and duration_s is not None and duration_s > 0:
         return max(0.01, round(duration_s * spec.cost_per_second, 4))
@@ -550,9 +563,15 @@ def format_audio_cost(
     text: str | None = None,
 ) -> str:
     """Job-total label (duration / characters when billed that way)."""
-    from app.pricing import format_job_cost
+    from app.pricing import format_job_cost, format_usd_amount
 
     amount = estimate_audio_cost(spec, duration_s=duration_s, text=text)
+    if is_flat_per_track(spec):
+        # Fal Lyria 3 Pro: "$0.08 per audio" — do not imply duration scaling.
+        s = format_usd_amount(amount)
+        model = (spec.label or "").strip()
+        tail = f" ({model})" if model else ""
+        return f"Est. cost: {s} / track{tail}"
     unit = None
     if spec.category == "voice_clone":
         unit = "clone job"

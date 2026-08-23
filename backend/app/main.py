@@ -408,6 +408,7 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     "endpoint": spec.endpoint,
                     "notes": spec.notes,
                     "cost_estimate_usd": spec.cost_estimate_usd,
+                    "pricing_mode": spec.pricing_mode,
                     "cost": estimate_audio_label(spec.key, spec.category),
                     "backend": "audio",
                     "source_key": spec.key,
