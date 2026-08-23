@@ -205,6 +205,26 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     const pickedQuality = quality || "";
     try {
       let assetId = data.assetId || "";
+      if (!assetId && data.sheetKind === "dress") {
+        if (!data.characterId || !data.costumeId) {
+          throw new Error("Pick a Character and a Costume.");
+        }
+        const dressed = await fetch("/assets/dress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character_id: data.characterId,
+            costume_id: data.costumeId,
+            name: data.name || "",
+          }),
+        });
+        const draft = await readJson(dressed);
+        const item = (draft.item || null) as { id?: string } | null;
+        if (!dressed.ok || !item?.id) {
+          throw new Error(errorFromBody(draft, "Dress draft failed."));
+        }
+        assetId = item.id;
+      }
       if (!assetId) {
         const created = await fetch("/assets/sheet/create", {
           method: "POST",
@@ -363,6 +383,19 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         </div>
         {isAngle ? (
           <>
+            {Array.isArray(data.refPreviews) && data.refPreviews.length ? (
+              <div className="ref-chip-row">
+                {data.refPreviews.map((chip) => (
+                  <div key={`${chip.label}-${chip.path}`} className="ref-chip">
+                    {chip.url ? <img src={chip.url} alt="" /> : <span className="sheet-angle-empty" />}
+                    <span>{chip.label}</span>
+                  </div>
+                ))}
+                <span className="hint">
+                  {packedRefCount()}/{cap || data.maxRefs || packedRefCount()} refs
+                </span>
+              </div>
+            ) : null}
             {isSheet && sheetModels.length ? (
               <label className="builder-field">
                 <span className="field-label">Model (T2I / multi-ref)</span>
@@ -476,7 +509,11 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => void confirmSheet()}
                 >
-                  {confirmed ? "Primary ✓" : "Confirm (set primary)"}
+                  {confirmed
+                    ? "Primary ✓"
+                    : data.sheetKind === "dress"
+                      ? "Confirm (save variant sheet)"
+                      : "Confirm (set primary)"}
                 </button>
               ) : null}
             </div>

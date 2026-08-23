@@ -44,6 +44,7 @@ import {
   composeCharacterIdentity,
   composeCostumeBrief,
   collectDressFrontRefs,
+  dressDefaultRefChips,
   composeCharacterSheetPrompt,
   collectAssetSheetRefs,
   composeCostumePrompt,
@@ -1704,13 +1705,18 @@ function DressForm({
       }),
     );
     return [
-      { id: "c-front", label: "Character Front", path: char?.identity?.front },
-      { id: "c-side", label: "Character Side", path: char?.identity?.side },
-      { id: "c-back", label: "Character Back", path: char?.identity?.back },
-      { id: "c-closeup", label: "Character Close-up", path: char?.identity?.closeup },
-      { id: "k-front", label: "Costume Front", path: costume?.identity?.front },
-      { id: "k-detail", label: "Costume Close-up", path: costume?.identity?.closeup },
-    ].filter((o) => o.path && !base.has(o.path)) as { id: string; label: string; path: string }[];
+      { id: "c-front", label: "Character Front", path: char?.identity?.front, url: char?.identity_urls?.front },
+      { id: "c-side", label: "Character Side", path: char?.identity?.side, url: char?.identity_urls?.side },
+      { id: "c-back", label: "Character Back", path: char?.identity?.back, url: char?.identity_urls?.back },
+      { id: "c-closeup", label: "Character Close-up", path: char?.identity?.closeup, url: char?.identity_urls?.closeup },
+      { id: "k-front", label: "Costume Front", path: costume?.identity?.front, url: costume?.identity_urls?.front },
+      { id: "k-detail", label: "Costume Close-up", path: costume?.identity?.closeup, url: costume?.identity_urls?.closeup },
+    ].filter((o) => o.path && !base.has(o.path)) as {
+      id: string;
+      label: string;
+      path: string;
+      url?: string;
+    }[];
   }, [char, costume, maxRefs]);
 
   function extraPaths() {
@@ -1832,58 +1838,78 @@ function DressForm({
   }
 
   function openDressedSheet() {
-    if (!char || !costume) {
-      setError("Pick a Character and a Costume.");
-      return;
-    }
-    const ident =
-      char.fields?.identity_prompt ||
-      composeCharacterIdentity(char.fields || {}, char.notes || "");
-    const outfit = costume.fields?.wardrobe || costume.name;
-    const refs = dressFrontRefs();
-    if (refs.length < 1) {
-      setError("Need a Character sheet (or Front) still.");
-      return;
-    }
-    if (refs.length > maxRefs) {
-      setError(
-        `${r2iRow?.label || "This model"} allows at most ${maxRefs} reference images (got ${refs.length}).`,
-      );
-      return;
-    }
+    const ident = char
+      ? char.fields?.identity_prompt ||
+        composeCharacterIdentity(char.fields || {}, char.notes || "")
+      : "the character";
+    const outfit = costume?.fields?.wardrobe || costume?.name || "the costume";
+    const cap = Math.max(1, maxRefs);
+    const refs = dressFrontRefs().slice(0, cap);
+    const chips = dressDefaultRefChips(char, costume);
+    const extraChips = extraCandidates
+      .filter((o) => extraOn[o.id])
+      .map((o) => ({
+        id: o.id,
+        label: o.label,
+        path: o.path,
+        url: o.url || "",
+      }));
+    const previews = [...chips, ...extraChips]
+      .filter((c, i, all) => c.path && all.findIndex((x) => x.path === c.path) === i)
+      .slice(0, cap);
     const sheetSize = dressSizes.includes(dressSize) ? dressSize : pickSheetResolution(dressSizes);
-    void ensureVariant()
-      .then((id) => {
-        spawnAngleResult({
-          builderId,
-          slot: COSTUME_SHEET_SLOT,
-          label: "Dressed sheet",
-          prompt: composeDressSheetPrompt(ident, outfit),
-          generating: false,
-          error: null,
-          focus: true,
-          resolution: pickDefaultResolution(dressQuals) || sheetSize,
-          resolutionChoices: dressSizes,
-          aspect: sheetSize,
-          quality: pickDefaultResolution(dressQuals),
-          qualityChoices: dressQuals,
-          t2iModel: models.t2iId,
-          r2iModel: models.r2iId || models.t2iId,
-          assetId: id,
-          sourceStill: refs[0],
-          extraRefs: refs.slice(1),
-          maxRefs,
-          wardrobe: outfit,
-          name: name.trim() || `${char.name} / ${costume.name}`,
-          sheetKind: "dress",
+    const warn =
+      !char || !costume
+        ? "Pick a Character and a Costume."
+        : refs.length < 1
+          ? "Need a Character sheet (or Front) and Costume sheet (or Front)."
+          : null;
+    const patch = {
+      builderId,
+      slot: COSTUME_SHEET_SLOT,
+      label: "Dressed sheet",
+      prompt: composeDressSheetPrompt(ident, outfit),
+      generating: false,
+      error: warn,
+      focus: true,
+      resolution: pickDefaultResolution(dressQuals) || sheetSize,
+      resolutionChoices: dressSizes,
+      aspect: sheetSize,
+      quality: pickDefaultResolution(dressQuals),
+      qualityChoices: dressQuals,
+      t2iModel: models.t2iId,
+      r2iModel: models.r2iId || models.t2iId,
+      assetId: data.sessionAssetId || "",
+      sourceStill: refs[0] || "",
+      extraRefs: refs.slice(1),
+      maxRefs: cap,
+      wardrobe: outfit,
+      name: name.trim() || (char && costume ? `${char.name} / ${costume.name}` : "Dressed sheet"),
+      sheetKind: "dress" as const,
+      characterId,
+      costumeId,
+      refPreviews: previews,
+    };
+    try {
+      spawnAngleResult(patch);
+      setError(warn);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open dressed sheet.";
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    if (!data.sessionAssetId && characterId && costumeId) {
+      void ensureVariant()
+        .then((id) => {
+          spawnAngleResult({ ...patch, assetId: id, error: warn, focus: true });
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Dress draft failed.";
+          setError(msg);
+          toast(msg, true);
         });
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Could not open dressed sheet.";
-        setError(msg);
-        toast(msg, true);
-      });
+    }
   }
 
   async function save() {
@@ -1955,6 +1981,21 @@ function DressForm({
           onChange={(e) => setName(e.target.value)}
         />
       </label>
+      {dressDefaultRefChips(char, costume).length ? (
+        <div className="ref-chip-row">
+          {dressDefaultRefChips(char, costume).map((chip) => (
+            <div key={chip.id} className="ref-chip">
+              {chip.url ? <img src={chip.url} alt="" /> : <span className="sheet-angle-empty" />}
+              <span>{chip.label}</span>
+            </div>
+          ))}
+          <span className="hint">
+            {dressFrontRefs().length}/{maxRefs} refs
+          </span>
+        </div>
+      ) : (
+        <p className="hint">No sheet or Front stills yet — pick a Character and Costume with stills.</p>
+      )}
       <ModelPickers models={models} r2iOnly />
       {dressSizes.length ? (
         <label className="builder-field">

@@ -957,6 +957,87 @@ export function sheetPrimaryPath(
   return (ident[slot] || ident.front || fallback || "").trim();
 }
 
+export type DressRefChip = {
+  id: string;
+  label: string;
+  path: string;
+  url: string;
+};
+
+function chipUrl(
+  asset: {
+    id?: string;
+    identity_urls?: Record<string, string> | null;
+    url?: string | null;
+    thumb_url?: string | null;
+  } | null | undefined,
+  slot: string,
+): string {
+  const urls = asset?.identity_urls || {};
+  return (
+    urls[slot] ||
+    (asset?.id ? `/assets/${asset.id}/still?slot=${slot}` : "") ||
+    asset?.thumb_url ||
+    asset?.url ||
+    ""
+  );
+}
+
+export function dressDefaultRefChips(
+  char?: {
+    id?: string;
+    identity?: Record<string, string> | null;
+    identity_urls?: Record<string, string> | null;
+    still_path?: string | null;
+    url?: string | null;
+    thumb_url?: string | null;
+    primary_slot?: string;
+  } | null,
+  costume?: {
+    id?: string;
+    identity?: Record<string, string> | null;
+    identity_urls?: Record<string, string> | null;
+    still_path?: string | null;
+    url?: string | null;
+    thumb_url?: string | null;
+    primary_slot?: string;
+  } | null,
+): DressRefChip[] {
+  const one = (
+    id: string,
+    asset: typeof char,
+    sheetLabel: string,
+    frontLabel: string,
+  ): DressRefChip | null => {
+    if (!asset) return null;
+    const ident = asset.identity || {};
+    if (ident.sheet) {
+      return {
+        id,
+        label: sheetLabel,
+        path: ident.sheet,
+        url: chipUrl(asset, "sheet"),
+      };
+    }
+    const path =
+      ident.front ||
+      sheetPrimaryPath(ident, asset.primary_slot, asset.still_path || "") ||
+      asset.still_path ||
+      "";
+    if (!path) return null;
+    return {
+      id,
+      label: frontLabel,
+      path,
+      url: chipUrl(asset, "front"),
+    };
+  };
+  return [
+    one("character", char, "Character Sheet", "Character Front"),
+    one("costume", costume, "Costume Sheet", "Costume Front"),
+  ].filter((c): c is DressRefChip => Boolean(c));
+}
+
 export function collectDressFrontRefs(opts: {
   characterIdentity?: Record<string, string> | null;
   characterPrimarySlot?: string;

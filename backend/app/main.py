@@ -1285,8 +1285,10 @@ def assets_dress(body: AssetDressIn) -> dict[str, Any]:
     if not char or char.get("kind") != "character":
         raise HTTPException(status_code=400, detail="Pick a saved Character.")
     ident = char.get("identity") if isinstance(char.get("identity"), dict) else {}
-    if not ident.get("front"):
-        raise HTTPException(status_code=400, detail="Character needs a Front still.")
+    if not ident.get("front") and not ident.get("sheet"):
+        raise HTTPException(
+            status_code=400, detail="Character needs a Front still or sheet."
+        )
     if not costume or costume.get("kind") != "costume":
         raise HTTPException(status_code=400, detail="Pick a saved Costume.")
     cfields = costume.get("fields") if isinstance(costume.get("fields"), dict) else {}

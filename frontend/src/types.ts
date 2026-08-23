@@ -250,6 +250,9 @@ export type ResultNodeData = {
   wardrobe?: string;
   name?: string;
   sheetKind?: "costume" | "character" | "dress";
+  characterId?: string;
+  costumeId?: string;
+  refPreviews?: { id?: string; label: string; path: string; url?: string }[];
   onPrompt?: (prompt: string) => void;
   onModel?: (id: string) => void;
   onConfirmSheet?: () => void;
@@ -381,6 +384,9 @@ export type SheetAnglePatch = {
   wardrobe?: string;
   name?: string;
   sheetKind?: "costume" | "character" | "dress";
+  characterId?: string;
+  costumeId?: string;
+  refPreviews?: { id?: string; label: string; path: string; url?: string }[];
 };
 
 export type BuilderSessionInfo = {
