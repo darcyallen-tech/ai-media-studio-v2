@@ -8,8 +8,23 @@ from pathlib import Path
 
 from app.fal.models import catalog_for_enhance, model_dropdown_choices
 
-# backend/app/config.py → code tree (checkout or later frozen extract)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False)) or hasattr(sys, "_MEIPASS")
+
+
+def _code_root() -> Path:
+    """Checkout root, or PyInstaller _MEIPASS (never write here)."""
+    if is_frozen():
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(str(meipass))
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent.parent
+
+
+# backend/app/config.py → code tree (checkout or frozen extract)
+PROJECT_ROOT = _code_root()
 
 
 def _truthy(raw: str | None) -> bool | None:
@@ -31,10 +46,13 @@ def is_dev_checkout() -> bool:
     """
     Repo-relative data + optional .env.
 
+    Frozen builds are never a checkout.
     AMS_DEV=1 → always checkout paths.
     AMS_DEV=0 → portable LOCALAPPDATA paths (production / freeze-ready).
     Unset → infer from frontend/package.json + backend/app/main.py.
     """
+    if is_frozen():
+        return False
     flag = _truthy(os.environ.get("AMS_DEV"))
     if flag is not None:
         return flag

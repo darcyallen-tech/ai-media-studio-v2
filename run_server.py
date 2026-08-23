@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import sys
 from pathlib import Path
 
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "backend"
-sys.path.insert(0, str(BACKEND))
+if BACKEND.is_dir():
+    sys.path.insert(0, str(BACKEND))
 os.environ["AMS_DEV"] = "0"
 
 from app.server import main  # noqa: E402

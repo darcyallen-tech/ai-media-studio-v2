@@ -24,6 +24,27 @@ python run_server.py
 - V1 root / Resolve inbox: optional in Settings (blank = disabled).
 - Dev checkout: `cd backend; python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` plus `npm run dev` in `frontend`. Set `AMS_DEV=1` to force repo-relative `outputs/` and `data/`.
 
+## Windows build
+
+One-folder PyInstaller package (not one-file). Console window stays visible for RC.
+
+```powershell
+cd frontend
+npm run build
+cd ..
+powershell -File packaging/build_windows.ps1
+```
+
+Run the folder (no repo checkout required):
+
+```
+dist\AIMediaStudioV2\AMS_V2.bat
+```
+
+or double-click `AIMediaStudioV2.exe`. The browser opens `http://127.0.0.1:8000/`.
+
+First run: open **Settings**, paste fal / xAI / Runware keys (saved under `%LOCALAPPDATA%\AI Media Studio V2\`). Outputs and Library write there, not next to the exe.
+
 ## Layout
 
 ```

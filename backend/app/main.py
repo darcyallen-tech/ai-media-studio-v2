@@ -26,11 +26,12 @@ from app.config import (  # noqa: E402
     OUTPUT_DIR,
     ensure_output_dir,
     is_dev_checkout,
+    is_frozen,
     data_root,
 )
 
-# Repo .env only in a checkout. Production uses Settings → secrets_store.
-if is_dev_checkout():
+# Repo .env only in a checkout. Frozen / production uses Settings → secrets_store.
+if is_dev_checkout() and not is_frozen():
     load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 from app.audio_registry import default_voices_for_model  # noqa: E402
@@ -494,6 +495,7 @@ def health() -> dict[str, Any]:
         "app": APP_TITLE,
         "version": APP_VERSION,
         "dev": is_dev_checkout(),
+        "frozen": is_frozen(),
         "output_dir": str(OUTPUT_DIR),
         "data_root": str(data_root()),
         "keys": {
