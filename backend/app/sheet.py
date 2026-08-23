@@ -368,22 +368,28 @@ def builder_fields(kind: str) -> dict[str, Any]:
         }
     if k == "costume":
         layer_fields: dict[str, Any] = {}
-        for layer in COSTUME_LAYERS:
-            layer_fields[layer] = {"label": layer.title(), "type": "text"}
+        stacked = list(COSTUME_LAYERS) + [f"top_{i}" for i in range(2, 6)]
+        for layer in stacked:
+            if layer == "over":
+                continue
+            title = "Body layer 1" if layer == "top" else (
+                f"Body layer {layer.split('_')[1]}" if layer.startswith("top_") else layer.title()
+            )
+            layer_fields[layer] = {"label": title, "type": "text"}
             layer_fields[f"{layer}_material"] = {
-                "label": f"{layer.title()} material",
+                "label": f"{title} material",
                 "choices": list(COSTUME_MATERIALS),
             }
             layer_fields[f"{layer}_color"] = {
-                "label": f"{layer.title()} color",
+                "label": f"{title} color",
                 "choices": list(COSTUME_COLORS),
             }
             layer_fields[f"{layer}_fit"] = {
-                "label": f"{layer.title()} fit",
+                "label": f"{title} fit",
                 "choices": list(COSTUME_FITS),
             }
             layer_fields[f"{layer}_condition"] = {
-                "label": f"{layer.title()} condition",
+                "label": f"{title} condition",
                 "choices": list(COSTUME_CONDITIONS),
             }
         return {
@@ -620,7 +626,31 @@ def costume_brief(fields: dict[str, Any] | None) -> str:
     emblem = _nv(f.get("emblem"))
     if emblem:
         parts.append(f"emblem: {emblem}")
+    body_stack: list[str] = []
+    for i in range(1, 6):
+        prefix = "top" if i == 1 else f"top_{i}"
+        item = _choice(f, prefix) or _nv(f.get(prefix))
+        if not item:
+            continue
+        bits = [item]
+        col = _choice(f, f"{prefix}_color") or _nv(f.get(f"{prefix}_color"))
+        mat = _choice(f, f"{prefix}_material") or _nv(f.get(f"{prefix}_material"))
+        fit = _choice(f, f"{prefix}_fit") or _nv(f.get(f"{prefix}_fit"))
+        cond = _choice(f, f"{prefix}_condition") or _nv(f.get(f"{prefix}_condition"))
+        if col:
+            bits.append(col)
+        if mat:
+            bits.append(mat)
+        if fit:
+            bits.append(f"{fit} fit")
+        if cond:
+            bits.append(cond)
+        body_stack.append(", ".join(bits))
+    if body_stack:
+        parts.append("body layers (innermost first): " + " → ".join(body_stack))
     for layer in COSTUME_LAYERS:
+        if layer in ("top", "over"):
+            continue
         item = _choice(f, layer) or _nv(f.get(layer))
         if not item:
             continue

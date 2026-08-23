@@ -699,6 +699,30 @@
   align-items: start;
 }
 
+.costume-builder .costume-layer-row.has-fit {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.costume-builder .layer-stack {
+  margin: 6px 0 4px;
+}
+
+.costume-builder .layer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.costume-builder .layer-remove {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+}
+
+.costume-builder .add-layer {
+  margin: 4px 0 8px;
+}
+
 .costume-builder .param {
   min-width: 0;
   flex: 1;

@@ -11,7 +11,7 @@ import {
   COSTUME_COLORS,
   COSTUME_CONDITIONS,
   COSTUME_ERAS,
-  COSTUME_LAYERS,
+  COSTUME_FITS,
   COSTUME_MATERIALS,
   type CostumeLayer,
   COSTUME_REGIONS,
@@ -19,6 +19,7 @@ import {
   COSTUME_SLOTS,
   COSTUME_TAGS,
   EXTRA_SLOTS,
+  bodyLayerItemsFor,
   layerItemsFor,
   signatureItemsFor,
   PROP_CONDITIONS,
@@ -92,6 +93,9 @@ const LAYER_LABEL: Record<string, string> = {
   hands: "Hands",
   accessories: "Accessories",
 };
+
+const SINGLE_SLOTS = ["bottom", "footwear", "head", "hands", "accessories"] as const;
+const MAX_BODY_LAYERS = 5;
 
 export default function CreatorBuilderNode({
   data,
@@ -1049,8 +1053,9 @@ function CostumeForm({
   const [paletteC, setPaletteC] = useState("");
   const [signature, setSignature] = useState("");
   const [signatureC, setSignatureC] = useState("");
-  const [layers, setLayers] = useState<Record<string, LayerState>>(() =>
-    Object.fromEntries(COSTUME_LAYERS.map((k) => [k, emptyLayer()])),
+  const [bodyLayers, setBodyLayers] = useState<LayerState[]>(() => [emptyLayer()]);
+  const [slots, setSlots] = useState<Record<string, LayerState>>(() =>
+    Object.fromEntries(SINGLE_SLOTS.map((k) => [k, emptyLayer()])),
   );
   const [notes, setNotes] = useState("");
   const [outfitPrompt, setOutfitPrompt] = useState("");
@@ -1076,16 +1081,25 @@ function CostumeForm({
   const eraKey = pickField(era, eraC);
   const signatureOpts = signatureItemsFor(catKey);
 
-  function remapIncompatible(cat: string, eraVal: string, cur: Record<string, LayerState>) {
+  function remapLayer(layer: LayerState, allowed: string[]): LayerState {
+    if (layer.item === "Custom" || !layer.item) return layer;
+    const item = pickField(layer.item, layer.itemC);
+    if (item && !allowed.includes(item)) {
+      return { ...layer, item: "Custom", itemC: item };
+    }
+    return layer;
+  }
+
+  function remapBody(cat: string, eraVal: string, cur: LayerState[]) {
+    const allowed = bodyLayerItemsFor(cat, eraVal);
+    return cur.map((L) => remapLayer(L, allowed));
+  }
+
+  function remapSlots(cat: string, eraVal: string, cur: Record<string, LayerState>) {
     const next: Record<string, LayerState> = { ...cur };
-    for (const layer of COSTUME_LAYERS) {
-      const allowed = layerItemsFor(layer as CostumeLayer, cat, eraVal);
-      const L = cur[layer] || emptyLayer();
-      if (L.item === "Custom" || !L.item) continue;
-      const item = pickField(L.item, L.itemC);
-      if (item && !allowed.includes(item)) {
-        next[layer] = { ...L, item: "Custom", itemC: item };
-      }
+    for (const key of SINGLE_SLOTS) {
+      const allowed = layerItemsFor(key as CostumeLayer, cat, eraVal);
+      next[key] = remapLayer(cur[key] || emptyLayer(), allowed);
     }
     return next;
   }
@@ -1093,7 +1107,8 @@ function CostumeForm({
   function onCategory(v: string) {
     setCategory(v);
     const cat = v === "Custom" ? categoryC : v;
-    setLayers((cur) => remapIncompatible(cat, eraKey, cur));
+    setBodyLayers((cur) => remapBody(cat, eraKey, cur));
+    setSlots((cur) => remapSlots(cat, eraKey, cur));
     if (signature && signature !== "Custom" && !signatureItemsFor(cat).includes(signature)) {
       setSignature("Custom");
       setSignatureC(signature);
@@ -1104,7 +1119,8 @@ function CostumeForm({
   function onEra(v: string) {
     setEra(v);
     const eraVal = v === "Custom" ? eraC : v;
-    setLayers((cur) => remapIncompatible(catKey, eraVal, cur));
+    setBodyLayers((cur) => remapBody(catKey, eraVal, cur));
+    setSlots((cur) => remapSlots(catKey, eraVal, cur));
   }
 
   const costumeFields = useMemo(() => {
@@ -1116,8 +1132,12 @@ function CostumeForm({
       palette: pickField(palette, paletteC),
       signature: pickField(signature, signatureC),
     };
-    for (const key of COSTUME_LAYERS) {
-      Object.assign(flat, flattenLayer(key, layers[key] || emptyLayer()));
+    bodyLayers.forEach((layer, i) => {
+      const key = i === 0 ? "top" : `top_${i + 1}`;
+      Object.assign(flat, flattenLayer(key, layer));
+    });
+    for (const key of SINGLE_SLOTS) {
+      Object.assign(flat, flattenLayer(key, slots[key] || emptyLayer()));
     }
     return flat;
   }, [
@@ -1133,7 +1153,8 @@ function CostumeForm({
     paletteC,
     signature,
     signatureC,
-    layers,
+    bodyLayers,
+    slots,
   ]);
 
   function outfitText() {
@@ -1240,8 +1261,8 @@ function CostumeForm({
   return (
     <>
       <p className="hint">
-        Faceless mannequin plates — no identity. Apply selection builds the outfit prompt.
-        Generate Front / Side / Back on Result nodes, then Save.
+        Faceless mannequin plates — no identity. Stack body layers innermost first;
+        Apply selection lists them in that order. Generate Front / Side / Back on Result nodes, then Save.
       </p>
       <label className="builder-field">
         <span className="field-label">Costume name</span>
@@ -1305,13 +1326,44 @@ function CostumeForm({
           onCustom={setSignatureC}
         />
       </div>
-      {COSTUME_LAYERS.map((key) => (
+      <div className="layer-stack">
+        <span className="field-label layer-title">Body layers (innermost first)</span>
+        {bodyLayers.map((layer, i) => (
+          <LayerBlock
+            key={`body-${i}`}
+            label={i === 0 ? "Layer 1 (innermost)" : `Layer ${i + 1}`}
+            itemOpts={bodyLayerItemsFor(catKey, eraKey)}
+            layer={layer}
+            showFit
+            onRemove={
+              bodyLayers.length > 1
+                ? () => setBodyLayers((cur) => cur.filter((_, j) => j !== i))
+                : undefined
+            }
+            onChange={(next) =>
+              setBodyLayers((cur) => cur.map((row, j) => (j === i ? next : row)))
+            }
+          />
+        ))}
+        {bodyLayers.length < MAX_BODY_LAYERS ? (
+          <button
+            type="button"
+            className="ghost add-layer"
+            onClick={() => setBodyLayers((cur) => [...cur, emptyLayer()])}
+          >
+            + Layer
+          </button>
+        ) : (
+          <p className="hint">Maximum {MAX_BODY_LAYERS} body layers.</p>
+        )}
+      </div>
+      {SINGLE_SLOTS.map((key) => (
         <LayerBlock
           key={key}
           label={LAYER_LABEL[key] || key}
           itemOpts={layerItemsFor(key, catKey, eraKey)}
-          layer={layers[key] || emptyLayer()}
-          onChange={(next) => setLayers((cur) => ({ ...cur, [key]: next }))}
+          layer={slots[key] || emptyLayer()}
+          onChange={(next) => setSlots((cur) => ({ ...cur, [key]: next }))}
         />
       ))}
       <label className="builder-field">
@@ -2346,17 +2398,28 @@ function LayerBlock({
   itemOpts,
   layer,
   onChange,
+  showFit,
+  onRemove,
 }: {
   label: string;
   itemOpts: readonly string[];
   layer: LayerState;
   onChange: (next: LayerState) => void;
+  showFit?: boolean;
+  onRemove?: () => void;
 }) {
   const set = (patch: Partial<LayerState>) => onChange({ ...layer, ...patch });
   return (
     <div className="layer-block">
-      <span className="field-label layer-title">{label}</span>
-      <div className="params costume-layer-row">
+      <div className="layer-head">
+        <span className="field-label layer-title">{label}</span>
+        {onRemove ? (
+          <button type="button" className="ghost layer-remove" onClick={onRemove}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+      <div className={`params costume-layer-row${showFit ? " has-fit" : ""}`}>
         <FieldSelect
           label="Item"
           value={layer.item}
@@ -2393,6 +2456,17 @@ function LayerBlock({
           onValue={(v) => set({ condition: v })}
           onCustom={(v) => set({ conditionC: v })}
         />
+        {showFit ? (
+          <FieldSelect
+            label="Fit"
+            value={layer.fit}
+            custom={layer.fitC}
+            options={COSTUME_FITS}
+            allowEmpty
+            onValue={(v) => set({ fit: v })}
+            onCustom={(v) => set({ fitC: v })}
+          />
+        ) : null}
       </div>
     </div>
   );

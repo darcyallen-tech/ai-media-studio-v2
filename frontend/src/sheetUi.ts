@@ -293,6 +293,11 @@ export function layerItemsFor(
   return items;
 }
 
+/** Item catalog for stacked body layers: union of Top + Over, still filtered by Category. */
+export function bodyLayerItemsFor(category: string, era = ""): string[] {
+  return uniq([...layerItemsFor("top", category, era), ...layerItemsFor("over", category, era)]);
+}
+
 export function signatureItemsFor(category: string): string[] {
   const cat = category.trim().toLowerCase();
   if (cat === "hero") return ["suit base", "cape", "emblem", "mask", "cowl"];
@@ -579,7 +584,27 @@ export function composeCostumeBrief(
   if (sig) parts.push(`signature piece: ${sig}`);
   const emblem = bit(fields.emblem);
   if (emblem) parts.push(`emblem: ${emblem}`);
+  const bodyStack: string[] = [];
+  for (let i = 1; i <= 5; i += 1) {
+    const prefix = i === 1 ? "top" : `top_${i}`;
+    const item = bit(fields[prefix]);
+    if (!item) continue;
+    const bits = [item];
+    const col = bit(fields[`${prefix}_color`]);
+    const mat = bit(fields[`${prefix}_material`]);
+    const fit = bit(fields[`${prefix}_fit`]);
+    const cond = bit(fields[`${prefix}_condition`]);
+    if (col) bits.push(col);
+    if (mat) bits.push(mat);
+    if (fit) bits.push(`${fit} fit`);
+    if (cond) bits.push(cond);
+    bodyStack.push(bits.join(", "));
+  }
+  if (bodyStack.length) {
+    parts.push(`body layers (innermost first): ${bodyStack.join(" → ")}`);
+  }
   for (const layer of COSTUME_LAYERS) {
+    if (layer === "top" || layer === "over") continue;
     const item = bit(fields[layer]);
     if (!item) continue;
     const bits = [item];
