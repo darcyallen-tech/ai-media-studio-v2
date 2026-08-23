@@ -17,16 +17,18 @@ EXTRA_SLOTS: tuple[str, ...] = (
     "threequarter_back",
     "top",
 )
-ALL_SLOTS: tuple[str, ...] = CORE_SLOTS + EXTRA_SLOTS
+SHEET_SLOT = "sheet"
+ALL_SLOTS: tuple[str, ...] = CORE_SLOTS + EXTRA_SLOTS + (SHEET_SLOT,)
 
 SLOT_LABELS: dict[str, str] = {
     "front": "Front (full body)",
     "side": "Side (full body)",
-    "closeup": "Close-up",
+    "closeup": "Close-up (detail)",
     "back": "Back (full body)",
     "threequarter_front": "¾ front",
     "threequarter_back": "¾ back",
     "top": "Top / high angle",
+    "sheet": "Costume sheet",
 }
 
 CLEAN_PLATE = (
@@ -681,11 +683,42 @@ def costume_brief(fields: dict[str, Any] | None) -> str:
     return head
 
 
+def costume_sheet_prompt(outfit: str, extra: str = "") -> str:
+    outfit_s = _nv(outfit) or "the described costume"
+    body = (
+        f"Single costume reference SHEET of: {outfit_s}. One image only. "
+        "Clean studio grid of faceless mannequin plates: Front, Side, and Back "
+        "(full-body, entire garment visible) plus a detail strip of fabric texture, "
+        "trim, closures, and any emblem, and a small color-palette row. "
+        "Labeled or clean unlabeled grid. Match the attached costume stills. "
+        "No face, no human identity, no living model, no environment. "
+        "Photoreal garments, even studio lighting. Dark studio ground."
+    )
+    if _nv(extra):
+        body += f" {_nv(extra)}"
+    return body
+
+
 def costume_prompt(slot: str, outfit: str, extra: str = "") -> str:
     """Standalone costume plate — mannequin / no face identity."""
-    key = slot if slot in PROFILE_VIEWS else "front"
-    view = PROFILE_VIEWS[key]
+    key = (slot or "front").strip().lower()
     outfit_s = _nv(outfit) or "the described costume"
+    if key == "sheet":
+        return costume_sheet_prompt(outfit_s, extra)
+    if key == "closeup":
+        body = (
+            f"Studio costume DETAIL plate of: {outfit_s}. "
+            "NOT a full-body shot. NOT a standing mannequin from head to toe. "
+            "Tight macro close-ups filling the frame: fabric weave and texture, "
+            "stitching, trim, closures, hardware, and any emblem or signature piece. "
+            "Optional small inset material callouts. "
+            "No face, no person, no full figure, no environment. Photoreal garment details. "
+            "Pure solid black background only (#000000)."
+        )
+        if _nv(extra):
+            body += f" {_nv(extra)}"
+        return body
+    view = PROFILE_VIEWS.get(key, PROFILE_VIEWS["front"])
     framing = {
         "front": (
             "Front full-body costume plate on a faceless mannequin or headless dress form. "
@@ -697,9 +730,6 @@ def costume_prompt(slot: str, outfit: str, extra: str = "") -> str:
         ),
         "back": (
             "Back-view costume plate on a faceless mannequin. Entire garment visible."
-        ),
-        "closeup": (
-            "Close-up of garment details — fabric, closures, trim. No face, no person identity."
         ),
     }.get(key, view)
     return (
@@ -1023,6 +1053,18 @@ _PORTRAIT_SIZE_PREFER: tuple[str, ...] = (
     "1K",
     "auto",
 )
+_SHEET_SIZE_PREFER: tuple[str, ...] = (
+    "landscape_16_9",
+    "16:9",
+    "auto_2K",
+    "2K",
+    "square_hd",
+    "1:1 square HD",
+    "auto_4K",
+    "4K",
+    "1K",
+    "auto",
+)
 
 
 def short_generate_error(exc: BaseException | str) -> str:
@@ -1079,6 +1121,7 @@ def pick_character_resolution(
     allowed: list[str],
     requested: str = "",
     default: str = "",
+    prefer: tuple[str, ...] | None = None,
 ) -> str:
     opts = [a for a in allowed if a]
     if not opts:
@@ -1089,7 +1132,7 @@ def pick_character_resolution(
         picked = lower[req.lower()]
         if picked.lower() != "auto" or all(k == "auto" for k in lower):
             return picked
-    for pref in _PORTRAIT_SIZE_PREFER:
+    for pref in prefer or _PORTRAIT_SIZE_PREFER:
         if pref.lower() in lower:
             return lower[pref.lower()]
     if default and default.lower() in lower and default.lower() != "auto":
@@ -1126,6 +1169,7 @@ def character_angle_params(
     modality: str,
     requested: str = "",
     requested_aspect: str = "",
+    landscape: bool = False,
 ) -> tuple[str, str]:
     """Return (aspect, resolution) using each model's exact allowed API strings."""
     from app.create_catalog import default_model_for, resolve_model
@@ -1155,7 +1199,7 @@ def character_angle_params(
             req = ""
             break
     if is_nano:
-        aspect = clamp_nano_aspect(req_aspect or req or "9:16")
+        aspect = clamp_nano_aspect(req_aspect or req or ("16:9" if landscape else "9:16"))
         q_allowed = {r.lower(): r for r in resolutions if r.lower().replace(" ", "") in _QUALITY_TOKENS}
         resolution = ""
         if quality and quality.lower() in q_allowed:
@@ -1165,7 +1209,11 @@ def character_angle_params(
         return aspect, resolution
     # Seedream / Flux image_size or aspect labels
     allowed = resolutions or aspects
-    picked = pick_character_resolution(allowed, req or req_aspect)
+    picked = pick_character_resolution(
+        allowed,
+        req or req_aspect,
+        prefer=_SHEET_SIZE_PREFER if landscape else None,
+    )
     if resolutions:
         return picked, picked
     return picked, quality
@@ -1203,6 +1251,8 @@ def generate_angle(
     costume_row = get_asset(costume_id) if costume_id else None
     is_dress = kind == "character" and bool(parent or costume_row)
     is_costume = kind == "costume"
+    if key == SHEET_SLOT and not is_costume:
+        raise ValueError("Costume sheet is only for Costume assets.")
     outfit = _nv(wardrobe) or _nv(fields.get("wardrobe"))
     if not outfit and costume_row:
         cfields = costume_row.get("fields") if isinstance(costume_row.get("fields"), dict) else {}
@@ -1219,6 +1269,14 @@ def generate_angle(
         p = _nv(raw)
         if p and Path(p).is_file() and p not in refs:
             refs.append(p)
+    if key == SHEET_SLOT and not refs:
+        ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
+        for slot in ("front", "side", "back", "closeup"):
+            p = _nv(ident.get(slot))
+            if p and Path(p).is_file() and p not in refs:
+                refs.append(p)
+        if not refs:
+            raise ValueError("Generate at least one costume angle before the sheet.")
 
     text = _nv(prompt) or compose_angle_prompt(
         kind=kind,
@@ -1243,6 +1301,8 @@ def generate_angle(
         raise ValueError(f"No {modality} model available for this sheet angle.")
 
     cap = _sheet_r2i_ref_cap(entry)
+    if key == SHEET_SLOT and cap > 0 and len(refs) > cap:
+        refs = refs[:cap]
     if refs and cap > 0 and len(refs) > cap:
         label = getattr(entry, "label", None) or getattr(entry, "id", None) or "This model"
         raise ValueError(
@@ -1254,7 +1314,11 @@ def generate_angle(
     start = refs[0] if refs else None
     extras = refs[1:] if len(refs) > 1 else []
     aspect, size = character_angle_params(
-        mid, modality, requested=resolution, requested_aspect=aspect
+        mid,
+        modality,
+        requested=resolution,
+        requested_aspect=aspect,
+        landscape=key == SHEET_SLOT,
     )
     state = CreateState(
         mode="image",

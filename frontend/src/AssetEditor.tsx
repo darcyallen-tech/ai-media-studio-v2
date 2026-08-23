@@ -4,10 +4,15 @@ import { toast } from "./toast";
 import { openLightbox } from "./lightbox";
 import {
   CORE_SLOTS,
+  COSTUME_PLATE_SLOTS,
+  COSTUME_SHEET_SLOT,
   EXTRA_SLOTS,
   SLOT_LABEL,
+  composeCostumeSheetPrompt,
   pickDefaultResolution,
+  pickSheetResolution,
   qualityChoices,
+  sheetR2iRefCap,
   sizeChoices,
   useSheetModels,
 } from "./sheetUi";
@@ -53,6 +58,10 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   const missing = ALL.filter((s) => !ident[s] && !row.identity?.[s]);
   const primary = row.primary_slot || "front";
   const isChar = row.kind === "character";
+  const isCostume = row.kind === "costume";
+  const hasSheet = Boolean(ident.sheet || row.identity?.sheet);
+  const costumeAngles = filled.length;
+  const canCostumeSheet = isCostume && costumeAngles >= 1;
 
   async function persistMeta() {
     setBusy(true);
@@ -138,6 +147,57 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     }
   }
 
+  async function generateCostumeSheet() {
+    const refs: string[] = [];
+    for (const slot of COSTUME_PLATE_SLOTS) {
+      const p = row.identity?.[slot] || "";
+      if (p && !refs.includes(p)) refs.push(p);
+    }
+    if (!refs.length) {
+      setError("Generate at least one costume angle first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r2i = models.r2iId || models.t2iId;
+      const sizeRow = models.r2i.find((m) => m.id === r2i) || models.t2i.find((m) => m.id === models.t2iId);
+      const cap = sheetR2iRefCap(sizeRow);
+      const packed = refs.slice(0, cap);
+      const sizes = sizeChoices(sizeRow);
+      const quals = qualityChoices(sizeRow);
+      const sheetSize = pickSheetResolution(sizes);
+      const outfit = row.fields?.wardrobe || row.name || "the costume";
+      const res = await fetch("/assets/sheet/angle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset_id: row.id,
+          slot: COSTUME_SHEET_SLOT,
+          model_id: r2i,
+          source_still: packed[0],
+          extra_refs: packed.slice(1),
+          prompt: composeCostumeSheetPrompt(outfit),
+          wardrobe: outfit,
+          resolution: pickDefaultResolution(quals) || sheetSize,
+          aspect: sheetSize,
+        }),
+      });
+      const body = await readJson(res);
+      if (!res.ok) throw new Error(errorFromBody(body, "Costume sheet failed."));
+      const item = body.item as StudioAsset;
+      setRow(item);
+      onChanged(item);
+      toast("Costume sheet saved as primary still.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Costume sheet failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div
@@ -184,10 +244,23 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                 Dress Character
               </button>
             ) : null}
+            {canCostumeSheet ? (
+              <button
+                type="button"
+                className="generate"
+                disabled={busy}
+                onClick={() => void generateCostumeSheet()}
+              >
+                {busy ? "Generating…" : hasSheet ? "Regenerate Costume Sheet" : "Generate Costume Sheet"}
+              </button>
+            ) : null}
           </div>
+          {hasSheet ? (
+            <p className="hint">Costume sheet is the primary Dress ref for this outfit.</p>
+          ) : null}
           <p className="field-label">Angles</p>
           <div className="sheet-progress">
-            {filled.map((slot) => {
+            {(hasSheet ? [COSTUME_SHEET_SLOT, ...filled] : filled).map((slot) => {
               const src = ident[slot] || row.url;
               return (
                 <div key={slot} className="sheet-angle">

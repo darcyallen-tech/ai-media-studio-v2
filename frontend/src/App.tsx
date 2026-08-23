@@ -1508,13 +1508,13 @@ function StudioCanvas() {
         ((angle.data as ResultNodeData).prompt || "")
       ).trim();
       const frontPath = anglePath(`sang-${builderId}-front`);
-      if (slot !== "front" && !frontPath) {
-        const msg = "Generate Front first";
+      const nodeData = angle.data as ResultNodeData;
+      if (slot !== "front" && !frontPath && !nodeData.sourceStill) {
+        const msg = slot === "sheet" ? "Generate a costume angle first" : "Generate Front first";
         upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
         toast(msg, true);
         return;
       }
-      const nodeData = angle.data as ResultNodeData;
       const extraRefs = Array.isArray(nodeData.extraRefs)
         ? nodeData.extraRefs.filter(Boolean)
         : [];

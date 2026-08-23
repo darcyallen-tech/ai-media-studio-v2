@@ -17,6 +17,8 @@ import {
   type CostumeLayer,
   COSTUME_REGIONS,
   COSTUME_SILHOUETTES,
+  COSTUME_PLATE_SLOTS,
+  COSTUME_SHEET_SLOT,
   COSTUME_SLOTS,
   COSTUME_TAGS,
   EXTRA_SLOTS,
@@ -43,12 +45,14 @@ import {
   composeCostumeBrief,
   collectDressFrontRefs,
   composeCostumePrompt,
+  composeCostumeSheetPrompt,
   composeDressPrompt,
   composePropBrief,
   composePropStill,
   composeSceneBrief,
   composeSceneStill,
   pickDefaultResolution,
+  pickSheetResolution,
   qualityChoices,
   sheetR2iRefCap,
   sizeChoices,
@@ -1068,6 +1072,10 @@ function CostumeForm({
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
   const haveFront = Boolean(data.doneSlots?.front);
+  const haveCostumeAngle = Boolean(
+    data.doneSlots &&
+      Object.entries(data.doneSlots).some(([slot, path]) => slot !== COSTUME_SHEET_SLOT && path),
+  );
   const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
   const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
   const frontSizes = sizeChoices(t2iRow);
@@ -1239,6 +1247,59 @@ function CostumeForm({
     }
   }
 
+  function openCostumeSheet() {
+    const outfit = outfitText();
+    if (!outfit) {
+      setError("Apply selection first — pick a category or at least one layer.");
+      return;
+    }
+    const refs: string[] = [];
+    for (const slot of COSTUME_PLATE_SLOTS) {
+      const p = data.doneSlots?.[slot] || "";
+      if (p && !refs.includes(p)) refs.push(p);
+    }
+    if (!refs.length) {
+      setError("Generate at least one costume angle first.");
+      return;
+    }
+    const cap = sheetR2iRefCap(r2iRow);
+    const packed = refs.slice(0, cap);
+    const sizes = sizeChoices(r2iRow);
+    const quals = qualityChoices(r2iRow);
+    const sheetSize = pickSheetResolution(sizes);
+    try {
+      const label = name.trim() || "Costume";
+      void ensureDraft().then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot: COSTUME_SHEET_SLOT,
+          label: SLOT_LABEL.sheet,
+          prompt: composeCostumeSheetPrompt(outfit),
+          generating: false,
+          error: null,
+          focus: true,
+          resolution: pickDefaultResolution(quals) || sheetSize,
+          resolutionChoices: sizes,
+          aspect: sheetSize,
+          quality: pickDefaultResolution(quals),
+          qualityChoices: quals,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          sourceStill: packed[0],
+          extraRefs: packed.slice(1),
+          maxRefs: cap,
+          wardrobe: outfit,
+          name: label,
+        });
+      });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open costume sheet.";
+      setError(msg);
+    }
+  }
+
   async function save() {
     if (!haveFront) {
       setError("Generate a Front mannequin plate first.");
@@ -1274,8 +1335,9 @@ function CostumeForm({
   return (
     <>
       <p className="hint">
-        Faceless mannequin plates — no identity. Gender filters garments with Category/Era
-        and nudges cut/fit on Apply. Stack body layers innermost first.
+        Faceless mannequin plates — no identity. Front / Side / Back are full-body.
+        Close-up is a fabric/trim detail plate, not a full figure. Generate Costume Sheet
+        composes a labeled grid from existing angles.
       </p>
       <label className="builder-field">
         <span className="field-label">Costume name</span>
@@ -1453,16 +1515,27 @@ function CostumeForm({
       <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
-        {COSTUME_SLOTS.map((slot) => (
+        {COSTUME_PLATE_SLOTS.map((slot) => (
           <button
             key={slot}
             type="button"
             className="generate"
+            disabled={slot !== "front" && !haveFront}
             onClick={() => openPlate(slot)}
           >
-            Generate {SLOT_LABEL[slot] || slot}
+            Generate {slot === "closeup" ? "Close-up (detail)" : SLOT_LABEL[slot] || slot}
           </button>
         ))}
+      </div>
+      <div className="prompt-actions">
+        <button
+          type="button"
+          className="generate"
+          disabled={!haveCostumeAngle}
+          onClick={() => openCostumeSheet()}
+        >
+          Generate Costume Sheet
+        </button>
       </div>
       <div className="prompt-actions">
         <button
@@ -1538,6 +1611,7 @@ function DressForm({
       costumeStill: costume?.still_path || "",
       lockFace: lockFace && hasCloseup,
       useFullPacks: useFullPacks && canFullPacks,
+      maxRefs,
     });
   }
 
@@ -1674,9 +1748,10 @@ function DressForm({
   return (
     <>
       <p className="hint">
-        Dress Front refs: Character Front + Costume Front
-        {maxRefs >= 3 ? " (optional Close-up if lock face)" : ""}. Side / Close-up
-        R2I from the new costumed Front only — not the full angle packs.
+        Dress Front refs: Character primary (sheet or Front) + Costume sheet
+        (or Costume Front if no sheet yet)
+        {maxRefs >= 3 ? ". Optional lock face adds Close-up as 3rd ref" : ""}.
+        Side / Close-up R2I from the new costumed Front only.
       </p>
       <label className="builder-field">
         <span className="field-label">Character</span>

@@ -26,6 +26,7 @@ IDENTITY_SLOTS: tuple[str, ...] = (
     "threequarter_front",
     "threequarter_back",
     "top",
+    "sheet",
 )
 
 SHEET_MODELS = ("flux", "seedream", "nano")
@@ -444,10 +445,15 @@ def attach_identity_still(
     found["identity"] = ident
     stills = _still_list(found)
     found["still_paths"] = stills
-    primary = _primary_slot_name(found)
-    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
-    if key == "front" or key == primary:
-        found["sheet_path"] = str(ident.get(primary) or dest)
+    if key == "sheet":
+        found["primary_slot"] = "sheet"
+        found["still_path"] = str(dest)
+        found["sheet_path"] = str(dest)
+    else:
+        primary = _primary_slot_name(found)
+        found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
+        if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
+            found["sheet_path"] = str(ident.get(primary) or dest)
     if model:
         found["model"] = model
     found["updated"] = _now()
@@ -485,10 +491,15 @@ def attach_identity_bytes(
     found["identity"] = ident
     stills = _still_list(found)
     found["still_paths"] = stills
-    primary = _primary_slot_name(found)
-    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
-    if key == "front" or key == primary:
-        found["sheet_path"] = str(ident.get(primary) or dest)
+    if key == "sheet":
+        found["primary_slot"] = "sheet"
+        found["still_path"] = str(dest)
+        found["sheet_path"] = str(dest)
+    else:
+        primary = _primary_slot_name(found)
+        found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
+        if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
+            found["sheet_path"] = str(ident.get(primary) or dest)
     if model:
         found["model"] = model
     found["updated"] = _now()

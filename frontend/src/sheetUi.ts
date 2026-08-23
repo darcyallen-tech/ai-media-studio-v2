@@ -3,6 +3,8 @@ import type { ModelRow } from "./types";
 
 export const CORE_SLOTS = ["front", "side", "closeup"] as const;
 export const COSTUME_SLOTS = ["front", "side", "back"] as const;
+export const COSTUME_SHEET_SLOT = "sheet";
+export const COSTUME_PLATE_SLOTS = ["front", "side", "back", "closeup"] as const;
 export const EXTRA_SLOTS = [
   "back",
   "threequarter_front",
@@ -588,6 +590,7 @@ export const SLOT_LABEL: Record<string, string> = {
   threequarter_front: "¾ front",
   threequarter_back: "¾ back",
   top: "Top",
+  sheet: "Costume sheet",
 };
 
 function bit(v: string | undefined | null): string {
@@ -796,15 +799,34 @@ export function composePropStill(brief: string): string {
 }
 
 /** Identity paragraph + one framing line for the angle. No API. */
+export function composeCostumeSheetPrompt(outfit: string, extra = ""): string {
+  const bits = [
+    `Single costume reference SHEET of: ${bit(outfit) || "the described costume"}. One image only.`,
+    "Clean studio grid of faceless mannequin plates: Front, Side, and Back (full-body, entire garment visible) plus a detail strip of fabric texture, trim, closures, and any emblem, and a small color-palette row.",
+    "Labeled or clean unlabeled grid. Match the attached costume stills. No face, no human identity, no living model, no environment. Photoreal garments, even studio lighting. Dark studio ground.",
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join(" ");
+}
+
 export function composeCostumePrompt(slot: string, outfit: string, extra = ""): string {
+  if (slot === "sheet") return composeCostumeSheetPrompt(outfit, extra);
+  if (slot === "closeup") {
+    const bits = [
+      `Studio costume DETAIL plate of: ${bit(outfit) || "the described costume"}.`,
+      "NOT a full-body shot. NOT a standing mannequin from head to toe.",
+      "Tight macro close-ups filling the frame: fabric weave and texture, stitching, trim, closures, hardware, and any emblem or signature piece. Optional small inset material callouts.",
+      "No face, no person, no full figure, no environment. Photoreal garment details. Pure solid black background only (#000000).",
+    ];
+    if (bit(extra)) bits.push(bit(extra));
+    return bits.join(" ");
+  }
   const framing: Record<string, string> = {
     front:
       "Front full-body costume plate on a faceless mannequin or headless dress form. Entire garment visible including hems and footwear.",
     side:
       "Side-view costume plate on a faceless mannequin or headless dress form. Clean silhouette of the outfit, entire garment visible.",
     back: "Back-view costume plate on a faceless mannequin. Entire garment visible.",
-    closeup:
-      "Close-up of garment details — fabric, closures, trim. No face, no person identity.",
   };
   const view = framing[slot] || framing.front;
   const bits = [
@@ -864,18 +886,32 @@ export function collectDressFrontRefs(opts: {
   costumeStill?: string;
   lockFace?: boolean;
   useFullPacks?: boolean;
+  maxRefs?: number;
 }): string[] {
   const out: string[] = [];
   const add = (p?: string) => {
     const s = String(p || "").trim();
     if (s && !out.includes(s)) out.push(s);
   };
-  add(sheetPrimaryPath(opts.characterIdentity, opts.characterPrimarySlot, opts.characterStill));
-  add(sheetPrimaryPath(opts.costumeIdentity, opts.costumePrimarySlot, opts.costumeStill));
-  if (opts.lockFace) add(opts.characterIdentity?.closeup);
+  add(
+    opts.characterIdentity?.sheet ||
+      sheetPrimaryPath(opts.characterIdentity, opts.characterPrimarySlot, opts.characterStill),
+  );
+  add(
+    opts.costumeIdentity?.sheet ||
+      sheetPrimaryPath(opts.costumeIdentity, opts.costumePrimarySlot, opts.costumeStill),
+  );
+  const cap = opts.maxRefs && opts.maxRefs > 0 ? opts.maxRefs : 3;
+  if (opts.lockFace && out.length < cap) add(opts.characterIdentity?.closeup);
   if (opts.useFullPacks) {
-    for (const slot of CORE_SLOTS) add(opts.characterIdentity?.[slot]);
-    for (const slot of COSTUME_SLOTS) add(opts.costumeIdentity?.[slot]);
+    for (const slot of CORE_SLOTS) {
+      if (out.length >= cap) break;
+      add(opts.characterIdentity?.[slot]);
+    }
+    for (const slot of COSTUME_SLOTS) {
+      if (out.length >= cap) break;
+      add(opts.costumeIdentity?.[slot]);
+    }
   }
   return out;
 }
@@ -925,11 +961,22 @@ export function sizeChoices(row: ModelRow | null | undefined): string[] {
   return qualities;
 }
 
-export function pickDefaultResolution(choices: string[]): string {
+function pickPreferredResolution(choices: string[], prefer: string[]): string {
   const opts = (Array.isArray(choices) ? choices : []).filter(Boolean);
   if (!opts.length) return "";
   const lower = new Map(opts.map((c) => [c.toLowerCase(), c]));
-  const prefer = [
+  for (const p of prefer) {
+    const hit = lower.get(p);
+    if (hit && (hit.toLowerCase() !== "auto" || opts.every((c) => c.toLowerCase() === "auto"))) {
+      return hit;
+    }
+  }
+  const nonAuto = opts.find((c) => c.toLowerCase() !== "auto");
+  return nonAuto || opts[0] || "";
+}
+
+export function pickDefaultResolution(choices: string[]): string {
+  return pickPreferredResolution(choices, [
     "9:16",
     "portrait_16_9",
     "portrait_4_3",
@@ -943,15 +990,22 @@ export function pickDefaultResolution(choices: string[]): string {
     "4k",
     "1k",
     "auto",
-  ];
-  for (const p of prefer) {
-    const hit = lower.get(p);
-    if (hit && (hit.toLowerCase() !== "auto" || opts.every((c) => c.toLowerCase() === "auto"))) {
-      return hit;
-    }
-  }
-  const nonAuto = opts.find((c) => c.toLowerCase() !== "auto");
-  return nonAuto || opts[0] || "";
+  ]);
+}
+
+export function pickSheetResolution(choices: string[]): string {
+  return pickPreferredResolution(choices, [
+    "landscape_16_9",
+    "16:9",
+    "auto_2k",
+    "2k",
+    "square_hd",
+    "1:1 square hd",
+    "auto_4k",
+    "4k",
+    "1k",
+    "auto",
+  ]);
 }
 
 export function sheetModel(row: ModelRow | null | undefined) {

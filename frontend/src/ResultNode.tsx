@@ -111,7 +111,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       return;
     }
     if (slot !== "front" && !data.sourceStill) {
-      setLocalError("Generate Front first");
+      setLocalError(slot === "sheet" ? "Generate a costume angle first" : "Generate Front first");
       return;
     }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
