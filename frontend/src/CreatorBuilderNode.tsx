@@ -41,6 +41,7 @@ import {
   composeAnglePrompt,
   composeCharacterIdentity,
   composeCostumeBrief,
+  collectDressFrontRefs,
   composeCostumePrompt,
   composeDressPrompt,
   composePropBrief,
@@ -49,6 +50,7 @@ import {
   composeSceneStill,
   pickDefaultResolution,
   qualityChoices,
+  sheetR2iRefCap,
   sizeChoices,
   useSheetEstimate,
   useSheetModels,
@@ -1493,15 +1495,19 @@ function DressForm({
   const [characterId, setCharacterId] = useState(data.seedCharacterId || "");
   const [costumeId, setCostumeId] = useState(data.seedCostumeId || "");
   const [name, setName] = useState("");
+  const [lockFace, setLockFace] = useState(false);
+  const [useFullPacks, setUseFullPacks] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
   const haveFront = Boolean(data.doneSlots?.front);
   const char = characters.find((c) => c.id === characterId);
   const costume = costumes.find((c) => c.id === costumeId);
-  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
   const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
-  const estimate = useSheetEstimate("character", models.t2iId, models.r2iId, [...CORE_SLOTS], models);
+  const maxRefs = sheetR2iRefCap(r2iRow);
+  const canFullPacks = maxRefs > 3;
+  const hasCloseup = Boolean(char?.identity?.closeup);
+  const estimate = useSheetEstimate("character", models.r2iId, models.r2iId, [...CORE_SLOTS], models);
 
   useEffect(() => {
     fetch("/assets?kind=character")
@@ -1522,18 +1528,17 @@ function DressForm({
       .catch(() => undefined);
   }, [data.seedCharacterId, data.seedCostumeId]);
 
-  function extraRefs(): string[] {
-    const out: string[] = [];
-    const add = (p?: string) => {
-      if (p && !out.includes(p)) out.push(p);
-    };
-    if (char?.identity) {
-      for (const slot of CORE_SLOTS) add(char.identity[slot]);
-    } else add(char?.still_path || "");
-    if (costume?.identity) {
-      for (const slot of COSTUME_SLOTS) add(costume.identity[slot]);
-    } else add(costume?.still_path || "");
-    return out;
+  function dressFrontRefs(): string[] {
+    return collectDressFrontRefs({
+      characterIdentity: char?.identity,
+      characterPrimarySlot: char?.primary_slot,
+      characterStill: char?.still_path || "",
+      costumeIdentity: costume?.identity,
+      costumePrimarySlot: costume?.primary_slot,
+      costumeStill: costume?.still_path || "",
+      lockFace: lockFace && hasCloseup,
+      useFullPacks: useFullPacks && canFullPacks,
+    });
   }
 
   async function ensureVariant() {
@@ -1574,8 +1579,34 @@ function DressForm({
       char.fields?.identity_prompt ||
       composeCharacterIdentity(char.fields || {}, char.notes || "");
     const outfit = costume.fields?.wardrobe || costume.name;
-    const refs = extraRefs();
-    const front = char.identity?.front || char.still_path || "";
+    let sourceStill = "";
+    let extra: string[] = [];
+    if (slot === "front") {
+      const refs = dressFrontRefs();
+      if (refs.length < 2) {
+        setError("Need Character Front (or primary) and Costume Front (or primary) stills.");
+        return;
+      }
+      if (refs.length > maxRefs) {
+        const label = r2iRow?.label || "This model";
+        setError(
+          `${label} allows at most ${maxRefs} reference images (this Dress Front would send ${refs.length}). Turn off “use full packs” or “lock face”.`,
+        );
+        return;
+      }
+      sourceStill = refs[0];
+      extra = refs.slice(1);
+    } else {
+      const costumed = data.doneSlots?.front || "";
+      if (!costumed) {
+        setError("Generate costumed Front first.");
+        return;
+      }
+      sourceStill = costumed;
+      extra = [];
+    }
+    const sizes = sizeChoices(r2iRow);
+    const quals = qualityChoices(r2iRow);
     void ensureVariant()
       .then((id) => {
         spawnAngleResult({
@@ -1586,16 +1617,17 @@ function DressForm({
           generating: false,
           error: null,
           focus: true,
-          resolution: pickDefaultResolution(qualityChoices(slot === "front" ? t2iRow : r2iRow)) || pickDefaultResolution(sizeChoices(slot === "front" ? t2iRow : r2iRow)),
-          resolutionChoices: sizeChoices(slot === "front" ? t2iRow : r2iRow),
-          aspect: pickDefaultResolution(sizeChoices(slot === "front" ? t2iRow : r2iRow)),
-          quality: pickDefaultResolution(qualityChoices(slot === "front" ? t2iRow : r2iRow)),
-          qualityChoices: qualityChoices(slot === "front" ? t2iRow : r2iRow),
+          resolution: pickDefaultResolution(quals) || pickDefaultResolution(sizes),
+          resolutionChoices: sizes,
+          aspect: pickDefaultResolution(sizes),
+          quality: pickDefaultResolution(quals),
+          qualityChoices: quals,
           t2iModel: models.t2iId,
           r2iModel: models.r2iId || models.t2iId,
           assetId: id,
-          sourceStill: slot === "front" ? front : data.doneSlots?.front || front,
-          extraRefs: refs,
+          sourceStill,
+          extraRefs: extra,
+          maxRefs,
           wardrobe: outfit,
           name: name.trim() || `${char.name} / ${costume.name}`,
         });
@@ -1642,8 +1674,9 @@ function DressForm({
   return (
     <>
       <p className="hint">
-        Multi-ref dresses the character in the costume. Fallback: costumed Front, then Side /
-        Close-up from that Front.
+        Dress Front refs: Character Front + Costume Front
+        {maxRefs >= 3 ? " (optional Close-up if lock face)" : ""}. Side / Close-up
+        R2I from the new costumed Front only — not the full angle packs.
       </p>
       <label className="builder-field">
         <span className="field-label">Character</span>
@@ -1676,11 +1709,45 @@ function DressForm({
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <ModelPickers models={models} />
-      <p className="estimate">{estimate}</p>
+      <ModelPickers models={models} r2iOnly />
+      <label className="param">
+        <span>
+          <input
+            type="checkbox"
+            checked={lockFace && hasCloseup}
+            disabled={!hasCloseup || maxRefs < 3}
+            onChange={(e) => setLockFace(e.target.checked)}
+          />{" "}
+          Lock face
+          {hasCloseup ? " (adds Character Close-up as 3rd ref)" : " (Character has no Close-up still)"}
+        </span>
+      </label>
+      {canFullPacks ? (
+        <label className="param">
+          <span>
+            <input
+              type="checkbox"
+              checked={useFullPacks}
+              onChange={(e) => setUseFullPacks(e.target.checked)}
+            />{" "}
+            Use full packs (all character + costume angles)
+          </span>
+        </label>
+      ) : null}
+      <p className="estimate">
+        {char && costume
+          ? `Front will send ${dressFrontRefs().length} / ${maxRefs} refs. ${estimate}`
+          : estimate}
+      </p>
       <div className="prompt-actions">
         {CORE_SLOTS.map((slot) => (
-          <button key={slot} type="button" className="generate" onClick={() => openAngle(slot)}>
+          <button
+            key={slot}
+            type="button"
+            className="generate"
+            disabled={slot !== "front" && !haveFront}
+            onClick={() => openAngle(slot)}
+          >
             Generate {SLOT_LABEL[slot]}
           </button>
         ))}

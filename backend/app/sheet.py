@@ -8,7 +8,6 @@ from typing import Any
 from app.assets import (
     attach_identity_still,
     get_asset,
-    primary_still_path,
 )
 
 CORE_SLOTS: tuple[str, ...] = ("front", "side", "closeup")
@@ -824,37 +823,22 @@ def prop_prompt(fields: dict[str, Any] | None) -> str:
     return out
 
 
-def _identity_refs(row: dict[str, Any], parent: dict[str, Any] | None) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
-
-    def add(path: str) -> None:
-        p = (path or "").strip()
-        if not p:
-            return
+def _sheet_r2i_ref_cap(entry: Any | None) -> int:
+    """Max stills this R2I model accepts. Seedream edit is treated as 3."""
+    limits = getattr(entry, "size_limits", None) or {}
+    n = 0
+    if isinstance(limits, dict):
         try:
-            key = str(Path(p).resolve())
-        except OSError:
-            key = p
-        if key.lower() in seen or not Path(p).is_file():
-            return
-        seen.add(key.lower())
-        out.append(p)
-
-    ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
-    parent_ident = (
-        parent.get("identity") if parent and isinstance(parent.get("identity"), dict) else {}
-    )
-    for slot in CORE_SLOTS:
-        add(str(ident.get(slot) or ""))
-    if not out:
-        add(primary_still_path(row))
-    if parent:
-        for slot in CORE_SLOTS:
-            add(str(parent_ident.get(slot) or ""))
-        if len(out) == 0:
-            add(primary_still_path(parent))
-    return out
+            n = int(limits.get("max_ref_images") or limits.get("max_refs") or 0)
+        except (TypeError, ValueError):
+            n = 0
+    blob = " ".join(
+        str(getattr(entry, key, "") or "")
+        for key in ("id", "label", "endpoint", "source_key")
+    ).lower()
+    if "seedream" in blob:
+        return min(n, 3) if n > 0 else 3
+    return n if n > 0 else 3
 
 
 def _pick_result_still(result: Any) -> str:
@@ -1235,13 +1219,6 @@ def generate_angle(
         p = _nv(raw)
         if p and Path(p).is_file() and p not in refs:
             refs.append(p)
-    for path in _identity_refs(row, parent):
-        if path not in refs:
-            refs.append(path)
-    if costume_row:
-        for path in _identity_refs(costume_row, None):
-            if path not in refs:
-                refs.append(path)
 
     text = _nv(prompt) or compose_angle_prompt(
         kind=kind,
@@ -1264,6 +1241,15 @@ def generate_angle(
         entry = resolve_model(mid, mode="image", modality=modality) if mid else None
     if not mid:
         raise ValueError(f"No {modality} model available for this sheet angle.")
+
+    cap = _sheet_r2i_ref_cap(entry)
+    if refs and cap > 0 and len(refs) > cap:
+        label = getattr(entry, "label", None) or getattr(entry, "id", None) or "This model"
+        raise ValueError(
+            f"{label} allows at most {cap} reference images (got {len(refs)}). "
+            "Dress Front uses Character Front + Costume Front only; "
+            "Side / Close-up use the costumed Front only."
+        )
 
     start = refs[0] if refs else None
     extras = refs[1:] if len(refs) > 1 else []

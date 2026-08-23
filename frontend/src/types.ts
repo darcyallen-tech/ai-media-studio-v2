@@ -245,6 +245,7 @@ export type ResultNodeData = {
   assetId?: string;
   sourceStill?: string;
   extraRefs?: string[];
+  maxRefs?: number;
   wardrobe?: string;
   name?: string;
   onPrompt?: (prompt: string) => void;
@@ -371,6 +372,7 @@ export type SheetAnglePatch = {
   assetId?: string;
   sourceStill?: string;
   extraRefs?: string[];
+  maxRefs?: number;
   wardrobe?: string;
   name?: string;
 };

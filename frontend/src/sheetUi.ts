@@ -830,11 +830,54 @@ export function composeDressPrompt(
   ];
   if (slot !== "front" && opts?.hasFront) {
     lines.push(
-      "Same person as the Front still. Use Front as the R2I identity source and costume plates for wardrobe.",
+      "Same person and wardrobe as the costumed Front still. Use that Front as the only R2I source.",
     );
   }
   lines.push(CLEAN_PLATE);
   return lines.join("\n\n");
+}
+
+/** Sheet-first Dress Front refs. Seedream R2I is treated as max 3. */
+export function sheetR2iRefCap(model?: ModelRow | null): number {
+  const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
+  const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
+  if (blob.includes("seedream")) return raw > 0 ? Math.min(raw, 3) : 3;
+  return raw > 0 ? raw : 3;
+}
+
+export function sheetPrimaryPath(
+  identity?: Record<string, string> | null,
+  primarySlot?: string,
+  fallback = "",
+): string {
+  const ident = identity || {};
+  const slot = (primarySlot || "front").trim().toLowerCase() || "front";
+  return (ident[slot] || ident.front || fallback || "").trim();
+}
+
+export function collectDressFrontRefs(opts: {
+  characterIdentity?: Record<string, string> | null;
+  characterPrimarySlot?: string;
+  characterStill?: string;
+  costumeIdentity?: Record<string, string> | null;
+  costumePrimarySlot?: string;
+  costumeStill?: string;
+  lockFace?: boolean;
+  useFullPacks?: boolean;
+}): string[] {
+  const out: string[] = [];
+  const add = (p?: string) => {
+    const s = String(p || "").trim();
+    if (s && !out.includes(s)) out.push(s);
+  };
+  add(sheetPrimaryPath(opts.characterIdentity, opts.characterPrimarySlot, opts.characterStill));
+  add(sheetPrimaryPath(opts.costumeIdentity, opts.costumePrimarySlot, opts.costumeStill));
+  if (opts.lockFace) add(opts.characterIdentity?.closeup);
+  if (opts.useFullPacks) {
+    for (const slot of CORE_SLOTS) add(opts.characterIdentity?.[slot]);
+    for (const slot of COSTUME_SLOTS) add(opts.costumeIdentity?.[slot]);
+  }
+  return out;
 }
 
 export function composeAnglePrompt(

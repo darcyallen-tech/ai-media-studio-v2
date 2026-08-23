@@ -114,6 +114,18 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       setLocalError("Generate Front first");
       return;
     }
+    const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
+    const packed: string[] = [];
+    for (const p of [data.sourceStill || "", ...extras]) {
+      if (p && !packed.includes(p)) packed.push(p);
+    }
+    const cap = Number(data.maxRefs) || 0;
+    if (cap > 0 && packed.length > cap) {
+      setLocalError(
+        `This model allows at most ${cap} reference images (got ${packed.length}). Dress Front uses Character Front + Costume Front only.`,
+      );
+      return;
+    }
     setBusy(true);
     setLocalError(null);
     data.onBusy?.(true, null);

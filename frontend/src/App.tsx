@@ -1322,6 +1322,7 @@ function StudioCanvas() {
                   qualityChoices: patch.qualityChoices ?? n.data.qualityChoices,
                   sourceStill: patch.sourceStill || n.data.sourceStill,
                   extraRefs: patch.extraRefs ?? n.data.extraRefs,
+                  maxRefs: patch.maxRefs ?? n.data.maxRefs,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
               };
@@ -1352,6 +1353,7 @@ function StudioCanvas() {
               assetId: patch.assetId ?? prev?.assetId,
               sourceStill: patch.sourceStill ?? prev?.sourceStill,
               extraRefs: patch.extraRefs ?? prev?.extraRefs,
+              maxRefs: patch.maxRefs ?? prev?.maxRefs,
               wardrobe: patch.wardrobe ?? prev?.wardrobe,
               name: patch.name ?? prev?.name,
               generating: patch.generating ?? prev?.generating ?? false,
@@ -1512,11 +1514,26 @@ function StudioCanvas() {
         toast(msg, true);
         return;
       }
-      const sourceStill = slot === "front" ? "" : frontPath;
+      const nodeData = angle.data as ResultNodeData;
+      const extraRefs = Array.isArray(nodeData.extraRefs)
+        ? nodeData.extraRefs.filter(Boolean)
+        : [];
+      const sourceStill = nodeData.sourceStill || (slot === "front" ? "" : frontPath);
+      const packed: string[] = [];
+      for (const p of [sourceStill, ...extraRefs]) {
+        if (p && !packed.includes(p)) packed.push(p);
+      }
+      const cap = Number(nodeData.maxRefs) || 0;
+      if (cap > 0 && packed.length > cap) {
+        const msg = `This model allows at most ${cap} reference images (got ${packed.length}).`;
+        upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
+        toast(msg, true);
+        return;
+      }
       const resolution = (
         resolutionOverride ||
-        (angle.data as ResultNodeData).aspect ||
-        (angle.data as ResultNodeData).resolution ||
+        nodeData.aspect ||
+        nodeData.resolution ||
         (slot === "front" ? session?.t2iResolution : session?.r2iResolution) ||
         ""
       ).trim();
@@ -1552,15 +1569,15 @@ function StudioCanvas() {
             asset_id: assetId,
             slot,
             model_id:
-              slot === "front"
+              slot === "front" && !sourceStill
                 ? session?.t2iModel || ""
                 : session?.r2iModel || session?.t2iModel || "",
             prompt,
             source_still: sourceStill,
             wardrobe: session?.wardrobe || "",
             resolution,
-            aspect: (angle.data as ResultNodeData).aspect || resolution,
-            extra_refs: (angle.data as ResultNodeData).extraRefs || [],
+            aspect: nodeData.aspect || resolution,
+            extra_refs: extraRefs,
           }),
         });
         const body = (await readJson(res)) as {
@@ -2613,6 +2630,7 @@ function StudioCanvas() {
                     ? ""
                     : builderSessions[builderId]?.done?.front || ""),
                 extraRefs: n.data.extraRefs,
+                maxRefs: n.data.maxRefs,
                 wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
                 name: n.data.name || builderSessions[builderId]?.name,
                 onPrompt: (prompt) =>
