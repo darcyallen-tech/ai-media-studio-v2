@@ -51,10 +51,9 @@ type Props = {
     kind: AssetRole | "costume" | "dress",
     seeds?: { characterId?: string; costumeId?: string },
   ) => void;
-  onSpawnSheet?: (asset: StudioAsset) => void;
 };
 
-export default function LibraryPanel({ open, onClose, onPick, onNewAsset, onSpawnSheet }: Props) {
+export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Props) {
   const [pane, setPane] = useState<Pane>("media");
   const [filter, setFilter] = useState<Filter>("all");
   const [section, setSection] = useState<LibrarySource>("uploads");
@@ -635,9 +634,9 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset, onSpaw
             if (item) onPick(item);
             else toast("This asset has no still yet.", true);
           }}
-          onSpawnSheet={(asset) => {
+          onSheetOpened={() => {
             setEditing(null);
-            onSpawnSheet?.(asset);
+            onClose();
           }}
         />
       ) : null}

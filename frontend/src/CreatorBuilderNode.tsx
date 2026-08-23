@@ -45,6 +45,7 @@ import {
   composeCostumeBrief,
   collectDressFrontRefs,
   composeCharacterSheetPrompt,
+  collectAssetSheetRefs,
   composeCostumePrompt,
   composeCostumeSheetPrompt,
   composeDressPrompt,
@@ -486,12 +487,24 @@ function CharacterForm({
     }
   }
 
-  function openCharacterSheet() {
+  async function openCharacterSheet() {
     const ident = ensureIdentity();
     const refs: string[] = [];
     for (const slot of ANGLE_ACTIONS) {
       const p = data.doneSlots?.[slot] || "";
       if (p && !refs.includes(p)) refs.push(p);
+    }
+    let assetId = data.sessionAssetId || "";
+    if (refs.length < 1 && assetId) {
+      try {
+        const res = await fetch(`/assets/${assetId}`);
+        const body = await readJson<{ item?: StudioAsset }>(res);
+        for (const p of collectAssetSheetRefs(body.item || {})) {
+          if (!refs.includes(p)) refs.push(p);
+        }
+      } catch {
+        /* keep refs as-is */
+      }
     }
     if (!refs.length) {
       setError("Generate at least one angle first.");
@@ -502,6 +515,9 @@ function CharacterForm({
     const quals = qualityChoices(r2iRow);
     const sheetSize = pickSheetResolution(sizes);
     try {
+      if (!assetId) {
+        assetId = await ensureDraft(ident, label);
+      }
       spawnAngleResult({
         builderId,
         slot: COSTUME_SHEET_SLOT,
@@ -517,7 +533,7 @@ function CharacterForm({
         qualityChoices: quals,
         t2iModel: models.t2iId,
         r2iModel: models.r2iId || models.t2iId,
-        assetId: data.sessionAssetId || "",
+        assetId,
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
         maxRefs: sheetR2iRefCap(r2iRow),
@@ -526,7 +542,7 @@ function CharacterForm({
         sheetKind: "character",
       });
       setError(null);
-      data.onSession?.(sessionPayload(data.sessionAssetId || "", ident, label));
+      data.onSession?.(sessionPayload(assetId, ident, label));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not open Character Sheet.";
       setError(msg);
@@ -1008,8 +1024,10 @@ function CharacterForm({
             <button
               type="button"
               className="generate"
-              disabled={!Object.values(data.doneSlots || {}).some(Boolean)}
-              onClick={() => openCharacterSheet()}
+              disabled={
+                !Object.values(data.doneSlots || {}).some(Boolean) && !data.sessionAssetId
+              }
+              onClick={() => void openCharacterSheet()}
             >
               {data.doneSlots?.sheet ? "Regenerate Character Sheet" : "Generate Character Sheet"}
             </button>

@@ -67,9 +67,6 @@ import {
   CORE_SLOTS,
   EXTRA_SLOTS,
   SLOT_LABEL,
-  collectSheetAngleRefs,
-  composeCharacterSheetPrompt,
-  composeCostumeSheetPrompt,
   preferredIdentityPaths,
 } from "./sheetUi";
 import { bindToast, toast } from "./toast";
@@ -1442,49 +1439,6 @@ function StudioCanvas() {
     [closeNode, setCenter, setEdges, setNodes],
   );
   upsertSheetAngleRef.current = upsertSheetAngle;
-
-  const spawnLibrarySheet = useCallback(
-    (asset: StudioAsset) => {
-      const kind = asset.kind === "costume" ? "costume" : "character";
-      const refs = collectSheetAngleRefs(asset.identity, kind);
-      if (!refs.length) {
-        toast("Generate at least one angle first.", true);
-        return;
-      }
-      const builderId = `lib-${asset.id}`;
-      const prompt =
-        kind === "costume"
-          ? composeCostumeSheetPrompt(asset.fields?.wardrobe || asset.name || "")
-          : composeCharacterSheetPrompt(asset.name || "character");
-      setBuilderSessions((cur) => ({
-        ...cur,
-        [builderId]: {
-          assetId: asset.id,
-          t2iModel: "",
-          r2iModel: "",
-          slots: ["sheet"],
-          name: asset.name,
-          fields: asset.fields,
-          wardrobe: asset.fields?.wardrobe || "",
-          done: { ...(asset.identity || {}) },
-        },
-      }));
-      upsertSheetAngle(builderId, "sheet", {
-        slot: "sheet",
-        label: kind === "costume" ? "Costume sheet" : "Character sheet",
-        prompt,
-        focus: true,
-        assetId: asset.id,
-        sourceStill: refs[0],
-        extraRefs: refs.slice(1),
-        name: asset.name,
-        wardrobe: asset.fields?.wardrobe || "",
-        sheetKind: kind,
-      });
-      setLibraryOpen(false);
-    },
-    [upsertSheetAngle],
-  );
 
   useEffect(() => {
     function onSpawn(ev: Event) {
@@ -3485,7 +3439,6 @@ function StudioCanvas() {
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
         onNewAsset={(kind, seeds) => addCreatorBuilder(kind, undefined, seeds)}
-        onSpawnSheet={spawnLibrarySheet}
       />
       <MediaLightbox />
       {toastMsg ? (

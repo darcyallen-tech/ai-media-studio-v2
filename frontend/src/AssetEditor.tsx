@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { spawnAngleResult } from "./angleSpawn";
 import { errorFromBody, readJson } from "./http";
 import { toast } from "./toast";
 import { openLightbox } from "./lightbox";
@@ -7,6 +8,9 @@ import {
   COSTUME_SHEET_SLOT,
   EXTRA_SLOTS,
   SLOT_LABEL,
+  collectAssetSheetRefs,
+  composeCharacterSheetPrompt,
+  composeCostumeSheetPrompt,
   pickDefaultResolution,
   qualityChoices,
   sizeChoices,
@@ -20,12 +24,12 @@ type Props = {
   onChanged: (asset: StudioAsset) => void;
   onDress?: (characterId: string) => void;
   onUseRef?: (asset: StudioAsset) => void;
-  onSpawnSheet?: (asset: StudioAsset) => void;
+  onSheetOpened?: () => void;
 };
 
 const ALL = [...CORE_SLOTS, ...EXTRA_SLOTS];
 
-export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef, onSpawnSheet }: Props) {
+export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef, onSheetOpened }: Props) {
   const [row, setRow] = useState(asset);
   const [name, setName] = useState(asset.name || "");
   const [notes, setNotes] = useState(asset.notes || "");
@@ -58,8 +62,12 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   const isCostume = row.kind === "costume";
   const hasSheet = Boolean(ident.sheet || row.identity?.sheet);
   const costumeAngles = filled.length;
-  const canCostumeSheet = isCostume && costumeAngles >= 1;
-  const canCharacterSheet = isChar && costumeAngles >= 1;
+  const angleCount =
+    costumeAngles ||
+    collectAssetSheetRefs(row).length ||
+    (row.still_path ? 1 : 0);
+  const canCostumeSheet = isCostume && angleCount >= 1;
+  const canCharacterSheet = isChar && angleCount >= 1;
 
   async function persistMeta() {
     setBusy(true);
@@ -146,11 +154,38 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   }
 
   function openSheetNode() {
-    if (!onSpawnSheet) {
-      setError("Sheet generate node is unavailable.");
+    const kind = isCostume ? "costume" : "character";
+    const refs = collectAssetSheetRefs(row);
+    if (!refs.length) {
+      setError("Generate at least one angle first.");
       return;
     }
-    onSpawnSheet(row);
+    try {
+      spawnAngleResult({
+        builderId: `lib-${row.id}`,
+        slot: COSTUME_SHEET_SLOT,
+        label: kind === "costume" ? "Costume sheet" : "Character sheet",
+        prompt:
+          kind === "costume"
+            ? composeCostumeSheetPrompt(row.fields?.wardrobe || row.name || "")
+            : composeCharacterSheetPrompt(row.name || "character"),
+        generating: false,
+        error: null,
+        focus: true,
+        assetId: row.id,
+        sourceStill: refs[0],
+        extraRefs: refs.slice(1),
+        name: row.name,
+        wardrobe: row.fields?.wardrobe || "",
+        sheetKind: kind,
+      });
+      onClose();
+      onSheetOpened?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open sheet node.";
+      setError(msg);
+      toast(msg, true);
+    }
   }
 
   return (

@@ -853,6 +853,23 @@ export function collectSheetAngleRefs(
   return out;
 }
 
+export function collectAssetSheetRefs(asset: {
+  kind?: string;
+  identity?: Record<string, string> | null;
+  still_path?: string | null;
+  still_paths?: string[];
+}): string[] {
+  const kind = asset.kind === "costume" ? "costume" : "character";
+  const out = collectSheetAngleRefs(asset.identity, kind);
+  const add = (p?: string | null) => {
+    const s = String(p || "").trim();
+    if (s && !out.includes(s)) out.push(s);
+  };
+  add(asset.still_path);
+  for (const p of asset.still_paths || []) add(p);
+  return out;
+}
+
 export function preferredIdentityPaths(
   identity?: Record<string, string> | null,
   primarySlot?: string,
