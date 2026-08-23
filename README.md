@@ -8,7 +8,7 @@ Version **2.0.0-rc1**. Dev: Vite on :5173 + API on :8000. Production: one origin
 
 ## Production run
 
-Build the SPA, then start the production server (no `--reload`). The browser opens `http://127.0.0.1:8000/`.
+Build the SPA, then start the production server (no `--reload`). A desktop window titled **AI Media Studio V2** opens on `http://127.0.0.1:8000/` (Edge WebView2). If WebView2 is missing, the default browser opens instead.
 
 ```powershell
 cd frontend
@@ -20,8 +20,9 @@ python run_server.py
 
 - Same origin: UI + `/generate`, `/draft-enhance`, `/library`, `/outputs`.
 - Data (outputs, uploads, library, assets, thumbs) goes to `%LOCALAPPDATA%\AI Media Studio V2\`.
-- Keys: Settings → secrets store. Repo-root `.env` is **not** required.
+- Keys: Settings inside the window → secrets store. Repo-root `.env` is **not** required.
 - V1 root / Resolve inbox: optional in Settings (blank = disabled).
+- Port 8000 busy: console says so, then the app tries **8001**. Close the other process if both are taken.
 - Dev checkout: `cd backend; python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` plus `npm run dev` in `frontend`. Set `AMS_DEV=1` to force repo-relative `outputs/` and `data/`.
 
 ## Windows build
@@ -41,9 +42,11 @@ Run the folder (no repo checkout required):
 dist\AIMediaStudioV2\AMS_V2.bat
 ```
 
-or double-click `AIMediaStudioV2.exe`. The browser opens `http://127.0.0.1:8000/`.
+or double-click `AIMediaStudioV2.exe`. A native window titled **AI Media Studio V2** opens (not a browser tab). Closing the window shuts down the server.
 
-First run: open **Settings**, paste fal / xAI / Runware keys (saved under `%LOCALAPPDATA%\AI Media Studio V2\`). Outputs and Library write there, not next to the exe.
+First run: open **Settings** inside the window, paste fal / xAI / Runware keys (saved under `%LOCALAPPDATA%\AI Media Studio V2\`). Outputs and Library write there, not next to the exe.
+
+Windows uses the **Microsoft Edge WebView2** runtime (already on most Windows 10/11 PCs). If the window fails to open, install the Evergreen runtime from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/) and retry. Without WebView2 the app falls back to your default browser and keeps the console message.
 
 ## Layout
 
@@ -59,6 +62,7 @@ ai-media-studio-v2/
 
 - Python 3.11+ (3.14 works)
 - Node.js 20+ (for the frontend)
+- Windows desktop window: [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually already installed on Windows 10/11)
 
 ## Keys
 

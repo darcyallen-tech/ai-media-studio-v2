@@ -50,6 +50,11 @@ for pkg in (
     "openai",
     "dotenv",
     "app",
+    "webview",
+    "pythonnet",
+    "clr_loader",
+    "bottle",
+    "proxy_tools",
 ):
     try:
         pkg_datas, pkg_bins, pkg_hidden = collect_all(pkg)
@@ -81,6 +86,15 @@ hiddenimports += [
     "PIL.Image",
     "PIL.ImageOps",
     "certifi",
+    "webview",
+    "webview.platforms",
+    "webview.platforms.winforms",
+    "webview.platforms.edgechromium",
+    "pythonnet",
+    "clr",
+    "clr_loader",
+    "bottle",
+    "proxy_tools",
 ]
 try:
     datas += collect_data_files("certifi")
@@ -93,6 +107,12 @@ excludes = [
     "pytest",
     "setuptools.tests",
     "tkinter.test",
+    "PyQt5",
+    "PyQt6",
+    "PySide2",
+    "PySide6",
+    "qtpy",
+    "cefpython3",
 ]
 
 a = Analysis(
