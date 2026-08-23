@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AI Media Studio V2 · Model Guide</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --paper: #fffcf7;
+    --ink: #1c1a16;
+    --muted: #6b645b;
+    --line: #e4ddd3;
+    --accent: #c45c26;
+    --accent-soft: #f4e4d6;
+    --good: #2f5d3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  body { min-height: 100vh; display: grid; grid-template-columns: 240px 1fr; }
+  nav {
+    position: sticky; top: 0; height: 100vh; overflow: auto;
+    padding: 28px 18px; border-right: 1px solid var(--line); background: var(--paper);
+  }
+  nav h1 { font-size: 15px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 6px; }
+  nav .sub { color: var(--muted); font-size: 12px; margin: 0 0 18px; }
+  nav a {
+    display: flex; justify-content: space-between; align-items: center;
+    text-decoration: none; color: var(--ink); padding: 7px 10px; border-radius: 8px; margin-bottom: 2px;
+  }
+  nav a:hover, nav a.active { background: var(--accent-soft); color: var(--accent); }
+  nav a span { color: var(--muted); font-size: 11px; }
+  main { padding: 28px 36px 80px; max-width: 1080px; }
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 28px; }
+  .toolbar input {
+    flex: 1; border: 1px solid var(--line); background: var(--paper);
+    padding: 10px 14px; border-radius: 10px; font: inherit;
+  }
+  .toolbar .count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  section { margin-bottom: 42px; }
+  .sec-head h2 { margin: 0 0 4px; font-size: 22px; }
+  .sec-head p { margin: 0 0 16px; color: var(--muted); max-width: 62ch; }
+  .card {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px 14px; margin-bottom: 12px;
+  }
+  .card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .card h3 { margin: 0; font-size: 17px; }
+  .tagline {
+    display: inline-block; margin: 6px 0 0; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600;
+  }
+  .id { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); margin: 8px 0 12px; }
+  .mod { font-style: normal; font-size: 10px; letter-spacing: .06em; color: var(--muted);
+    border: 1px solid var(--line); padding: 2px 6px; border-radius: 999px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .cols h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .cols ul { margin: 0; padding-left: 16px; }
+  .cols li { margin-bottom: 4px; }
+  .muted { color: var(--muted); }
+  .empty { display: none; color: var(--muted); padding: 24px 0; }
+  @media (max-width: 900px) {
+    body { grid-template-columns: 1fr; }
+    nav { position: relative; height: auto; }
+    .cols { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <h1>Model Guide</h1>
+  <p class="sub">AMS V2 · 2026-08-23<br/>Match ids to GET /models</p>
+  <a href="#t2i" data-section="t2i">Text → Image <span>12</span></a><a href="#i2i" data-section="i2i">Image → Image <span>13</span></a><a href="#r2i" data-section="r2i">Reference → Image <span>9</span></a><a href="#region" data-section="region">Region edit <span>1</span></a><a href="#t2v" data-section="t2v">Text → Video <span>14</span></a><a href="#i2v" data-section="i2v">Image → Video <span>15</span></a><a href="#r2v" data-section="r2v">Reference → Video <span>5</span></a><a href="#bridge" data-section="bridge">First → Last <span>3</span></a><a href="#v2v" data-section="v2v">Video → Video <span>6</span></a><a href="#extend" data-section="extend">Extend <span>1</span></a><a href="#music" data-section="music">Music <span>7</span></a><a href="#sfx" data-section="sfx">Sound effects <span>2</span></a><a href="#voiceover" data-section="voiceover">Voiceover <span>4</span></a><a href="#upscale" data-section="upscale">Upscale <span>9</span></a><a href="#finish" data-section="finish">Finish / restore <span>2</span></a>
+</nav>
+<main>
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="Search models, taglines, ids…" autocomplete="off"/>
+    <span class="count" id="count"></span>
+  </div>
+  <section id="t2i"><div class="sec-head"><h2>Text → Image</h2><p>Generate a still from a prompt. Nail start/end frames here before you spend on video.</p></div>
+<article class="card" data-name="flux 2 pro best for photoreal stills vision:flux 2 pro t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Flux 2 Pro</h3>
+      <p class="tagline">Best for photoreal stills</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:flux 2 pro t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Studio-grade photoreal. Default T2I in V2.</li><li>Reliable start/end frames before I2V.</li><li>Cheap versus a video miss.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the cheapest Flux 2 SKU.</li><li>Type and infographics lose to Qwen / Recraft.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Listing hero stills</li><li>Start frame for I2V</li><li>Photoreal product plates</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 (cheaper) best for cheap photoreal iteration vision:flux 2 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Flux 2 (cheaper)</h3>
+      <p class="tagline">Best for cheap photoreal iteration</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:flux 2 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Same Flux 2 family, faster/cheaper (~$0.012/MP).</li><li>Good explore-then-promote workflow.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Softer than Pro on hard details.</li><li>Not the final delivery still.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Prompt fishing</li><li>Batch variants</li><li>Throwaway comps</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 flex best for controlled flux looks vision:flux 2 flex t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Flux 2 Flex</h3>
+      <p class="tagline">Best for controlled Flux looks</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:flux 2 flex t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>More control / quality tradeoff than base Flux 2.</li><li>Useful when Pro is too locked-in.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Slower to learn than Pro.</li><li>Still a photoreal family, not illustration.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Look-dev</li><li>Style-sensitive stills</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 1.1 pro ultra best for high-res photoreal (up to ~2k) vision:flux 1.1 pro ultra t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Flux 1.1 Pro Ultra</h3>
+      <p class="tagline">Best for high-res photoreal (up to ~2K)</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:flux 1.1 pro ultra t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>High-res photoreal stills.</li><li>Good when Flux 2 Pro feels small.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Older generation than Flux 2.</li><li>Not the fastest iterate SKU.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Print-ish stills</li><li>Detail crops</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedream 5.0 pro best for listing-grade detail vision:seedream 5 pro t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Seedream 5.0 Pro</h3>
+      <p class="tagline">Best for listing-grade detail</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:seedream 5 pro t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Highest Seedream T2I on fal.</li><li>Dense interiors, signage-adjacent detail.</li><li>Pairs with Seedream 5 Pro edit / sheets.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Pricier than Lite.</li><li>Photoreal faces can later trip Seedance R2V.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Property stills</li><li>Character sheet fronts</li><li>Catalog frames</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedream 5.0 lite best for seedream iteration vision:seedream 5 lite t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Seedream 5.0 Lite</h3>
+      <p class="tagline">Best for Seedream iteration</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:seedream 5 lite t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Cheaper/faster Seedream 5 T2I.</li><li>Same family as Pro for promote-up.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the final quality pass.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Explore Seedream looks</li><li>Volume stills</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedream 4.5 best for detailed listing stills (prior gen) vision:seedream 4.5 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Seedream 4.5</h3>
+      <p class="tagline">Best for detailed listing stills (prior gen)</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:seedream 4.5 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Strong detail, listing-friendly.</li><li>Known quantity if 5.x misbehaves.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Superseded by 5 Pro for most new work.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Fallback listing stills</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana 2 best for fast stills (0.5k–4k) vision:nano banana 2 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Nano Banana 2</h3>
+      <p class="tagline">Best for fast stills (0.5K–4K)</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:nano banana 2 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Fast Google T2I with resolution control.</li><li>Cheap end-frame exploration.</li><li>Extreme aspect ratios.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Adherence trails Nano Banana Pro.</li><li>Not Recraft/Qwen for type.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Quick comps</li><li>Aspect tests</li><li>I2V start-frame fishing</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana pro best for prompt-faithful stills vision:nano banana pro t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Nano Banana Pro</h3>
+      <p class="tagline">Best for prompt-faithful stills</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:nano banana pro t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Higher adherence than Banana 2.</li><li>1K / 2K / 4K.</li><li>Good when the prompt must stick.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Pricier stills.</li><li>Photoreal, not illustration.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Locked compositions</li><li>Prompt-critical heroes</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="qwen image 3 best for type, signage, and faces vision:qwen image 3 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Qwen Image 3</h3>
+      <p class="tagline">Best for type, signage, and faces</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:qwen image 3 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Multilingual text in-image, up to 2K.</li><li>Faces and packaging/signage.</li><li>Est. $0.04 @1K / $0.075 @2K.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the photoreal listing king (use Flux / Seedream).</li><li>Newer SKU — watch edge cases.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>For-sale signs</li><li>Lower thirds stills</li><li>Infographics</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="recraft v4 best for artistic / brand design vision:recraft v4 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Recraft V4</h3>
+      <p class="tagline">Best for artistic / brand design</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:recraft v4 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Illustration, layout, brand stills, type.</li><li>~$0.04/image.</li><li>The design tool in a photoreal catalog.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not photoreal property photos.</li><li>Don't send Recraft frames into Seedance as 'real' people.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Brand kits</li><li>Thumbnails</li><li>Illustrated social covers</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 2.0 best for xai stills in the same stack vision:grok imagine 2.0 t2i" data-section="t2i">
+  <header>
+    <div>
+      <h3>Grok Imagine 2.0</h3>
+      <p class="tagline">Best for xAI stills in the same stack</p>
+    </div>
+    <div class="meta"><em class="mod">T2I</em></div>
+  </header>
+  <p class="id">vision:grok imagine 2.0 t2i</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>1K/2K, quality low/medium.</li><li>Matches Grok video/edit family.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the default listing still (Flux/Seedream).</li><li>Quality tiers change price fast.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-consistent stills</li><li>Prompt play</li></ul></div>
+  </div>
+</article></section><section id="i2i"><div class="sec-head"><h2>Image → Image</h2><p>Edit a source still. Staging, wardrobe, sky, cleanup.</p></div>
+<article class="card" data-name="flux 2 pro (edit) best default for staging edits studio:img:flux 2 pro" data-section="i2i">
+  <header>
+    <div>
+      <h3>Flux 2 Pro (edit)</h3>
+      <p class="tagline">Best default for staging edits</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>V2 default. Multi-ref (~$0.03 first MP).</li><li>Strong furniture/sky/staging swaps.</li><li>Up to 4 refs.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not region-boxed (use Seedream 5 Pro edit).</li><li>Type/signage: Qwen.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Virtual staging</li><li>Sky / lawn cleanup</li><li>Product on a plate</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 max (edit) best flux edit quality studio:img:flux 2 max" data-section="i2i">
+  <header>
+    <div>
+      <h3>Flux 2 Max (edit)</h3>
+      <p class="tagline">Best Flux edit quality</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 max</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Highest quality Flux edit.</li><li>When Pro's first pass isn't enough.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Est. ~$0.07 first MP — spendy vs Pro.</li><li>Overkill for small cleanups.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Final stills</li><li>Hero listing shots</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 flex (edit) best for style-flexible flux edits studio:img:flux 2 flex" data-section="i2i">
+  <header>
+    <div>
+      <h3>Flux 2 Flex (edit)</h3>
+      <p class="tagline">Best for style-flexible Flux edits</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 flex</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Multi-ref with more look control.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less 'default safe' than Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Style-matched edits</li><li>Look-dev from a still</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux kontext pro best for single-image local edits studio:img:flux kontext pro" data-section="i2i">
+  <header>
+    <div>
+      <h3>Flux Kontext Pro</h3>
+      <p class="tagline">Best for single-image local edits</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em></div>
+  </header>
+  <p class="id">studio:img:flux kontext pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Local + scene transforms from one still.</li><li>Mature Kontext workflow.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Strict aspect_ratio enum — mismatches get snapped.</li><li>Single image, not a ref pack.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>One-still retouches</li><li>Object/scene transforms</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana pro (edit) best prompt-faithful edit studio:img:nano banana pro" data-section="i2i">
+  <header>
+    <div>
+      <h3>Nano Banana Pro (edit)</h3>
+      <p class="tagline">Best prompt-faithful edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:nano banana pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Excellent prompt adherence.</li><li>Up to 4 refs.</li><li>Google Gemini image on fal.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Can rewrite more than you asked vs Kontext.</li><li>Cost above Banana 2.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Instruction edits</li><li>Identity-preserving tweaks</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana 2 (edit) best cheap instruction edit studio:img:nano banana 2" data-section="i2i">
+  <header>
+    <div>
+      <h3>Nano Banana 2 (edit)</h3>
+      <p class="tagline">Best cheap instruction edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:nano banana 2</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Faster/cheaper Banana edit.</li><li>Up to 4 refs.</li><li>Good cost/quality default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Weaker lock than Pro on hard prompts.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume edits</li><li>Explore then promote to Pro</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedream 5 pro (region) best for boxed / grounded edits studio:region:seedream 5 pro" data-section="i2i">
+  <header>
+    <div>
+      <h3>Seedream 5 Pro (region)</h3>
+      <p class="tagline">Best for boxed / grounded edits</p>
+    </div>
+    <div class="meta"><em class="mod">REGION</em> <em class="mod">I2I</em></div>
+  </header>
+  <p class="id">studio:region:seedream 5 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Region-precise (colored box / layer).</li><li>Up to 10 refs on the family.</li><li>Listing-safe local changes.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Heavier than a Flux Pro dab.</li><li>Whole-frame restyles may prefer Flux / Banana.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Replace a sofa</li><li>Fix a sky in-frame</li><li>Signage in a photo</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="qwen image 3 (edit) best for editing type and faces studio:img:qwen image 3" data-section="i2i">
+  <header>
+    <div>
+      <h3>Qwen Image 3 (edit)</h3>
+      <p class="tagline">Best for editing type and faces</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:qwen image 3</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>1–3 refs. Faces, type, signage.</li><li>$0.04 @1K · $0.075 @2K.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the staging workhorse.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Rewrite a sign</li><li>Headshot cleanup</li><li>Label/packaging edits</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 2.0 edit best grok 2.0 still edit studio:img:grok imagine 2.0 edit" data-section="i2i">
+  <header>
+    <div>
+      <h3>Grok Imagine 2.0 Edit</h3>
+      <p class="tagline">Best Grok 2.0 still edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine 2.0 edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Current Grok image edit. 1K/2K.</li><li>Up to 3 sources.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Older Grok edit SKUs still sit in the catalog — prefer this one.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-stack edits</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine quality edit best grok edit for detail and text studio:img:grok imagine quality edit" data-section="i2i">
+  <header>
+    <div>
+      <h3>Grok Imagine Quality Edit</h3>
+      <p class="tagline">Best Grok edit for detail and text</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine quality edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Stronger detail and text than the cheap Grok edit.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Est. ~$0.06/image.</li><li>Superseded in spirit by 2.0 — keep if Quality wins a shot.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Text-in-image fixes</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine edit best cheap grok edit studio:img:grok imagine edit" data-section="i2i">
+  <header>
+    <div>
+      <h3>Grok Imagine Edit</h3>
+      <p class="tagline">Best cheap Grok edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.022/image. Up to 3 sources.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Weaker text/detail than Quality / 2.0.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Low-stakes tweaks</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="mai-image-2.5-pro (edit) best microsoft pro edit studio:img:mai image 2.5 pro" data-section="i2i">
+  <header>
+    <div>
+      <h3>MAI-Image-2.5-Pro (edit)</h3>
+      <p class="tagline">Best Microsoft Pro edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em></div>
+  </header>
+  <p class="id">studio:img:mai image 2.5 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Token-billed Pro edit on fal.</li><li>Alternate photoreal editor.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Est. ~$0.18–$0.27/image.</li><li>Less V2 battle-testing than Flux / Banana.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>When Flux/Banana refuse a look</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="mai-image-2.5 (edit) best lighter microsoft edit studio:img:mai image 2.5" data-section="i2i">
+  <header>
+    <div>
+      <h3>MAI-Image-2.5 (edit)</h3>
+      <p class="tagline">Best lighter Microsoft edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em></div>
+  </header>
+  <p class="id">studio:img:mai image 2.5</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Faster/cheaper than MAI Pro.</li><li>Est. ~$0.05–$0.08/image.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the default staging path.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Cheap Microsoft-stack edits</li></ul></div>
+  </div>
+</article></section><section id="r2i"><div class="sec-head"><h2>Reference → Image</h2><p>Edit with extra reference stills (identity, style, product).</p></div>
+<article class="card" data-name="flux 2 pro (edit) best default for staging edits studio:img:flux 2 pro" data-section="r2i">
+  <header>
+    <div>
+      <h3>Flux 2 Pro (edit)</h3>
+      <p class="tagline">Best default for staging edits</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>V2 default. Multi-ref (~$0.03 first MP).</li><li>Strong furniture/sky/staging swaps.</li><li>Up to 4 refs.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not region-boxed (use Seedream 5 Pro edit).</li><li>Type/signage: Qwen.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Virtual staging</li><li>Sky / lawn cleanup</li><li>Product on a plate</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 max (edit) best flux edit quality studio:img:flux 2 max" data-section="r2i">
+  <header>
+    <div>
+      <h3>Flux 2 Max (edit)</h3>
+      <p class="tagline">Best Flux edit quality</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 max</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Highest quality Flux edit.</li><li>When Pro's first pass isn't enough.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Est. ~$0.07 first MP — spendy vs Pro.</li><li>Overkill for small cleanups.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Final stills</li><li>Hero listing shots</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 2 flex (edit) best for style-flexible flux edits studio:img:flux 2 flex" data-section="r2i">
+  <header>
+    <div>
+      <h3>Flux 2 Flex (edit)</h3>
+      <p class="tagline">Best for style-flexible Flux edits</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:flux 2 flex</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Multi-ref with more look control.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less 'default safe' than Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Style-matched edits</li><li>Look-dev from a still</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana pro (edit) best prompt-faithful edit studio:img:nano banana pro" data-section="r2i">
+  <header>
+    <div>
+      <h3>Nano Banana Pro (edit)</h3>
+      <p class="tagline">Best prompt-faithful edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:nano banana pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Excellent prompt adherence.</li><li>Up to 4 refs.</li><li>Google Gemini image on fal.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Can rewrite more than you asked vs Kontext.</li><li>Cost above Banana 2.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Instruction edits</li><li>Identity-preserving tweaks</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="nano banana 2 (edit) best cheap instruction edit studio:img:nano banana 2" data-section="r2i">
+  <header>
+    <div>
+      <h3>Nano Banana 2 (edit)</h3>
+      <p class="tagline">Best cheap instruction edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:nano banana 2</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Faster/cheaper Banana edit.</li><li>Up to 4 refs.</li><li>Good cost/quality default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Weaker lock than Pro on hard prompts.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume edits</li><li>Explore then promote to Pro</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="qwen image 3 (edit) best for editing type and faces studio:img:qwen image 3" data-section="r2i">
+  <header>
+    <div>
+      <h3>Qwen Image 3 (edit)</h3>
+      <p class="tagline">Best for editing type and faces</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:qwen image 3</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>1–3 refs. Faces, type, signage.</li><li>$0.04 @1K · $0.075 @2K.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the staging workhorse.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Rewrite a sign</li><li>Headshot cleanup</li><li>Label/packaging edits</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 2.0 edit best grok 2.0 still edit studio:img:grok imagine 2.0 edit" data-section="r2i">
+  <header>
+    <div>
+      <h3>Grok Imagine 2.0 Edit</h3>
+      <p class="tagline">Best Grok 2.0 still edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine 2.0 edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Current Grok image edit. 1K/2K.</li><li>Up to 3 sources.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Older Grok edit SKUs still sit in the catalog — prefer this one.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-stack edits</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine quality edit best grok edit for detail and text studio:img:grok imagine quality edit" data-section="r2i">
+  <header>
+    <div>
+      <h3>Grok Imagine Quality Edit</h3>
+      <p class="tagline">Best Grok edit for detail and text</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine quality edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Stronger detail and text than the cheap Grok edit.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Est. ~$0.06/image.</li><li>Superseded in spirit by 2.0 — keep if Quality wins a shot.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Text-in-image fixes</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine edit best cheap grok edit studio:img:grok imagine edit" data-section="r2i">
+  <header>
+    <div>
+      <h3>Grok Imagine Edit</h3>
+      <p class="tagline">Best cheap Grok edit</p>
+    </div>
+    <div class="meta"><em class="mod">I2I</em> <em class="mod">R2I</em></div>
+  </header>
+  <p class="id">studio:img:grok imagine edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.022/image. Up to 3 sources.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Weaker text/detail than Quality / 2.0.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Low-stakes tweaks</li></ul></div>
+  </div>
+</article></section><section id="region"><div class="sec-head"><h2>Region edit</h2><p>Grounded, boxed, or layer edits instead of a whole-frame rewrite.</p></div>
+<article class="card" data-name="seedream 5 pro (region) best for boxed / grounded edits studio:region:seedream 5 pro" data-section="region">
+  <header>
+    <div>
+      <h3>Seedream 5 Pro (region)</h3>
+      <p class="tagline">Best for boxed / grounded edits</p>
+    </div>
+    <div class="meta"><em class="mod">REGION</em> <em class="mod">I2I</em></div>
+  </header>
+  <p class="id">studio:region:seedream 5 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Region-precise (colored box / layer).</li><li>Up to 10 refs on the family.</li><li>Listing-safe local changes.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Heavier than a Flux Pro dab.</li><li>Whole-frame restyles may prefer Flux / Banana.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Replace a sofa</li><li>Fix a sky in-frame</li><li>Signage in a photo</li></ul></div>
+  </div>
+</article></section><section id="t2v"><div class="sec-head"><h2>Text → Video</h2><p>Prompt to a clip. Native audio on most flagship models.</p></div>
+<article class="card" data-name="flux 3 best all-round t2v with draft→enhance vision:flux 3 t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>FLUX 3</h3>
+      <p class="tagline">Best all-round T2V with draft→enhance</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:flux 3 t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>5–20s, native audio.</li><li>Draft then enhance to cut cost.</li><li>BFL on fal — V2 already wired.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not 30s (that's Seedance).</li><li>Extend is a separate SKU and costs more than the I2V rate.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Hero prompt-to-clip</li><li>Audio-on social videos</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedance 2.5 best for long single-shot t2v (up to 30s) vision:seedance 2.5 t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Seedance 2.5</h3>
+      <p class="tagline">Best for long single-shot T2V (up to 30s)</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:seedance 2.5 t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Native 4–30s with audio.</li><li>480p/720p/1080p.</li><li>Strong motion.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Photoreal people can trip the face filter on related R2V.</li><li>Pricey at 1080p.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Walkthrough-length clips</li><li>Unbroken camera moves</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="minimax h3 best value cinematic t2v (2k, stereo) vision:minimax h3 t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>MiniMax H3</h3>
+      <p class="tagline">Best value cinematic T2V (2K, stereo)</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:minimax h3 t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>5–15s, 2K, native stereo audio.</li><li>Open-weight partner on fal.</li><li>Storyboard default family.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Max 15s.</li><li>Not Veo's 'prestige' look.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Default storyboard T2V</li><li>2K delivery on a budget</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 best prestige t2v vision:veo 3.1" data-section="t2v">
+  <header>
+    <div>
+      <h3>Veo 3.1</h3>
+      <p class="tagline">Best prestige T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:veo 3.1</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Highest quality T2V in the catalog.</li><li>Optional audio. 16:9 or 9:16.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>~$0.40/s. Max 4/6/8s.</li><li>Don't estimate 15s/60s — helper won't clamp.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Campaign heroes</li><li>Short cinematic opens</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 fast best veo for exploration vision:veo 3.1 fast" data-section="t2v">
+  <header>
+    <div>
+      <h3>Veo 3.1 Fast</h3>
+      <p class="tagline">Best Veo for exploration</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 fast</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Same family, ~$0.15/s.</li><li>Good default when you might still want Veo.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Still 8s max.</li><li>Not as pretty as full Veo.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Veo look-dev</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 3.0 pro best cinematic kling t2v vision:kling v3 pro t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Kling 3.0 Pro</h3>
+      <p class="tagline">Best cinematic Kling T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:kling v3 pro t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>3–15s, native audio, 16:9/9:16/1:1.</li><li>Storyboard-friendly motion.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>V2 currently prices Standard T2V the same as Pro — treat Pro as the real SKU until that's fixed.</li><li>Not 30s.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Cinematic B-roll</li><li>Character motion from text</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 3.0 standard best cheaper kling 3 t2v (in theory) vision:kling v3 standard t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Kling 3.0 Standard</h3>
+      <p class="tagline">Best cheaper Kling 3 T2V (in theory)</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:kling v3 standard t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Same 3–15s native-audio family.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Estimate currently matches Pro ($2.52 / 15s). Prefer O3 Standard if you want a real cheaper Kling.</li><li>Don't trust the Standard discount until the helper is fixed.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Only if you confirm a real price gap</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling o3 pro best kling o3 t2v vision:kling o3 pro t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Kling O3 Pro</h3>
+      <p class="tagline">Best Kling O3 T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:kling o3 pro t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>3–15s native audio. ~$0.168/s with audio.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>O3 vs 3.0 naming is easy to mix up in the dropdown.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>O3-stack text clips</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling o3 standard best cheap kling t2v vision:kling o3 standard t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Kling O3 Standard</h3>
+      <p class="tagline">Best cheap Kling T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:kling o3 standard t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Actually cheaper (~$0.112/s).</li><li>3–15s native audio.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less polish than O3 Pro / 3.0 Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume Kling T2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 1.5 best grok t2v vision:grok imagine 1.5 t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Grok Imagine 1.5</h3>
+      <p class="tagline">Best Grok T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:grok imagine 1.5 t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Strong motion + native audio.</li><li>1–15s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not the listing default (H3 / FLUX 3 / Kling).</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-stack clips</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="ltx 2.5 pro best open a/v quality pass vision:ltx 2.5 pro t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>LTX 2.5 Pro</h3>
+      <p class="tagline">Best open A/V quality pass</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:ltx 2.5 pro t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Lightricks, native audio.</li><li>6/8/10s or auto.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Max 10s on Pro.</li><li>4K lives on Fast.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Quality LTX pass</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="ltx 2.5 fast best ltx iteration / 4k vision:ltx 2.5 fast t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>LTX 2.5 Fast</h3>
+      <p class="tagline">Best LTX iteration / 4K</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:ltx 2.5 fast t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>6–20s, up to 4K.</li><li>Cheaper than Pro.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Softer than Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>LTX look-dev</li><li>4K trials</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="luma ray 2 best luma cinematic t2v vision:luma ray 2" data-section="t2v">
+  <header>
+    <div>
+      <h3>Luma Ray 2</h3>
+      <p class="tagline">Best Luma cinematic T2V</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:luma ray 2</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Strong cinematic alternative.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Duration/aspect follow Luma, not the Fal flagship set.</li><li>Max ~9s in catalog.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>When you want a Luma look</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="mirage avatar x (script) best talking-head from a script vision:mirage avatar x t2v" data-section="t2v">
+  <header>
+    <div>
+      <h3>Mirage Avatar X (script)</h3>
+      <p class="tagline">Best talking-head from a script</p>
+    </div>
+    <div class="meta"><em class="mod">T2V</em></div>
+  </header>
+  <p class="id">vision:mirage avatar x t2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Prompt = spoken script (50–1500 chars).</li><li>Talking-head, not B-roll.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Needs a face/identity path for lock (use R2V).</li><li>Not a world-gen model.</li><li>No duration enum in catalog.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Agent-style addresses</li><li>Listing VO to camera</li></ul></div>
+  </div>
+</article></section><section id="i2v"><div class="sec-head"><h2>Image → Video</h2><p>Animate a start still. Best path for a character you already trust.</p></div>
+<article class="card" data-name="flux 3 i2v best still→video with native audio studio:vid:flux 3 i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>FLUX 3 I2V</h3>
+      <p class="tagline">Best still→video with native audio</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:flux 3 i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Animates a still, aspect follows the plate.</li><li>Draft→enhance wired.</li><li>5–20s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Identity lock is weaker than H3 Omni / Seedance R2V.</li><li>Extend is a different SKU.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Listing still to walkthrough</li><li>Product spin-up</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedance 2.5 i2v best long i2v (up to 30s) studio:vid:seedance 2.5 i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Seedance 2.5 I2V</h3>
+      <p class="tagline">Best long I2V (up to 30s)</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:seedance 2.5 i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Single-pass up to 30s + native audio.</li><li>Optional end frame.</li><li>Prefer I2V start-frame over R2V for photoreal people.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>R2V face filter is a different SKU — this I2V path is the safer Seedance route for characters.</li><li>Catalog max_ref_images=4 is leftover metadata.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Long interior moves</li><li>Character still → performance</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="minimax h3 i2v best default i2v studio:vid:minimax h3 i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>MiniMax H3 I2V</h3>
+      <p class="tagline">Best default I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:minimax h3 i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>First-frame still, optional end frame.</li><li>5–15s, 2K-class, stereo audio.</li><li>Storyboard-friendly.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>15s cap.</li><li>JPEG proxy before upload can soften fine detail.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Default still→clip</li><li>First→last without a dedicated bridge SKU</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 3.0 pro i2v best cinematic kling i2v studio:vid:kling v3 pro i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling 3.0 Pro I2V</h3>
+      <p class="tagline">Best cinematic Kling I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling v3 pro i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>3–15s, optional end still.</li><li>Pro motion quality.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Still-size limits (Kling proxy).</li><li>Not 30s.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Cinematic listing moves</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 3.0 standard i2v best cheaper kling 3 i2v studio:vid:kling v3 standard i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling 3.0 Standard I2V</h3>
+      <p class="tagline">Best cheaper Kling 3 I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling v3 standard i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Same 3–15s family, actually cheaper than Pro on I2V ($1.68 vs $2.10 / 15s).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less polish than Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume Kling I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling o3 pro i2v best kling o3 i2v studio:vid:kling o3 pro i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling O3 Pro I2V</h3>
+      <p class="tagline">Best Kling O3 I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling o3 pro i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Start + optional end. 3–15s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>O3 vs 3.0 naming clutter.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>O3-stack I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling o3 standard i2v best cheap kling o3 i2v studio:vid:kling o3 standard i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling O3 Standard I2V</h3>
+      <p class="tagline">Best cheap Kling O3 I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling o3 standard i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Cheapest Kling I2V in the set.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Softest Kling 3/O3 variant.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Draft Kling I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 2.6 pro i2v best older kling with native audio studio:vid:kling 2.6 pro i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling 2.6 Pro I2V</h3>
+      <p class="tagline">Best older Kling with native audio</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling 2.6 pro i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Native audio. Known 5/10s enum.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Superseded by 3.0 / O3 for new work.</li><li>Max 10s.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Fallback if 3.0 misbehaves</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling 2.5 turbo pro i2v best fast legacy kling i2v studio:vid:kling 2.5 turbo pro i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Kling 2.5 Turbo Pro I2V</h3>
+      <p class="tagline">Best fast legacy Kling I2V</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling 2.5 turbo pro i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Fast cinematic I2V.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Max 10s. Older gen.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Speed tests only</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 i2v best prestige still→move vision:veo 3.1 i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Veo 3.1 I2V</h3>
+      <p class="tagline">Best prestige still→move</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Cinematic I2V. Keep architecture in the prompt.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>~$0.40/s, 8s max.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Hero listing moves</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 fast i2v best veo i2v default vision:veo 3.1 fast i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Veo 3.1 Fast I2V</h3>
+      <p class="tagline">Best Veo I2V default</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 fast i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.15/s. Recommended Veo I2V experiments.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>8s max.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Veo look-dev from a still</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 1.5 i2v best grok still→video studio:vid:grok imagine 1.5 i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>Grok Imagine 1.5 I2V</h3>
+      <p class="tagline">Best Grok still→video</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:grok imagine 1.5 i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Strong motion + native audio from a start still.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not H3/FLUX 3 for listing defaults.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-stack I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="ltx 2.5 pro i2v best ltx still→video vision:ltx 2.5 pro i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>LTX 2.5 Pro I2V</h3>
+      <p class="tagline">Best LTX still→video</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">vision:ltx 2.5 pro i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Native audio. Optional last frame on Fast sibling.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Pro max 10s.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>LTX quality I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="ltx 2.5 fast i2v best ltx i2v iteration vision:ltx 2.5 fast i2v" data-section="i2v">
+  <header>
+    <div>
+      <h3>LTX 2.5 Fast I2V</h3>
+      <p class="tagline">Best LTX I2V iteration</p>
+    </div>
+    <div class="meta"><em class="mod">I2V</em></div>
+  </header>
+  <p class="id">vision:ltx 2.5 fast i2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>6–20s, up to 4K, optional last frame.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Softer than Pro.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>LTX drafts</li><li>4K I2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 3 first→last best flux 3 connect-shot studio:vid:flux 3 first last" data-section="i2v">
+  <header>
+    <div>
+      <h3>FLUX 3 First→Last</h3>
+      <p class="tagline">Best FLUX 3 connect-shot</p>
+    </div>
+    <div class="meta"><em class="mod">BRIDGE</em> <em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:flux 3 first last</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Bridges two stills with native audio.</li><li>Draft→enhance wired.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Needs both frames.</li><li>20s cap.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Room to room</li><li>Before/after moves</li></ul></div>
+  </div>
+</article></section><section id="r2v"><div class="sec-head"><h2>Reference → Video</h2><p>Lock subject/style from a pack of stills (and sometimes video/audio).</p></div>
+<article class="card" data-name="minimax h3 omni best character lock (storyboard default) studio:vid:minimax h3 reference" data-section="r2v">
+  <header>
+    <div>
+      <h3>MiniMax H3 Omni</h3>
+      <p class="tagline">Best character lock (storyboard default)</p>
+    </div>
+    <div class="meta"><em class="mod">R2V</em></div>
+  </header>
+  <p class="id">studio:vid:minimax h3 reference</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Up to 9 images + 3 videos + 3 audio.</li><li>Storyboard default — photoreal people stay usable.</li><li>Stereo, 5–15s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>12 total refs cap.</li><li>Not 30s.</li><li>Don't recycle last-frame as next-shot ref (false face hits on other models).</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Synthetic characters</li><li>Multi-angle identity</li><li>Storyboard shots</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedance 2.5 r2v best multimodal ref pack — avoid tight photoreal faces studio:vid:seedance 2.5 reference" data-section="r2v">
+  <header>
+    <div>
+      <h3>Seedance 2.5 R2V</h3>
+      <p class="tagline">Best multimodal ref pack — avoid tight photoreal faces</p>
+    </div>
+    <div class="meta"><em class="mod">R2V</em></div>
+  </header>
+  <p class="id">studio:vid:seedance 2.5 reference</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Up to 50 refs (image/video/audio), up to 30s, native audio.</li><li>Best motion in-family.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Photoreal Seedream faces often flag as real people. No safety-off on fal 2.5.</li><li>Don't productize blur/grid tricks.</li><li>Prefer I2V start-frame or H3 Omni for characters.</li><li>Catalog shows 30 refs; Fal lists 50.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Style/location packs without close faces</li><li>Long R2V when the plate isn't a headshot</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine 1.5 r2v best grok subject/style lock studio:vid:grok imagine 1.5 reference" data-section="r2v">
+  <header>
+    <div>
+      <h3>Grok Imagine 1.5 R2V</h3>
+      <p class="tagline">Best Grok subject/style lock</p>
+    </div>
+    <div class="meta"><em class="mod">R2V</em></div>
+  </header>
+  <p class="id">studio:vid:grok imagine 1.5 reference</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Up to 7 reference stills.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Weaker omni than H3 (no video/audio refs).</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok identity packs</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 reference best prestige r2v vision:veo 3.1 reference" data-section="r2v">
+  <header>
+    <div>
+      <h3>Veo 3.1 Reference</h3>
+      <p class="tagline">Best prestige R2V</p>
+    </div>
+    <div class="meta"><em class="mod">R2V</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 reference</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>1–N reference stills.</li><li>Veo look.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>~$0.40/s, 8s (catalog enum is 8s only on this row).</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Short prestige identity clips</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="mirage avatar x r2v best identity-locked talking head vision:mirage avatar x r2v" data-section="r2v">
+  <header>
+    <div>
+      <h3>Mirage Avatar X R2V</h3>
+      <p class="tagline">Best identity-locked talking head</p>
+    </div>
+    <div class="meta"><em class="mod">R2V</em></div>
+  </header>
+  <p class="id">vision:mirage avatar x r2v</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Needs a voice/audio ref (optional talking-head still).</li><li>$0.30/s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not B-roll. Script/audio driven.</li><li>No duration enum — quotes will scale to whatever you send.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Avatar from a real VO</li><li>Presenters</li></ul></div>
+  </div>
+</article></section><section id="bridge"><div class="sec-head"><h2>First → Last</h2><p>Bridge two stills into one move. Connect shots, room-to-room.</p></div>
+<article class="card" data-name="flux 3 first→last best flux 3 connect-shot studio:vid:flux 3 first last" data-section="bridge">
+  <header>
+    <div>
+      <h3>FLUX 3 First→Last</h3>
+      <p class="tagline">Best FLUX 3 connect-shot</p>
+    </div>
+    <div class="meta"><em class="mod">BRIDGE</em> <em class="mod">I2V</em></div>
+  </header>
+  <p class="id">studio:vid:flux 3 first last</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Bridges two stills with native audio.</li><li>Draft→enhance wired.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Needs both frames.</li><li>20s cap.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Room to room</li><li>Before/after moves</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 first→last best prestige bridge vision:veo 3.1 bridge" data-section="bridge">
+  <header>
+    <div>
+      <h3>Veo 3.1 First→Last</h3>
+      <p class="tagline">Best prestige bridge</p>
+    </div>
+    <div class="meta"><em class="mod">BRIDGE</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 bridge</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Continuous move between two stills.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>8s, ~$0.40/s.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Upstairs → living room heroes</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="veo 3.1 fast first→last best default bridge vision:veo 3.1 fast bridge" data-section="bridge">
+  <header>
+    <div>
+      <h3>Veo 3.1 Fast First→Last</h3>
+      <p class="tagline">Best default bridge</p>
+    </div>
+    <div class="meta"><em class="mod">BRIDGE</em></div>
+  </header>
+  <p class="id">vision:veo 3.1 fast bridge</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Faster/cheaper Veo bridge.</li><li>Recommended connect-shot default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>8s cap.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Explore connect shots</li></ul></div>
+  </div>
+</article></section><section id="v2v"><div class="sec-head"><h2>Video → Video</h2><p>Edit or retake an existing clip. Length usually follows the source.</p></div>
+<article class="card" data-name="kling o3 standard v2v best default clip edit studio:vid:kling o3 standard edit" data-section="v2v">
+  <header>
+    <div>
+      <h3>Kling O3 Standard V2V</h3>
+      <p class="tagline">Best default clip edit</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling o3 standard edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Motion-preserving V2V. Length matches source (3–15s).</li><li>V2 default video edit.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Won't magically lengthen a clip.</li><li>Helper will quote 60s if you send it — clamp to source length.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Wardrobe/bg tweaks on a take</li><li>Prompted V2V</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="kling o3 pro v2v best quality kling v2v studio:vid:kling o3 pro edit" data-section="v2v">
+  <header>
+    <div>
+      <h3>Kling O3 Pro V2V</h3>
+      <p class="tagline">Best quality Kling V2V</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:kling o3 pro edit</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Higher quality than Standard. 3–15s source.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Costlier. Same length lock.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Final V2V pass</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="ltx 2.3 retake best surgical retake studio:vid:ltx retake" data-section="v2v">
+  <header>
+    <div>
+      <h3>LTX 2.3 Retake</h3>
+      <p class="tagline">Best surgical retake</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:ltx retake</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Regenerate a 2–16s segment, lock surrounding motion.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not a full restyle model.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Fix one beat</li><li>Replace a gesture</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok imagine edit video best grok v2v studio:vid:grok imagine edit video" data-section="v2v">
+  <header>
+    <div>
+      <h3>Grok Imagine Edit Video</h3>
+      <p class="tagline">Best Grok V2V</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:grok imagine edit video</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Prompt + source clip.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>API truncates to ~8s and re-encodes.</li><li>Don't send long masters.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Short Grok restyles</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux 3 extend best native-audio extend studio:vid:flux 3 extend" data-section="v2v">
+  <header>
+    <div>
+      <h3>FLUX 3 Extend</h3>
+      <p class="tagline">Best native-audio extend</p>
+    </div>
+    <div class="meta"><em class="mod">EXTEND</em> <em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:flux 3 extend</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Continue a clip with prompt + audio.</li><li>Draft→enhance wired.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Estimate currently uses the I2V rate ($2.55 / 15s) — real extend is costlier.</li><li>Source clip size/length limits.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Hold a walkthrough</li><li>Add a beat after a hero</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="sync-3 lipsync best lipsync (clip + dialogue) vision:sync 3 lipsync" data-section="v2v">
+  <header>
+    <div>
+      <h3>sync-3 Lipsync</h3>
+      <p class="tagline">Best lipsync (clip + dialogue)</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em> <em class="mod">FINISH</em></div>
+  </header>
+  <p class="id">vision:sync 3 lipsync</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Source clip + dialogue audio. Est. $8/min.</li><li>Prompt unused — don't fight it.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not a generator. Needs a decent face take.</li><li>No duration enum.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Match VO to a talking head</li><li>Fix mouth on a take</li></ul></div>
+  </div>
+</article></section><section id="extend"><div class="sec-head"><h2>Extend</h2><p>Continue a clip. Prompt plus native audio on FLUX 3.</p></div>
+<article class="card" data-name="flux 3 extend best native-audio extend studio:vid:flux 3 extend" data-section="extend">
+  <header>
+    <div>
+      <h3>FLUX 3 Extend</h3>
+      <p class="tagline">Best native-audio extend</p>
+    </div>
+    <div class="meta"><em class="mod">EXTEND</em> <em class="mod">V2V</em></div>
+  </header>
+  <p class="id">studio:vid:flux 3 extend</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Continue a clip with prompt + audio.</li><li>Draft→enhance wired.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Estimate currently uses the I2V rate ($2.55 / 15s) — real extend is costlier.</li><li>Source clip size/length limits.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Hold a walkthrough</li><li>Add a beat after a hero</li></ul></div>
+  </div>
+</article></section><section id="music"><div class="sec-head"><h2>Music</h2><p>Beds, songs, listing underscore.</p></div>
+<article class="card" data-name="minimax music 3 best full songs (up to 5 min) audio:minimax music 3" data-section="music">
+  <header>
+    <div>
+      <h3>MiniMax Music 3</h3>
+      <p class="tagline">Best full songs (up to 5 min)</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:minimax music 3</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Style/arrangement prompt, lyrics separate.</li><li>Cheap per second.</li><li>Scales with duration.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not a licensed-music guarantee.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>End-card songs</li><li>Longer beds</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="minimax music 2.6 best default listing underscore audio:minimax music 2.6" data-section="music">
+  <header>
+    <div>
+      <h3>MiniMax Music 2.6</h3>
+      <p class="tagline">Best default listing underscore</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:minimax music 2.6</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Instrumental-friendly.</li><li>V2 music default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>15s and 60s estimates currently match ($0.15) — likely capped.</li><li>Superseded in length by Music 3.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Listing beds</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="elevenlabs music best high-quality background music audio:elevenlabs music" data-section="music">
+  <header>
+    <div>
+      <h3>ElevenLabs Music</h3>
+      <p class="tagline">Best high-quality background music</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:elevenlabs music</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Duration 3s–3 min.</li><li>Instrumental-friendly.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Pricier than MiniMax Music 3.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Premium listing beds</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="google lyria 3 pro best google full-song bed audio:lyria 3 pro" data-section="music">
+  <header>
+    <div>
+      <h3>Google Lyria 3 Pro</h3>
+      <p class="tagline">Best Google full-song bed</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:lyria 3 pro</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Up to 3 min, commercial use on fal.</li><li>Flat per track (duration doesn't change the quote).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>No per-second control in the estimate.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>When you want a Google song, not a timed bed</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="google lyria 2 best short google mood clip audio:lyria 2" data-section="music">
+  <header>
+    <div>
+      <h3>Google Lyria 2</h3>
+      <p class="tagline">Best short Google mood clip</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:lyria 2</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~30s ambient / mood.</li><li>Flat per track.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not a 3-minute song (that's Lyria 3).</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Instagram-length beds</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="sonilo music best licensed-commercial music claim audio:sonilo text music" data-section="music">
+  <header>
+    <div>
+      <h3>Sonilo Music</h3>
+      <p class="tagline">Best licensed-commercial music claim</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:sonilo text music</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Marketed commercial-use text→music.</li><li>Duration control.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less known than ElevenLabs / MiniMax.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>When license copy matters</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="stable audio 2.5 best long ambient beds audio:stable audio 25" data-section="music">
+  <header>
+    <div>
+      <h3>Stable Audio 2.5</h3>
+      <p class="tagline">Best long ambient beds</p>
+    </div>
+    <div class="meta"><em class="mod">MUSIC</em></div>
+  </header>
+  <p class="id">audio:stable audio 25</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Music/SFX beds, longer ambients.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less 'song' than MiniMax 3 / Lyria 3.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Room tone-ish music</li><li>Pads</li></ul></div>
+  </div>
+</article></section><section id="sfx"><div class="sec-head"><h2>Sound effects</h2><p>Whooshes, rooms, hits. Keep it short.</p></div>
+<article class="card" data-name="elevenlabs sfx v2 best default sfx audio:elevenlabs sfx v2" data-section="sfx">
+  <header>
+    <div>
+      <h3>ElevenLabs SFX V2</h3>
+      <p class="tagline">Best default SFX</p>
+    </div>
+    <div class="meta"><em class="mod">SFX</em></div>
+  </header>
+  <p class="id">audio:elevenlabs sfx v2</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Text→SFX 0.5–22s.</li><li>Optional seamless loop.</li><li>V2 SFX default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not music.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Whooshes, hits, loops</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="sonilo sfx best licensed sfx audio:sonilo text sfx" data-section="sfx">
+  <header>
+    <div>
+      <h3>Sonilo SFX</h3>
+      <p class="tagline">Best licensed SFX</p>
+    </div>
+    <div class="meta"><em class="mod">SFX</em></div>
+  </header>
+  <p class="id">audio:sonilo text sfx</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Commercial-use claim + duration control.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Smaller voice than ElevenLabs.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Licensed SFX beds</li></ul></div>
+  </div>
+</article></section><section id="voiceover"><div class="sec-head"><h2>Voiceover</h2><p>TTS for listing reads and avatar scripts.</p></div>
+<article class="card" data-name="minimax speech 02 hd best default tts (my voices) audio:minimax speech 02 hd" data-section="voiceover">
+  <header>
+    <div>
+      <h3>MiniMax Speech 02 HD</h3>
+      <p class="tagline">Best default TTS (My Voices)</p>
+    </div>
+    <div class="meta"><em class="mod">VOICEOVER</em></div>
+  </header>
+  <p class="id">audio:minimax speech 02 hd</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Emotion + speed.</li><li>V2 voice default.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Estimate ignores duration (character-based).</li><li>Empty prompt still shows a stub cost.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Listing reads</li><li>Avatar scripts</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="elevenlabs eleven v3 best natural tts with acting tags audio:elevenlabs v3" data-section="voiceover">
+  <header>
+    <div>
+      <h3>ElevenLabs Eleven v3</h3>
+      <p class="tagline">Best natural TTS with acting tags</p>
+    </div>
+    <div class="meta"><em class="mod">VOICEOVER</em></div>
+  </header>
+  <p class="id">audio:elevenlabs v3</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>[laughs], [whispers]. Stock voices.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Duration-blind estimate.</li><li>Stock voices only in this row.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Characterful VO</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="elevenlabs turbo v2.5 best fast multilingual tts audio:elevenlabs turbo" data-section="voiceover">
+  <header>
+    <div>
+      <h3>ElevenLabs Turbo v2.5</h3>
+      <p class="tagline">Best fast multilingual TTS</p>
+    </div>
+    <div class="meta"><em class="mod">VOICEOVER</em></div>
+  </header>
+  <p class="id">audio:elevenlabs turbo</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Quick listing reads, many languages.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less 'acted' than v3.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Draft VO</li><li>Non-English reads</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="grok tts best xai voices audio:grok tts" data-section="voiceover">
+  <header>
+    <div>
+      <h3>Grok TTS</h3>
+      <p class="tagline">Best xAI voices</p>
+    </div>
+    <div class="meta"><em class="mod">VOICEOVER</em></div>
+  </header>
+  <p class="id">audio:grok tts</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Eve, Ara, Leo, Rex, Sal.</li><li>Delivery notes map to wrappers.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Small voice set.</li><li>Duration-blind estimate.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Grok-stack VO</li></ul></div>
+  </div>
+</article></section><section id="upscale"><div class="sec-head"><h2>Upscale</h2><p>Delivery polish. Image and video.</p></div>
+<article class="card" data-name="topaz upscale (image) best photoreal image upscale tool:topaz-upscale-image" data-section="upscale">
+  <header>
+    <div>
+      <h3>Topaz Upscale (image)</h3>
+      <p class="tagline">Best photoreal image upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:topaz-upscale-image</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Listing/product stills to delivery res.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>ToolNode shows a static catalog cost — it does not re-quote on factor.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>4K stills</li><li>Crop recovery</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedvr upscale (image) best cheap image upscale tool:seedvr-upscale-image" data-section="upscale">
+  <header>
+    <div>
+      <h3>SeedVR Upscale (image)</h3>
+      <p class="tagline">Best cheap image upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:seedvr-upscale-image</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.04 / still.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Less 'photo lab' than Topaz.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume stills</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="recraft crisp upscale best tiny/cheap upscale tool:recraft-crisp-upscale" data-section="upscale">
+  <header>
+    <div>
+      <h3>Recraft Crisp Upscale</h3>
+      <p class="tagline">Best tiny/cheap upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:recraft-crisp-upscale</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.004 / still.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not Topaz.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>UI/graphic stills</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="topaz wonder 3.5 best generative image upscale tool:topaz-wonder-35" data-section="upscale">
+  <header>
+    <div>
+      <h3>Topaz Wonder 3.5</h3>
+      <p class="tagline">Best generative image upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:topaz-wonder-35</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Creative/generative upscale (~$0.24).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Can invent detail — don't use on legal photos.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>AI stills that need size</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="flux video upscale best flux 3 video sr tool:flux-video-upscale" data-section="upscale">
+  <header>
+    <div>
+      <h3>FLUX Video Upscale</h3>
+      <p class="tagline">Best FLUX 3 video SR</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:flux-video-upscale</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>1080p / 2K / 4K path after any generator.</li><li>Catalog ~$1.40 / 5s @1080p.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Confirm precise vs creative tier at run time.</li><li>Pricey versus ByteDance upscale.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Delivery 4K from a 720p generate</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="seedvr2 video upscale best general video upscale tool:seedvr2-video-upscale" data-section="upscale">
+  <header>
+    <div>
+      <h3>SeedVR2 Video Upscale</h3>
+      <p class="tagline">Best general video upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:seedvr2-video-upscale</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Solid 1080p quote (~$0.31 / 5s).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not Topaz Starlight.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Batch video SR</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="bytedance video upscale best cheap video upscale tool:bytedance-video-upscale" data-section="upscale">
+  <header>
+    <div>
+      <h3>ByteDance Video Upscale</h3>
+      <p class="tagline">Best cheap video upscale</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:bytedance-video-upscale</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>~$0.036 / 5s @1080p.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Quality trails FLUX / Topaz.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Volume SR</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="topaz video (proteus / artemis / nyx / starlight / gaia) best topaz video finish — quotes are placeholders tool:topaz-video-placeholder" data-section="upscale">
+  <header>
+    <div>
+      <h3>Topaz video (Proteus / Artemis / Nyx / Starlight / Gaia)</h3>
+      <p class="tagline">Best Topaz video finish — quotes are placeholders</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em> <em class="mod">FINISH</em></div>
+  </header>
+  <p class="id">tool:topaz-video-placeholder</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Real Topaz SKUs are in the dropdown (denoise, restore, CG, generative).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>V2 currently shows $0.10 / 5s / 1080p for almost every Topaz video SKU. Don't trust the number.</li><li>ToolNode does not re-estimate on duration.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Pick the named SKU for the job; treat cost as TBD</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="realesrgan video upscale best open video sr tool:realesrgan-video" data-section="upscale">
+  <header>
+    <div>
+      <h3>RealESRGAN Video Upscale</h3>
+      <p class="tagline">Best open video SR</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em></div>
+  </header>
+  <p class="id">tool:realesrgan-video</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Classic upscaler, ~$0.44 / 5s.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Older look than FLUX / Topaz.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Fallback SR</li></ul></div>
+  </div>
+</article></section><section id="finish"><div class="sec-head"><h2>Finish / restore</h2><p>Denoise, restore, deblur, interpolate, lipsync, talking heads.</p></div>
+<article class="card" data-name="sync-3 lipsync best lipsync (clip + dialogue) vision:sync 3 lipsync" data-section="finish">
+  <header>
+    <div>
+      <h3>sync-3 Lipsync</h3>
+      <p class="tagline">Best lipsync (clip + dialogue)</p>
+    </div>
+    <div class="meta"><em class="mod">V2V</em> <em class="mod">FINISH</em></div>
+  </header>
+  <p class="id">vision:sync 3 lipsync</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Source clip + dialogue audio. Est. $8/min.</li><li>Prompt unused — don't fight it.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>Not a generator. Needs a decent face take.</li><li>No duration enum.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Match VO to a talking head</li><li>Fix mouth on a take</li></ul></div>
+  </div>
+</article>
+<article class="card" data-name="topaz video (proteus / artemis / nyx / starlight / gaia) best topaz video finish — quotes are placeholders tool:topaz-video-placeholder" data-section="finish">
+  <header>
+    <div>
+      <h3>Topaz video (Proteus / Artemis / Nyx / Starlight / Gaia)</h3>
+      <p class="tagline">Best Topaz video finish — quotes are placeholders</p>
+    </div>
+    <div class="meta"><em class="mod">UPSCALE</em> <em class="mod">FINISH</em></div>
+  </header>
+  <p class="id">tool:topaz-video-placeholder</p>
+  <div class="cols">
+    <div><h4>Strengths</h4><ul><li>Real Topaz SKUs are in the dropdown (denoise, restore, CG, generative).</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>V2 currently shows $0.10 / 5s / 1080p for almost every Topaz video SKU. Don't trust the number.</li><li>ToolNode does not re-estimate on duration.</li></ul></div>
+    <div><h4>Use for</h4><ul><li>Pick the named SKU for the job; treat cost as TBD</li></ul></div>
+  </div>
+</article></section>
+  <p class="empty" id="empty">No models match.</p>
+</main>
+<script>
+const q = document.getElementById('q');
+const cards = [...document.querySelectorAll('.card')];
+const count = document.getElementById('count');
+const empty = document.getElementById('empty');
+function paint() {
+  const term = q.value.trim().toLowerCase();
+  let n = 0;
+  cards.forEach(c => {
+    const on = !term || c.dataset.name.includes(term);
+    c.style.display = on ? '' : 'none';
+    if (on) n++;
+  });
+  document.querySelectorAll('section').forEach(s => {
+    const any = [...s.querySelectorAll('.card')].some(c => c.style.display !== 'none');
+    s.style.display = any ? '' : 'none';
+  });
+  count.textContent = n + ' models';
+  empty.style.display = n ? 'none' : 'block';
+}
+q.addEventListener('input', paint);
+paint();
+const links = [...document.querySelectorAll('nav a')];
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(a => a.classList.toggle('active', a.dataset.section === e.target.id));
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('main section').forEach(s => io.observe(s));
+</script>
+</body>
+</html>

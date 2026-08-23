@@ -3339,6 +3339,17 @@ function StudioCanvas() {
           >
             ⚙
           </button>
+          <button
+            type="button"
+            className="library-toggle"
+            aria-label="Model Guide"
+            title="Model Guide"
+            onClick={() => {
+              window.open("/model-guide.html", "_blank", "noopener,noreferrer");
+            }}
+          >
+            Model Guide
+          </button>
           <div>
             <h1>AI Media Studio V2</h1>
             <p>Wheel zoom · Middle-drag pan</p>
