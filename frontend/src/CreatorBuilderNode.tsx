@@ -44,9 +44,11 @@ import {
   composeCharacterIdentity,
   composeCostumeBrief,
   collectDressFrontRefs,
+  composeCharacterSheetPrompt,
   composeCostumePrompt,
   composeCostumeSheetPrompt,
   composeDressPrompt,
+  composeDressSheetPrompt,
   composePropBrief,
   composePropStill,
   composeSceneBrief,
@@ -479,6 +481,54 @@ function CharacterForm({
     } catch (err: unknown) {
       console.error("Angle Result spawn failed", err);
       const msg = err instanceof Error ? err.message : "Could not open Result node.";
+      setError(msg);
+      toast(msg, true);
+    }
+  }
+
+  function openCharacterSheet() {
+    const ident = ensureIdentity();
+    const refs: string[] = [];
+    for (const slot of ANGLE_ACTIONS) {
+      const p = data.doneSlots?.[slot] || "";
+      if (p && !refs.includes(p)) refs.push(p);
+    }
+    if (!refs.length) {
+      setError("Generate at least one angle first.");
+      return;
+    }
+    const label = name.trim() || "Character";
+    const sizes = sizeChoices(r2iRow);
+    const quals = qualityChoices(r2iRow);
+    const sheetSize = pickSheetResolution(sizes);
+    try {
+      spawnAngleResult({
+        builderId,
+        slot: COSTUME_SHEET_SLOT,
+        label: "Character sheet",
+        prompt: composeCharacterSheetPrompt(label),
+        generating: false,
+        error: null,
+        focus: true,
+        resolution: pickDefaultResolution(quals) || sheetSize,
+        resolutionChoices: sizes,
+        aspect: sheetSize,
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: refs[0],
+        extraRefs: refs.slice(1),
+        maxRefs: sheetR2iRefCap(r2iRow),
+        wardrobe: identityFields.wardrobe,
+        name: label,
+        sheetKind: "character",
+      });
+      setError(null);
+      data.onSession?.(sessionPayload(data.sessionAssetId || "", ident, label));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Character Sheet.";
       setError(msg);
       toast(msg, true);
     }
@@ -954,6 +1004,16 @@ function CharacterForm({
               </button>
             ))}
           </div>
+          <div className="prompt-actions">
+            <button
+              type="button"
+              className="generate"
+              disabled={!Object.values(data.doneSlots || {}).some(Boolean)}
+              onClick={() => openCharacterSheet()}
+            >
+              {data.doneSlots?.sheet ? "Regenerate Character Sheet" : "Generate Character Sheet"}
+            </button>
+          </div>
         </>
       ) : (
         <p className="hint">Optional: after one hero upload, Generate Side / Close-up from Front.</p>
@@ -1263,7 +1323,6 @@ function CostumeForm({
       return;
     }
     const cap = sheetR2iRefCap(r2iRow);
-    const packed = refs.slice(0, cap);
     const sizes = sizeChoices(r2iRow);
     const quals = qualityChoices(r2iRow);
     const sheetSize = pickSheetResolution(sizes);
@@ -1286,11 +1345,12 @@ function CostumeForm({
           t2iModel: models.t2iId,
           r2iModel: models.r2iId || models.t2iId,
           assetId: id,
-          sourceStill: packed[0],
-          extraRefs: packed.slice(1),
+          sourceStill: refs[0],
+          extraRefs: refs.slice(1),
           maxRefs: cap,
           wardrobe: outfit,
           name: label,
+          sheetKind: "costume",
         });
       });
       setError(null);
@@ -1570,6 +1630,8 @@ function DressForm({
   const [name, setName] = useState("");
   const [lockFace, setLockFace] = useState(false);
   const [useFullPacks, setUseFullPacks] = useState(false);
+  const [extraOn, setExtraOn] = useState<Record<string, boolean>>({});
+  const [dressSize, setDressSize] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
@@ -1580,7 +1642,17 @@ function DressForm({
   const maxRefs = sheetR2iRefCap(r2iRow);
   const canFullPacks = maxRefs > 3;
   const hasCloseup = Boolean(char?.identity?.closeup);
-  const estimate = useSheetEstimate("character", models.r2iId, models.r2iId, [...CORE_SLOTS], models);
+  const haveSheet = Boolean(data.doneSlots?.sheet);
+  const dressSizes = sizeChoices(r2iRow);
+  const dressQuals = qualityChoices(r2iRow);
+  const estimate = useSheetEstimate(
+    "character",
+    models.r2iId,
+    models.r2iId,
+    ["sheet"],
+    models,
+    { t2i: dressSize, r2i: dressSize },
+  );
 
   useEffect(() => {
     fetch("/assets?kind=character")
@@ -1601,6 +1673,32 @@ function DressForm({
       .catch(() => undefined);
   }, [data.seedCharacterId, data.seedCostumeId]);
 
+  const extraCandidates = useMemo(() => {
+    const base = new Set(
+      collectDressFrontRefs({
+        characterIdentity: char?.identity,
+        characterPrimarySlot: char?.primary_slot,
+        characterStill: char?.still_path || "",
+        costumeIdentity: costume?.identity,
+        costumePrimarySlot: costume?.primary_slot,
+        costumeStill: costume?.still_path || "",
+        maxRefs,
+      }),
+    );
+    return [
+      { id: "c-front", label: "Character Front", path: char?.identity?.front },
+      { id: "c-side", label: "Character Side", path: char?.identity?.side },
+      { id: "c-back", label: "Character Back", path: char?.identity?.back },
+      { id: "c-closeup", label: "Character Close-up", path: char?.identity?.closeup },
+      { id: "k-front", label: "Costume Front", path: costume?.identity?.front },
+      { id: "k-detail", label: "Costume Close-up", path: costume?.identity?.closeup },
+    ].filter((o) => o.path && !base.has(o.path)) as { id: string; label: string; path: string }[];
+  }, [char, costume, maxRefs]);
+
+  function extraPaths() {
+    return extraCandidates.filter((o) => extraOn[o.id]).map((o) => o.path);
+  }
+
   function dressFrontRefs(): string[] {
     return collectDressFrontRefs({
       characterIdentity: char?.identity,
@@ -1611,6 +1709,7 @@ function DressForm({
       costumeStill: costume?.still_path || "",
       lockFace: lockFace && hasCloseup,
       useFullPacks: useFullPacks && canFullPacks,
+      extraPaths: extraPaths(),
       maxRefs,
     });
   }
@@ -1714,9 +1813,64 @@ function DressForm({
       });
   }
 
+  function openDressedSheet() {
+    if (!char || !costume) {
+      setError("Pick a Character and a Costume.");
+      return;
+    }
+    const ident =
+      char.fields?.identity_prompt ||
+      composeCharacterIdentity(char.fields || {}, char.notes || "");
+    const outfit = costume.fields?.wardrobe || costume.name;
+    const refs = dressFrontRefs();
+    if (refs.length < 1) {
+      setError("Need a Character sheet (or Front) still.");
+      return;
+    }
+    if (refs.length > maxRefs) {
+      setError(
+        `${r2iRow?.label || "This model"} allows at most ${maxRefs} reference images (got ${refs.length}).`,
+      );
+      return;
+    }
+    const sheetSize = dressSizes.includes(dressSize) ? dressSize : pickSheetResolution(dressSizes);
+    void ensureVariant()
+      .then((id) => {
+        spawnAngleResult({
+          builderId,
+          slot: COSTUME_SHEET_SLOT,
+          label: "Dressed sheet",
+          prompt: composeDressSheetPrompt(ident, outfit),
+          generating: false,
+          error: null,
+          focus: true,
+          resolution: pickDefaultResolution(dressQuals) || sheetSize,
+          resolutionChoices: dressSizes,
+          aspect: sheetSize,
+          quality: pickDefaultResolution(dressQuals),
+          qualityChoices: dressQuals,
+          t2iModel: models.t2iId,
+          r2iModel: models.r2iId || models.t2iId,
+          assetId: id,
+          sourceStill: refs[0],
+          extraRefs: refs.slice(1),
+          maxRefs,
+          wardrobe: outfit,
+          name: name.trim() || `${char.name} / ${costume.name}`,
+          sheetKind: "dress",
+        });
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Could not open dressed sheet.";
+        setError(msg);
+        toast(msg, true);
+      });
+  }
+
   async function save() {
-    if (!haveFront) {
-      setError("Generate costumed Front first.");
+    if (!haveFront && !haveSheet) {
+      setError("Generate costumed Front or a dressed sheet first.");
       return;
     }
     setSaving(true);
@@ -1748,10 +1902,9 @@ function DressForm({
   return (
     <>
       <p className="hint">
-        Dress Front refs: Character primary (sheet or Front) + Costume sheet
-        (or Costume Front if no sheet yet)
-        {maxRefs >= 3 ? ". Optional lock face adds Close-up as 3rd ref" : ""}.
-        Side / Close-up R2I from the new costumed Front only.
+        Default refs: Character Sheet + Costume Sheet (else Front stills). Optional extra
+        angles fill up to the model max. Generate Dressed Sheet dresses the entire
+        character grid in one go. Side / Close-up still come from a costumed Front.
       </p>
       <label className="builder-field">
         <span className="field-label">Character</span>
@@ -1785,6 +1938,22 @@ function DressForm({
         />
       </label>
       <ModelPickers models={models} r2iOnly />
+      {dressSizes.length ? (
+        <label className="builder-field">
+          <span className="field-label">Aspect / size</span>
+          <select
+            className="model"
+            value={dressSizes.includes(dressSize) ? dressSize : pickSheetResolution(dressSizes)}
+            onChange={(e) => setDressSize(e.target.value)}
+          >
+            {dressSizes.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label className="param">
         <span>
           <input
@@ -1797,6 +1966,43 @@ function DressForm({
           {hasCloseup ? " (adds Character Close-up as 3rd ref)" : " (Character has no Close-up still)"}
         </span>
       </label>
+      {extraCandidates.length ? (
+        <div className="layer-stack">
+          <span className="field-label layer-title">Extra angles (up to model max)</span>
+          {extraCandidates.map((o) => (
+            <label key={o.id} className="param">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(extraOn[o.id])}
+                  onChange={() => {
+                    const next = { ...extraOn, [o.id]: !extraOn[o.id] };
+                    const paths = extraCandidates.filter((x) => next[x.id]).map((x) => x.path);
+                    const n = collectDressFrontRefs({
+                      characterIdentity: char?.identity,
+                      characterPrimarySlot: char?.primary_slot,
+                      characterStill: char?.still_path || "",
+                      costumeIdentity: costume?.identity,
+                      costumePrimarySlot: costume?.primary_slot,
+                      costumeStill: costume?.still_path || "",
+                      lockFace: lockFace && hasCloseup,
+                      extraPaths: paths,
+                      maxRefs,
+                    }).length;
+                    if (n > maxRefs) {
+                      setError(`This model allows at most ${maxRefs} reference images.`);
+                      return;
+                    }
+                    setExtraOn(next);
+                    setError(null);
+                  }}
+                />{" "}
+                {o.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      ) : null}
       {canFullPacks ? (
         <label className="param">
           <span>
@@ -1805,15 +2011,20 @@ function DressForm({
               checked={useFullPacks}
               onChange={(e) => setUseFullPacks(e.target.checked)}
             />{" "}
-            Use full packs (all character + costume angles)
+            Use full packs (all remaining angles)
           </span>
         </label>
       ) : null}
       <p className="estimate">
         {char && costume
-          ? `Front will send ${dressFrontRefs().length} / ${maxRefs} refs. ${estimate}`
+          ? `${dressFrontRefs().length} / ${maxRefs} refs. ${estimate}`
           : estimate}
       </p>
+      <div className="prompt-actions">
+        <button type="button" className="generate" onClick={() => openDressedSheet()}>
+          Generate Dressed Sheet
+        </button>
+      </div>
       <div className="prompt-actions">
         {CORE_SLOTS.map((slot) => (
           <button
@@ -1828,7 +2039,12 @@ function DressForm({
         ))}
       </div>
       <div className="prompt-actions">
-        <button type="button" className="ghost" disabled={!haveFront || saving} onClick={() => void save()}>
+        <button
+          type="button"
+          className="ghost"
+          disabled={(!haveFront && !haveSheet) || saving}
+          onClick={() => void save()}
+        >
           {saving ? "Saving…" : "Save variant"}
         </button>
       </div>

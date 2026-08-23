@@ -63,7 +63,15 @@ import {
   type AngleGenerateDetail,
   type AngleSpawnDetail,
 } from "./angleSpawn";
-import { CORE_SLOTS, EXTRA_SLOTS, SLOT_LABEL } from "./sheetUi";
+import {
+  CORE_SLOTS,
+  EXTRA_SLOTS,
+  SLOT_LABEL,
+  collectSheetAngleRefs,
+  composeCharacterSheetPrompt,
+  composeCostumeSheetPrompt,
+  preferredIdentityPaths,
+} from "./sheetUi";
 import { bindToast, toast } from "./toast";
 import {
   assetToLibraryItem,
@@ -1281,6 +1289,7 @@ function StudioCanvas() {
         "threequarter_front",
         "threequarter_back",
         "top",
+        "sheet",
       ];
       const idx = Math.max(0, order.indexOf(slot));
       let panTo: { x: number; y: number } | null = patch.focus ? { x: 0, y: 0 } : null;
@@ -1323,6 +1332,8 @@ function StudioCanvas() {
                   sourceStill: patch.sourceStill || n.data.sourceStill,
                   extraRefs: patch.extraRefs ?? n.data.extraRefs,
                   maxRefs: patch.maxRefs ?? n.data.maxRefs,
+                  modelId: patch.modelId ?? n.data.modelId,
+                  sheetKind: patch.sheetKind ?? n.data.sheetKind,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
               };
@@ -1354,6 +1365,8 @@ function StudioCanvas() {
               sourceStill: patch.sourceStill ?? prev?.sourceStill,
               extraRefs: patch.extraRefs ?? prev?.extraRefs,
               maxRefs: patch.maxRefs ?? prev?.maxRefs,
+              modelId: patch.modelId ?? prev?.modelId,
+              sheetKind: patch.sheetKind ?? prev?.sheetKind,
               wardrobe: patch.wardrobe ?? prev?.wardrobe,
               name: patch.name ?? prev?.name,
               generating: patch.generating ?? prev?.generating ?? false,
@@ -1402,6 +1415,8 @@ function StudioCanvas() {
         });
         setEdges((current) => {
           if (current.some((e) => e.id === edgeId)) return current;
+          const hasBuilder = current.some((n) => n.id === builderId);
+          if (!hasBuilder) return current;
           return addEdge(
             {
               id: edgeId,
@@ -1427,6 +1442,49 @@ function StudioCanvas() {
     [closeNode, setCenter, setEdges, setNodes],
   );
   upsertSheetAngleRef.current = upsertSheetAngle;
+
+  const spawnLibrarySheet = useCallback(
+    (asset: StudioAsset) => {
+      const kind = asset.kind === "costume" ? "costume" : "character";
+      const refs = collectSheetAngleRefs(asset.identity, kind);
+      if (!refs.length) {
+        toast("Generate at least one angle first.", true);
+        return;
+      }
+      const builderId = `lib-${asset.id}`;
+      const prompt =
+        kind === "costume"
+          ? composeCostumeSheetPrompt(asset.fields?.wardrobe || asset.name || "")
+          : composeCharacterSheetPrompt(asset.name || "character");
+      setBuilderSessions((cur) => ({
+        ...cur,
+        [builderId]: {
+          assetId: asset.id,
+          t2iModel: "",
+          r2iModel: "",
+          slots: ["sheet"],
+          name: asset.name,
+          fields: asset.fields,
+          wardrobe: asset.fields?.wardrobe || "",
+          done: { ...(asset.identity || {}) },
+        },
+      }));
+      upsertSheetAngle(builderId, "sheet", {
+        slot: "sheet",
+        label: kind === "costume" ? "Costume sheet" : "Character sheet",
+        prompt,
+        focus: true,
+        assetId: asset.id,
+        sourceStill: refs[0],
+        extraRefs: refs.slice(1),
+        name: asset.name,
+        wardrobe: asset.fields?.wardrobe || "",
+        sheetKind: kind,
+      });
+      setLibraryOpen(false);
+    },
+    [upsertSheetAngle],
+  );
 
   useEffect(() => {
     function onSpawn(ev: Event) {
@@ -2180,7 +2238,15 @@ function StudioCanvas() {
             ? setScenes
             : setProps;
       const entry = catalog.find((r) => r.id === catalogId) ?? null;
+      const identPaths = catalogId
+        ? preferredIdentityPaths(
+            entry?.identity,
+            entry?.primary_slot,
+            entry?.still_path || "",
+          )
+        : [];
       const mapped = entry ? catalogToItem(entry) : null;
+      if (mapped && identPaths[0]) mapped.path = identPaths[0];
       setter((cur) =>
         cur.map((r) => {
           if (r.id !== slotId) return r;
@@ -2195,9 +2261,7 @@ function StudioCanvas() {
             ...r,
             catalogId,
             item: catalogId ? mapped || r.item : r.item,
-            identityPaths: catalogId
-              ? Object.values(entry?.identity || {}).filter(Boolean)
-              : [],
+            identityPaths: identPaths,
             label:
               r.label ||
               (catalogId
@@ -2631,6 +2695,8 @@ function StudioCanvas() {
                     : builderSessions[builderId]?.done?.front || ""),
                 extraRefs: n.data.extraRefs,
                 maxRefs: n.data.maxRefs,
+                modelId: n.data.modelId,
+                sheetKind: n.data.sheetKind,
                 wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
                 name: n.data.name || builderSessions[builderId]?.name,
                 onPrompt: (prompt) =>
@@ -3419,6 +3485,7 @@ function StudioCanvas() {
         onClose={() => setLibraryOpen(false)}
         onPick={attachMedia}
         onNewAsset={(kind, seeds) => addCreatorBuilder(kind, undefined, seeds)}
+        onSpawnSheet={spawnLibrarySheet}
       />
       <MediaLightbox />
       {toastMsg ? (

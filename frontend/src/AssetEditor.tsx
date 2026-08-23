@@ -4,15 +4,11 @@ import { toast } from "./toast";
 import { openLightbox } from "./lightbox";
 import {
   CORE_SLOTS,
-  COSTUME_PLATE_SLOTS,
   COSTUME_SHEET_SLOT,
   EXTRA_SLOTS,
   SLOT_LABEL,
-  composeCostumeSheetPrompt,
   pickDefaultResolution,
-  pickSheetResolution,
   qualityChoices,
-  sheetR2iRefCap,
   sizeChoices,
   useSheetModels,
 } from "./sheetUi";
@@ -24,11 +20,12 @@ type Props = {
   onChanged: (asset: StudioAsset) => void;
   onDress?: (characterId: string) => void;
   onUseRef?: (asset: StudioAsset) => void;
+  onSpawnSheet?: (asset: StudioAsset) => void;
 };
 
 const ALL = [...CORE_SLOTS, ...EXTRA_SLOTS];
 
-export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef }: Props) {
+export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef, onSpawnSheet }: Props) {
   const [row, setRow] = useState(asset);
   const [name, setName] = useState(asset.name || "");
   const [notes, setNotes] = useState(asset.notes || "");
@@ -62,6 +59,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   const hasSheet = Boolean(ident.sheet || row.identity?.sheet);
   const costumeAngles = filled.length;
   const canCostumeSheet = isCostume && costumeAngles >= 1;
+  const canCharacterSheet = isChar && costumeAngles >= 1;
 
   async function persistMeta() {
     setBusy(true);
@@ -147,55 +145,12 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     }
   }
 
-  async function generateCostumeSheet() {
-    const refs: string[] = [];
-    for (const slot of COSTUME_PLATE_SLOTS) {
-      const p = row.identity?.[slot] || "";
-      if (p && !refs.includes(p)) refs.push(p);
-    }
-    if (!refs.length) {
-      setError("Generate at least one costume angle first.");
+  function openSheetNode() {
+    if (!onSpawnSheet) {
+      setError("Sheet generate node is unavailable.");
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const r2i = models.r2iId || models.t2iId;
-      const sizeRow = models.r2i.find((m) => m.id === r2i) || models.t2i.find((m) => m.id === models.t2iId);
-      const cap = sheetR2iRefCap(sizeRow);
-      const packed = refs.slice(0, cap);
-      const sizes = sizeChoices(sizeRow);
-      const quals = qualityChoices(sizeRow);
-      const sheetSize = pickSheetResolution(sizes);
-      const outfit = row.fields?.wardrobe || row.name || "the costume";
-      const res = await fetch("/assets/sheet/angle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          asset_id: row.id,
-          slot: COSTUME_SHEET_SLOT,
-          model_id: r2i,
-          source_still: packed[0],
-          extra_refs: packed.slice(1),
-          prompt: composeCostumeSheetPrompt(outfit),
-          wardrobe: outfit,
-          resolution: pickDefaultResolution(quals) || sheetSize,
-          aspect: sheetSize,
-        }),
-      });
-      const body = await readJson(res);
-      if (!res.ok) throw new Error(errorFromBody(body, "Costume sheet failed."));
-      const item = body.item as StudioAsset;
-      setRow(item);
-      onChanged(item);
-      toast("Costume sheet saved as primary still.");
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Costume sheet failed.";
-      setError(msg);
-      toast(msg, true);
-    } finally {
-      setBusy(false);
-    }
+    onSpawnSheet(row);
   }
 
   return (
@@ -249,9 +204,19 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                 type="button"
                 className="generate"
                 disabled={busy}
-                onClick={() => void generateCostumeSheet()}
+                onClick={() => openSheetNode()}
               >
-                {busy ? "Generating…" : hasSheet ? "Regenerate Costume Sheet" : "Generate Costume Sheet"}
+                {hasSheet ? "Regenerate Costume Sheet" : "Generate Costume Sheet"}
+              </button>
+            ) : null}
+            {canCharacterSheet ? (
+              <button
+                type="button"
+                className="generate"
+                disabled={busy}
+                onClick={() => openSheetNode()}
+              >
+                {hasSheet ? "Regenerate Character Sheet" : "Generate Character Sheet"}
               </button>
             ) : null}
           </div>

@@ -799,14 +799,77 @@ export function composePropStill(brief: string): string {
 }
 
 /** Identity paragraph + one framing line for the angle. No API. */
+const SHEET_NO_GARBLED =
+  "No gibberish text, no watermarks, no logos, no random letters or captions.";
+
 export function composeCostumeSheetPrompt(outfit: string, extra = ""): string {
   const bits = [
     `Single costume reference SHEET of: ${bit(outfit) || "the described costume"}. One image only.`,
-    "Clean studio grid of faceless mannequin plates: Front, Side, and Back (full-body, entire garment visible) plus a detail strip of fabric texture, trim, closures, and any emblem, and a small color-palette row.",
-    "Labeled or clean unlabeled grid. Match the attached costume stills. No face, no human identity, no living model, no environment. Photoreal garments, even studio lighting. Dark studio ground.",
+    "Build the sheet from the attached costume angle stills: faceless mannequin Front, Side, and Back (full-body) plus detail callouts of fabric, trim, closures, and any emblem, and a small color-palette row.",
+    "Labeled or clean unlabeled grid. Match the attached stills. No face, no human identity, no living model, no environment. Photoreal garments, even studio lighting. Dark studio ground.",
+    SHEET_NO_GARBLED,
   ];
   if (bit(extra)) bits.push(bit(extra));
   return bits.join(" ");
+}
+
+export function composeCharacterSheetPrompt(name: string, extra = ""): string {
+  const who = bit(name) || "this character";
+  const bits = [
+    `Production character SHEET of ${who}. One image only.`,
+    "Clean studio grid built from the attached angle stills (front, side, back, close-up, and any extra views).",
+    "Same person in every panel — identity, face, hair, body, and wardrobe consistent. Isolated on a clean plate. Photoreal. Optional small clean labels only.",
+    SHEET_NO_GARBLED,
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join(" ");
+}
+
+export function composeDressSheetPrompt(identity: string, outfit: string, extra = ""): string {
+  const bits = [
+    `Production character SHEET of ${bit(identity) || "the character"} dressed in: ${bit(outfit) || "the attached costume"}. One image only.`,
+    "Take the attached character sheet (or angle stills) and dress EVERY pose and angle in the attached costume. Keep identity, face, hair, age, skin, and body.",
+    "Same grid layout: full-body front/side/back plus close-up, now wearing the costume. Match costume color, cut, and fabric. Isolated on a clean plate. Photoreal.",
+    SHEET_NO_GARBLED,
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join(" ");
+}
+
+export const SHEET_NO_TEXT =
+  "No text, no labels, no lettering, no captions anywhere on the image.";
+
+export function collectSheetAngleRefs(
+  identity?: Record<string, string> | null,
+  kind: "character" | "costume" = "character",
+): string[] {
+  const slots =
+    kind === "costume" ? COSTUME_PLATE_SLOTS : [...CORE_SLOTS, ...EXTRA_SLOTS];
+  const out: string[] = [];
+  for (const slot of slots) {
+    const p = String(identity?.[slot] || "").trim();
+    if (p && !out.includes(p)) out.push(p);
+  }
+  return out;
+}
+
+export function preferredIdentityPaths(
+  identity?: Record<string, string> | null,
+  primarySlot?: string,
+  still?: string,
+): string[] {
+  const sheet = String(identity?.sheet || "").trim();
+  if (sheet) return [sheet];
+  const primary = sheetPrimaryPath(identity, primarySlot, still);
+  return primary ? [primary] : [];
+}
+
+export function modelCostLabel(row?: ModelRow | null): string {
+  const usd = Number(row?.cost_estimate_usd);
+  if (Number.isFinite(usd) && usd > 0) return `Est. cost: $${usd.toFixed(2)}`;
+  const cost = String(row?.cost || "").trim();
+  if (cost) return cost.startsWith("Est.") ? cost : `Est. cost: ${cost}`;
+  return "Est. cost: —";
 }
 
 export function composeCostumePrompt(slot: string, outfit: string, extra = ""): string {
@@ -886,6 +949,7 @@ export function collectDressFrontRefs(opts: {
   costumeStill?: string;
   lockFace?: boolean;
   useFullPacks?: boolean;
+  extraPaths?: string[];
   maxRefs?: number;
 }): string[] {
   const out: string[] = [];
@@ -903,6 +967,10 @@ export function collectDressFrontRefs(opts: {
   );
   const cap = opts.maxRefs && opts.maxRefs > 0 ? opts.maxRefs : 3;
   if (opts.lockFace && out.length < cap) add(opts.characterIdentity?.closeup);
+  for (const p of opts.extraPaths || []) {
+    if (out.length >= cap) break;
+    add(p);
+  }
   if (opts.useFullPacks) {
     for (const slot of CORE_SLOTS) {
       if (out.length >= cap) break;

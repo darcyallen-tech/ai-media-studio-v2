@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { errorFromBody, readJson } from "./http";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
@@ -6,37 +6,74 @@ import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
 import ResizableMedia from "./ResizableMedia";
-import { sendToResolve } from "./toast";
+import { sendToResolve, toast } from "./toast";
+import {
+  modelCostLabel,
+  pickSheetResolution,
+  qualityChoices,
+  sheetR2iRefCap,
+  SHEET_NO_TEXT,
+  sizeChoices,
+  useSheetModels,
+} from "./sheetUi";
 import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types";
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
 export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
+  const isSheet = data.slot === "sheet";
+  const models = useSheetModels();
+  const sheetModels = useMemo(() => {
+    const r2i = Array.isArray(models.r2i) ? models.r2i.filter((m) => m?.id) : [];
+    const t2i = Array.isArray(models.t2i) ? models.t2i.filter((m) => m?.id) : [];
+    const out = [...r2i];
+    for (const m of t2i) {
+      if (!out.some((x) => x.id === m.id)) out.push(m);
+    }
+    return out;
+  }, [models.r2i, models.t2i]);
+  const [modelId, setModelId] = useState(
+    data.modelId || data.r2iModel || data.t2iModel || "",
+  );
+  const selectedModel =
+    sheetModels.find((m) => m.id === modelId) ||
+    sheetModels.find((m) => m.id === (data.r2iModel || data.t2iModel)) ||
+    sheetModels[0];
+  const liveSizes = isSheet ? sizeChoices(selectedModel) : [];
+  const liveQuals = isSheet ? qualityChoices(selectedModel) : [];
+  const sizeChoicesList = (
+    isSheet && liveSizes.length ? liveSizes : Array.isArray(data.resolutionChoices) ? data.resolutionChoices : []
+  ).filter(Boolean);
   const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
-  const sizeChoices = Array.isArray(data.resolutionChoices)
-    ? data.resolutionChoices.filter(Boolean)
-    : [];
   const [size, setSize] = useState(
     data.aspect ||
-      (sizeChoices.includes(data.resolution || "") ? data.resolution : "") ||
-      sizeChoices[0] ||
+      (sizeChoicesList.includes(data.resolution || "") ? data.resolution : "") ||
+      (isSheet ? pickSheetResolution(sizeChoicesList) : sizeChoicesList[0]) ||
       "",
   );
-  const qualityOpts = Array.isArray(data.qualityChoices)
-    ? data.qualityChoices.filter(Boolean)
-    : [];
+  const qualityOpts = (
+    isSheet && liveQuals.length ? liveQuals : Array.isArray(data.qualityChoices) ? data.qualityChoices : []
+  ).filter(Boolean);
   const [quality, setQuality] = useState(
     data.quality || qualityOpts[0] || "",
   );
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localUrl, setLocalUrl] = useState("");
+  const [noLabels, setNoLabels] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const cap = isSheet ? sheetR2iRefCap(selectedModel) : Number(data.maxRefs) || 0;
   useEffect(() => {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
   useEffect(() => {
     if (data.aspect && data.aspect !== size) setSize(data.aspect);
   }, [data.aspect]);
+  useEffect(() => {
+    if (!isSheet || !liveSizes.length) return;
+    setSize((cur) => (liveSizes.includes(cur) ? cur : pickSheetResolution(liveSizes)));
+    setQuality((cur) => (liveQuals.includes(cur) ? cur : liveQuals[0] || ""));
+  }, [selectedModel?.id]);
   useEffect(() => {
     if (!data.generating) setBusy(false);
   }, [data.generating]);
@@ -100,6 +137,40 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     });
   }
 
+  function packedRefCount() {
+    const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
+    const packed: string[] = [];
+    for (const p of [data.sourceStill || "", ...extras]) {
+      if (p && !packed.includes(p)) packed.push(p);
+    }
+    return packed.length;
+  }
+
+  async function confirmSheet() {
+    const assetId = data.assetId || "";
+    if (!assetId) {
+      setLocalError("Missing costume/character id — Generate first.");
+      return;
+    }
+    try {
+      const res = await fetch(`/assets/${assetId}/primary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primary_slot: "sheet" }),
+      });
+      const body = await readJson(res);
+      if (!res.ok) throw new Error(errorFromBody(body, "Could not set sheet as primary."));
+      setConfirmed(true);
+      toast("Sheet set as primary still.");
+      window.dispatchEvent(new Event("ams-assets-changed"));
+      data.onConfirmSheet?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not set primary.";
+      setLocalError(msg);
+      toast(msg, true);
+    }
+  }
+
   async function runAngleJob(ev?: { preventDefault?: () => void; stopPropagation?: () => void }) {
     ev?.preventDefault?.();
     ev?.stopPropagation?.();
@@ -111,7 +182,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       return;
     }
     if (slot !== "front" && !data.sourceStill) {
-      setLocalError(slot === "sheet" ? "Generate a costume angle first" : "Generate Front first");
+      setLocalError(slot === "sheet" ? "Generate at least one angle first" : "Generate Front first");
       return;
     }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
@@ -119,10 +190,11 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     for (const p of [data.sourceStill || "", ...extras]) {
       if (p && !packed.includes(p)) packed.push(p);
     }
-    const cap = Number(data.maxRefs) || 0;
-    if (cap > 0 && packed.length > cap) {
+    const refCap = isSheet ? cap : Number(data.maxRefs) || 0;
+    const sendRefs = isSheet && refCap > 0 ? packed.slice(0, refCap) : packed;
+    if (!isSheet && refCap > 0 && sendRefs.length > refCap) {
       setLocalError(
-        `This model allows at most ${cap} reference images (got ${packed.length}). Dress Front uses Character Front + Costume Front only.`,
+        `This model allows at most ${refCap} reference images (got ${sendRefs.length}).`,
       );
       return;
     }
@@ -159,13 +231,16 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         body: JSON.stringify({
           asset_id: assetId,
           slot,
-          model_id:
-            slot === "front" && !data.sourceStill
+          model_id: isSheet
+            ? selectedModel?.id || data.r2iModel || data.t2iModel || ""
+            : slot === "front" && !data.sourceStill
               ? data.t2iModel || ""
               : data.r2iModel || data.t2iModel || "",
-          prompt,
-          source_still: data.sourceStill || "",
-          extra_refs: Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [],
+          prompt: noLabels && isSheet && !prompt.includes("No text, no labels")
+            ? `${prompt} ${SHEET_NO_TEXT}`
+            : prompt,
+          source_still: sendRefs[0] || data.sourceStill || "",
+          extra_refs: sendRefs.slice(1),
           wardrobe: data.wardrobe || "",
           resolution: pickedQuality || pickedAspect || data.resolution || "",
           aspect: pickedAspect,
@@ -217,7 +292,14 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       </div>
       <div className="node-body nodrag">
         <p className="meta">
-          <span>{result.cost || (data.generating ? "Generating…" : "Cost: —")}</span>
+          <span>
+            {result.cost ||
+              (data.generating
+                ? "Generating…"
+                : isSheet
+                  ? modelCostLabel(selectedModel)
+                  : "Cost: —")}
+          </span>
           {result.duration_sec ? (
             <span>{formatDuration(result.duration_sec)}</span>
           ) : null}
@@ -281,19 +363,39 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         </div>
         {isAngle ? (
           <>
-            {sizeChoices.length ? (
+            {isSheet && sheetModels.length ? (
+              <label className="builder-field">
+                <span className="field-label">Model (T2I / multi-ref)</span>
+                <select
+                  className="model"
+                  value={selectedModel?.id || ""}
+                  disabled={data.generating || busy}
+                  onChange={(e) => {
+                    setModelId(e.target.value);
+                    data.onModel?.(e.target.value);
+                  }}
+                >
+                  {sheetModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label || m.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {sizeChoicesList.length ? (
               <label className="builder-field">
                 <span className="field-label">Aspect / size</span>
                 <select
                   className="model"
-                  value={sizeChoices.includes(size) ? size : sizeChoices[0]}
+                  value={sizeChoicesList.includes(size) ? size : sizeChoicesList[0]}
                   disabled={data.generating || busy}
                   onChange={(e) => {
                     setSize(e.target.value);
                     data.onResolution?.(e.target.value);
                   }}
                 >
-                  {sizeChoices.map((s) => (
+                  {sizeChoicesList.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
@@ -318,8 +420,29 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 </select>
               </label>
             ) : null}
+            {isSheet ? (
+              <label className="param">
+                <span>
+                  <input
+                    type="checkbox"
+                    checked={noLabels}
+                    disabled={data.generating || busy}
+                    onChange={(e) => setNoLabels(e.target.checked)}
+                  />{" "}
+                  No text / labels
+                </span>
+              </label>
+            ) : null}
+            <p className="estimate">
+              {isSheet
+                ? `${modelCostLabel(selectedModel)} · ${Math.min(
+                    packedRefCount(),
+                    cap || packedRefCount(),
+                  )} / ${cap || "—"} refs`
+                : result.cost || "Est. cost: —"}
+            </p>
             <label className="builder-field">
-              <span className="field-label">Angle prompt</span>
+              <span className="field-label">{isSheet ? "Sheet prompt" : "Angle prompt"}</span>
               <textarea
                 className="prompt nowheel"
                 rows={4}
@@ -345,6 +468,17 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                     ? "Regenerate"
                     : "Generate"}
               </button>
+              {isSheet && hasStill ? (
+                <button
+                  type="button"
+                  className="ghost nodrag"
+                  disabled={busy || confirmed}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => void confirmSheet()}
+                >
+                  {confirmed ? "Primary ✓" : "Confirm (set primary)"}
+                </button>
+              ) : null}
             </div>
             {localError || data.error ? (
               <p className="hint warn" role="alert">

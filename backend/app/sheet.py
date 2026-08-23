@@ -683,16 +683,53 @@ def costume_brief(fields: dict[str, Any] | None) -> str:
     return head
 
 
+SHEET_NO_GARBLED = (
+    "No gibberish text, no watermarks, no logos, no random letters or captions."
+)
+
+
 def costume_sheet_prompt(outfit: str, extra: str = "") -> str:
     outfit_s = _nv(outfit) or "the described costume"
     body = (
         f"Single costume reference SHEET of: {outfit_s}. One image only. "
-        "Clean studio grid of faceless mannequin plates: Front, Side, and Back "
-        "(full-body, entire garment visible) plus a detail strip of fabric texture, "
-        "trim, closures, and any emblem, and a small color-palette row. "
-        "Labeled or clean unlabeled grid. Match the attached costume stills. "
+        "Build the sheet from the attached costume angle stills: faceless mannequin "
+        "Front, Side, and Back (full-body) plus detail callouts of fabric, trim, "
+        "closures, and any emblem, and a small color-palette row. "
+        "Labeled or clean unlabeled grid. Match the attached stills. "
         "No face, no human identity, no living model, no environment. "
-        "Photoreal garments, even studio lighting. Dark studio ground."
+        "Photoreal garments, even studio lighting. Dark studio ground. "
+        + SHEET_NO_GARBLED
+    )
+    if _nv(extra):
+        body += f" {_nv(extra)}"
+    return body
+
+
+def character_sheet_prompt(name: str, extra: str = "") -> str:
+    who = _nv(name) or "this character"
+    body = (
+        f"Production character SHEET of {who}. One image only. "
+        "Clean studio grid built from the attached angle stills "
+        "(front, side, back, close-up, and any extra views). "
+        "Same person in every panel — identity, face, hair, body, and wardrobe consistent. "
+        "Isolated on a clean plate. Photoreal. Optional small clean labels only. "
+        + SHEET_NO_GARBLED
+    )
+    if _nv(extra):
+        body += f" {_nv(extra)}"
+    return body
+
+
+def dress_sheet_prompt(name: str, outfit: str, extra: str = "") -> str:
+    who = _nv(name) or "the character"
+    outfit_s = _nv(outfit) or "the attached costume"
+    body = (
+        f"Production character SHEET of {who} dressed in: {outfit_s}. One image only. "
+        "Take the attached character sheet (or angle stills) and dress EVERY pose and angle "
+        "in the attached costume. Keep identity, face, hair, age, skin, and body. "
+        "Same grid layout: full-body front/side/back plus close-up, now wearing the costume. "
+        "Match costume color, cut, and fabric. Isolated on a clean plate. Photoreal. "
+        + SHEET_NO_GARBLED
     )
     if _nv(extra):
         body += f" {_nv(extra)}"
@@ -909,6 +946,12 @@ def compose_angle_prompt(
     if kind == "prop":
         return prop_prompt(merged)
     outfit = wardrobe or _nv((fields or {}).get("wardrobe")) or costume_brief(fields)
+    if key == SHEET_SLOT:
+        if kind == "costume":
+            return costume_sheet_prompt(outfit, extra)
+        if is_costume or _nv((fields or {}).get("costume_id")):
+            return dress_sheet_prompt(str(name or merged.get("name") or ""), outfit, extra)
+        return character_sheet_prompt(str(name or merged.get("name") or ""), extra)
     if kind == "costume":
         return costume_prompt(key, outfit, extra)
     if is_costume or _nv((fields or {}).get("costume_id")):
@@ -1251,8 +1294,8 @@ def generate_angle(
     costume_row = get_asset(costume_id) if costume_id else None
     is_dress = kind == "character" and bool(parent or costume_row)
     is_costume = kind == "costume"
-    if key == SHEET_SLOT and not is_costume:
-        raise ValueError("Costume sheet is only for Costume assets.")
+    if key == SHEET_SLOT and kind not in ("costume", "character"):
+        raise ValueError("Sheet generate is only for Character or Costume assets.")
     outfit = _nv(wardrobe) or _nv(fields.get("wardrobe"))
     if not outfit and costume_row:
         cfields = costume_row.get("fields") if isinstance(costume_row.get("fields"), dict) else {}
@@ -1271,12 +1314,20 @@ def generate_angle(
             refs.append(p)
     if key == SHEET_SLOT and not refs:
         ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
-        for slot in ("front", "side", "back", "closeup"):
+        for slot in (
+            "front",
+            "side",
+            "back",
+            "closeup",
+            "threequarter_front",
+            "threequarter_back",
+            "top",
+        ):
             p = _nv(ident.get(slot))
             if p and Path(p).is_file() and p not in refs:
                 refs.append(p)
         if not refs:
-            raise ValueError("Generate at least one costume angle before the sheet.")
+            raise ValueError("Generate at least one angle before the sheet.")
 
     text = _nv(prompt) or compose_angle_prompt(
         kind=kind,

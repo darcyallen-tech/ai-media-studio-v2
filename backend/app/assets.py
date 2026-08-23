@@ -415,6 +415,30 @@ def delete_asset(asset_id: str) -> bool:
     return True
 
 
+def _apply_sheet_or_primary(
+    found: dict[str, Any],
+    ident: dict[str, Any],
+    stills: list[str],
+    key: str,
+    dest: Path,
+) -> None:
+    """Store a still. Sheet slot is saved but does not steal primary until Confirm."""
+    if key == "sheet":
+        found["sheet_path"] = str(dest)
+        if _primary_slot_name(found) == "sheet":
+            found["still_path"] = str(dest)
+        else:
+            primary = _primary_slot_name(found)
+            found["still_path"] = (
+                ident.get(primary) or ident.get("front") or (stills[0] if stills else str(dest))
+            )
+        return
+    primary = _primary_slot_name(found)
+    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
+    if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
+        found["sheet_path"] = str(ident.get(primary) or dest)
+
+
 def attach_identity_still(
     asset_id: str,
     slot: str,
@@ -445,15 +469,7 @@ def attach_identity_still(
     found["identity"] = ident
     stills = _still_list(found)
     found["still_paths"] = stills
-    if key == "sheet":
-        found["primary_slot"] = "sheet"
-        found["still_path"] = str(dest)
-        found["sheet_path"] = str(dest)
-    else:
-        primary = _primary_slot_name(found)
-        found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
-        if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
-            found["sheet_path"] = str(ident.get(primary) or dest)
+    _apply_sheet_or_primary(found, ident, stills, key, dest)
     if model:
         found["model"] = model
     found["updated"] = _now()
@@ -491,15 +507,7 @@ def attach_identity_bytes(
     found["identity"] = ident
     stills = _still_list(found)
     found["still_paths"] = stills
-    if key == "sheet":
-        found["primary_slot"] = "sheet"
-        found["still_path"] = str(dest)
-        found["sheet_path"] = str(dest)
-    else:
-        primary = _primary_slot_name(found)
-        found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
-        if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
-            found["sheet_path"] = str(ident.get(primary) or dest)
+    _apply_sheet_or_primary(found, ident, stills, key, dest)
     if model:
         found["model"] = model
     found["updated"] = _now()
@@ -564,8 +572,11 @@ def save_sheet(
         raise ValueError("Asset not found.")
     ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
     front = str(ident.get("front") or "").strip()
-    if require_front and not (front and Path(front).is_file()):
-        raise ValueError("Front still is required to save.")
+    sheet = str(ident.get("sheet") or row.get("sheet_path") or "").strip()
+    if require_front and not (
+        (front and Path(front).is_file()) or (sheet and Path(sheet).is_file())
+    ):
+        raise ValueError("Front still or sheet is required to save.")
     return update_asset(
         asset_id,
         name=name or None,

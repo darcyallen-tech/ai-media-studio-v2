@@ -246,9 +246,13 @@ export type ResultNodeData = {
   sourceStill?: string;
   extraRefs?: string[];
   maxRefs?: number;
+  modelId?: string;
   wardrobe?: string;
   name?: string;
+  sheetKind?: "costume" | "character" | "dress";
   onPrompt?: (prompt: string) => void;
+  onModel?: (id: string) => void;
+  onConfirmSheet?: () => void;
   onRegen?: () => void;
   onResolution?: (resolution: string) => void;
   onBusy?: (busy: boolean, error?: string | null) => void;
@@ -373,8 +377,10 @@ export type SheetAnglePatch = {
   sourceStill?: string;
   extraRefs?: string[];
   maxRefs?: number;
+  modelId?: string;
   wardrobe?: string;
   name?: string;
+  sheetKind?: "costume" | "character" | "dress";
 };
 
 export type BuilderSessionInfo = {
