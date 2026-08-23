@@ -20,6 +20,7 @@ import CreatorBuilderNode from "./CreatorBuilderNode";
 import LibraryPanel from "./LibraryPanel";
 import SheetAngleNode from "./SheetAngleNode";
 import MediaLightbox from "./MediaLightbox";
+import ModelGuide from "./ModelGuide";
 import SettingsPanel from "./SettingsPanel";
 import DirectorNode from "./DirectorNode";
 import HubNode from "./HubNode";
@@ -285,6 +286,7 @@ function StudioCanvas() {
   const [sideTab, setSideTab] = useState<"library" | "assets" | null>(null);
   const openLibrary = () => setSideTab("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
   const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
   const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
@@ -355,6 +357,17 @@ function StudioCanvas() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!settingsOpen && !guideOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setSettingsOpen(false);
+      setGuideOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [settingsOpen, guideOpen]);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -3332,20 +3345,30 @@ function StudioCanvas() {
         <div className="topbar-left">
           <button
             type="button"
-            className="library-toggle settings-toggle"
+            className={
+              settingsOpen
+                ? "library-toggle settings-toggle on"
+                : "library-toggle settings-toggle"
+            }
             aria-label="Settings"
             title="Settings"
-            onClick={() => setSettingsOpen((v) => !v)}
+            aria-pressed={settingsOpen}
+            onClick={() => {
+              setGuideOpen(false);
+              setSettingsOpen((v) => !v);
+            }}
           >
             ⚙
           </button>
           <button
             type="button"
-            className="library-toggle"
+            className={guideOpen ? "library-toggle on" : "library-toggle"}
             aria-label="Model Guide"
             title="Model Guide"
+            aria-pressed={guideOpen}
             onClick={() => {
-              window.open("/model-guide.html", "_blank", "noopener,noreferrer");
+              setSettingsOpen(false);
+              setGuideOpen((v) => !v);
             }}
           >
             Model Guide
@@ -3380,6 +3403,15 @@ function StudioCanvas() {
           </button>
         </div>
       </header>
+      {settingsOpen || guideOpen ? (
+        <div
+          className="panel-overlay"
+          onClick={() => {
+            setSettingsOpen(false);
+            setGuideOpen(false);
+          }}
+        />
+      ) : null}
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -3390,6 +3422,7 @@ function StudioCanvas() {
         edgeStyle={edgeStyle}
         onEdgeStyle={setEdgeStylePref}
       />
+      <ModelGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
       <ReactFlow
         nodes={nodes}
         edges={edges}

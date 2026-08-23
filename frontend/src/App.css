@@ -6,7 +6,7 @@
 
 .topbar {
   position: absolute;
-  z-index: 8;
+  z-index: 13;
   top: 14px;
   left: 18px;
   right: 18px;
@@ -503,6 +503,218 @@
 
 .settings-path {
   margin-bottom: 8px;
+}
+
+.panel-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  background: rgba(28, 37, 48, 0.38);
+  cursor: pointer;
+}
+
+.model-guide {
+  width: min(640px, 100vw);
+  padding: 16px 0 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.model-guide > .library-head {
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+
+.guide-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  border-top: 1px solid #b4c2d2;
+}
+
+.guide-rail {
+  width: 168px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-right: 1px solid #b4c2d2;
+}
+
+.guide-rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #1c2530;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guide-rail-btn span {
+  color: #6b7584;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.guide-rail-btn:hover {
+  background: #cfd8e2;
+}
+
+.guide-rail-btn.on {
+  background: #1c2530;
+  color: #f4f7fb;
+}
+
+.guide-rail-btn.on span {
+  color: #c5d0dc;
+}
+
+.guide-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.guide-pane-head {
+  flex-shrink: 0;
+  padding: 10px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-bottom: 1px solid #b4c2d2;
+}
+
+.guide-cards {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guide-sec-head h3 {
+  margin: 4px 0 2px;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3a4a5c;
+}
+
+.guide-card {
+  border: 1px solid #b4c2d2;
+  background: #eef2f6;
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  color: inherit;
+}
+
+.guide-card > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.guide-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.guide-tagline {
+  display: inline-block;
+  margin: 6px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #7aaa2a;
+  background: #c8ec6a;
+  color: #1c3308;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.guide-mods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.guide-mod {
+  font-style: normal;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  font-weight: 650;
+  color: #3a4a5c;
+  border: 1px solid #b4c2d2;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.guide-id {
+  margin: 8px 0 10px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.7rem;
+  color: #6b7584;
+  word-break: break-all;
+}
+
+.guide-cols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.guide-cols h4 {
+  margin: 0 0 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3a4a5c;
+}
+
+.guide-cols ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.78rem;
+}
+
+.guide-cols li {
+  margin-bottom: 3px;
+}
+
+@media (max-width: 560px) {
+  .guide-body {
+    flex-direction: column;
+  }
+
+  .guide-rail {
+    width: 100%;
+    flex-direction: row;
+    overflow: auto;
+    border-right: none;
+    border-bottom: 1px solid #b4c2d2;
+  }
+
+  .guide-rail-btn {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
 }
 
 .lightbox {
@@ -1351,6 +1563,62 @@ html[data-theme="night"] .settings {
   border-color: #3a4554;
   color: #e6ebf2;
   box-shadow: none;
+}
+
+html[data-theme="night"] .panel-overlay {
+  background: rgba(8, 12, 18, 0.55);
+}
+
+html[data-theme="night"] .guide-body,
+html[data-theme="night"] .guide-rail,
+html[data-theme="night"] .guide-pane-head {
+  border-color: #3a4554;
+}
+
+html[data-theme="night"] .guide-rail-btn {
+  color: #e6ebf2;
+}
+
+html[data-theme="night"] .guide-rail-btn span {
+  color: #9aa8b8;
+}
+
+html[data-theme="night"] .guide-rail-btn:hover {
+  background: #323c4c;
+}
+
+html[data-theme="night"] .guide-rail-btn.on {
+  background: #e6ebf2;
+  color: #1c2530;
+}
+
+html[data-theme="night"] .guide-rail-btn.on span {
+  color: #3a4a5c;
+}
+
+html[data-theme="night"] .guide-sec-head h3,
+html[data-theme="night"] .guide-cols h4,
+html[data-theme="night"] .guide-mod {
+  color: #9aa8b8;
+}
+
+html[data-theme="night"] .guide-card {
+  background: #2a3340;
+  border-color: #4a5a6e;
+}
+
+html[data-theme="night"] .guide-tagline {
+  background: #2e4a18;
+  border-color: #5a8a22;
+  color: #d4f0a0;
+}
+
+html[data-theme="night"] .guide-mod {
+  border-color: #4a5a6e;
+}
+
+html[data-theme="night"] .guide-id {
+  color: #9aa8b8;
 }
 
 html[data-theme="night"] .library-card {
