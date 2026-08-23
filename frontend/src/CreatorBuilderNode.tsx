@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import NodeErrorBoundary from "./NodeErrorBoundary";
 import { spawnAngleResult } from "./angleSpawn";
@@ -11,7 +11,6 @@ import {
   COSTUME_COLORS,
   COSTUME_CONDITIONS,
   COSTUME_ERAS,
-  COSTUME_FITS,
   COSTUME_LAYERS,
   COSTUME_MATERIALS,
   COSTUME_REGIONS,
@@ -81,9 +80,20 @@ function errOf(body: GenBody, fallback: string, res?: Response) {
   return error || (typeof detail === "string" ? detail : "") || res?.statusText || fallback;
 }
 
+const LAYER_LABEL: Record<string, string> = {
+  top: "Top",
+  bottom: "Bottom",
+  footwear: "Footwear",
+  over: "Over",
+  head: "Head",
+  hands: "Hands",
+  accessories: "Accessories",
+};
+
 export default function CreatorBuilderNode({
   data,
   id,
+  selected,
 }: NodeProps<CreatorBuilderFlowNode>) {
   const kind = data?.kind || "character";
   const safe: CreatorBuilderNodeData = {
@@ -98,8 +108,24 @@ export default function CreatorBuilderNode({
     onSaved: typeof data?.onSaved === "function" ? data.onSaved : () => undefined,
   };
   const builderId = id || "";
+  const costume = kind === "costume";
   return (
-    <div className="studio-node creator-builder-node">
+    <div
+      className={
+        costume
+          ? "studio-node creator-builder-node costume-builder nowheel"
+          : "studio-node creator-builder-node"
+      }
+    >
+      {costume ? (
+        <NodeResizer
+          minWidth={560}
+          minHeight={240}
+          isVisible={selected}
+          lineClassName="node-resize-line"
+          handleClassName="node-resize-handle"
+        />
+      ) : null}
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">
         <span>
@@ -1020,8 +1046,6 @@ function CostumeForm({
   const [paletteC, setPaletteC] = useState("");
   const [signature, setSignature] = useState("");
   const [signatureC, setSignatureC] = useState("");
-  const [emblem, setEmblem] = useState("");
-  const [emblemC, setEmblemC] = useState("");
   const [layers, setLayers] = useState<Record<string, LayerState>>(() =>
     Object.fromEntries(COSTUME_LAYERS.map((k) => [k, emptyLayer()])),
   );
@@ -1054,7 +1078,6 @@ function CostumeForm({
       silhouette: pickField(silhouette, silhouetteC),
       palette: pickField(palette, paletteC),
       signature: pickField(signature, signatureC),
-      emblem: pickField(emblem, emblemC),
     };
     for (const key of COSTUME_LAYERS) {
       Object.assign(flat, flattenLayer(key, layers[key] || emptyLayer()));
@@ -1073,8 +1096,6 @@ function CostumeForm({
     paletteC,
     signature,
     signatureC,
-    emblem,
-    emblemC,
     layers,
   ]);
 
@@ -1189,7 +1210,7 @@ function CostumeForm({
         <span className="field-label">Costume name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <div className="params">
+      <div className="params costume-row-3">
         <FieldSelect
           label="Category"
           value={category}
@@ -1218,8 +1239,7 @@ function CostumeForm({
           onCustom={setRegionC}
         />
       </div>
-      <span className="field-label">Hero</span>
-      <div className="params">
+      <div className="params costume-row-3">
         <FieldSelect
           label="Silhouette"
           value={silhouette}
@@ -1238,8 +1258,6 @@ function CostumeForm({
           onValue={setPalette}
           onCustom={setPaletteC}
         />
-      </div>
-      <div className="params">
         <FieldSelect
           label="Signature"
           value={signature}
@@ -1249,20 +1267,11 @@ function CostumeForm({
           onValue={setSignature}
           onCustom={setSignatureC}
         />
-        <FieldSelect
-          label="Emblem"
-          value={emblem}
-          custom={emblemC}
-          options={["crest", "rune", "house mark", "none"]}
-          allowEmpty
-          onValue={setEmblem}
-          onCustom={setEmblemC}
-        />
       </div>
       {COSTUME_LAYERS.map((key) => (
         <LayerBlock
           key={key}
-          label={key}
+          label={LAYER_LABEL[key] || key}
           itemOpts={LAYER_ITEMS[key]}
           layer={layers[key] || emptyLayer()}
           onChange={(next) => setLayers((cur) => ({ ...cur, [key]: next }))}
@@ -2269,8 +2278,8 @@ function LayerBlock({
   const set = (patch: Partial<LayerState>) => onChange({ ...layer, ...patch });
   return (
     <div className="layer-block">
-      <span className="field-label">{label}</span>
-      <div className="params">
+      <span className="field-label layer-title">{label}</span>
+      <div className="params costume-layer-row">
         <FieldSelect
           label="Item"
           value={layer.item}
@@ -2297,17 +2306,6 @@ function LayerBlock({
           allowEmpty
           onValue={(v) => set({ color: v })}
           onCustom={(v) => set({ colorC: v })}
-        />
-      </div>
-      <div className="params">
-        <FieldSelect
-          label="Fit"
-          value={layer.fit}
-          custom={layer.fitC}
-          options={COSTUME_FITS}
-          allowEmpty
-          onValue={(v) => set({ fit: v })}
-          onCustom={(v) => set({ fitC: v })}
         />
         <FieldSelect
           label="Condition"

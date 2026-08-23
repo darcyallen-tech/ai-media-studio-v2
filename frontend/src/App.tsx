@@ -1241,6 +1241,7 @@ function StudioCanvas() {
             y: Number.isFinite(y) ? y : PROMPT_POS.y,
           },
           dragHandle: ".node-header",
+          style: safeKind === "costume" ? { width: 620, minWidth: 560 } : undefined,
           data: {
             kind: safeKind,
             attachSlotId,

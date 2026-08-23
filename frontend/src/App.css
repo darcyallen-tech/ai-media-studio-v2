@@ -676,8 +676,66 @@
   width: 380px;
 }
 
+.creator-builder-node.costume-builder {
+  width: 620px;
+  min-width: 560px;
+}
+
 .creator-builder-node .param input.model {
   margin-top: 4px;
+}
+
+.costume-builder .costume-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.costume-builder .costume-layer-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px 8px;
+  align-items: start;
+}
+
+.costume-builder .param {
+  min-width: 0;
+  flex: 1;
+}
+
+.costume-builder .param .model {
+  width: 100%;
+  min-width: 0;
+}
+
+.costume-builder .layer-block {
+  margin: 4px 0 2px;
+  padding-top: 4px;
+}
+
+.costume-builder .layer-title {
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  margin-bottom: 2px;
+}
+
+.costume-builder .prompt-actions {
+  margin-top: 8px;
+}
+
+.node-resize-line {
+  border-color: #8aa4c2;
+}
+
+.node-resize-handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #8aa4c2;
+  border: 1px solid #d5dde6;
 }
 
 .sheet-angle-node {
