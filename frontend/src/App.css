@@ -676,9 +676,24 @@
   width: 380px;
 }
 
-.creator-builder-node.costume-builder {
+.creator-builder-node.costume-builder,
+.creator-builder-node.wide-builder {
   width: 620px;
   min-width: 560px;
+}
+
+.wide-builder .costume-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.wide-builder .costume-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
+  align-items: start;
 }
 
 .creator-builder-node .param input.model {

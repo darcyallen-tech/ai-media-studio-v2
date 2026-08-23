@@ -420,6 +420,17 @@ export const LAYER_ITEMS: Record<CostumeLayer, readonly string[]> = {
   accessories: allLayerItems("accessories"),
 };
 
+export const SCENE_THEMES = [
+  "contemporary",
+  "noir",
+  "fantasy",
+  "sci-fi",
+  "western",
+  "historical",
+  "horror",
+  "coastal",
+] as const;
+
 export const SCENE_LOCATIONS = [
   "bar",
   "nightclub",
@@ -519,6 +530,129 @@ export const SCENE_GRADES = [
   "neon night",
   "faded film",
 ] as const;
+
+const SCENE_THEME_STACK: Record<
+  string,
+  {
+    locations: readonly string[];
+    architecture: readonly string[];
+    lighting: readonly string[];
+    setting?: string;
+  }
+> = {
+  fantasy: {
+    locations: [
+      "castle",
+      "temple",
+      "forest",
+      "marketplace",
+      "tavern",
+      "throne hall",
+      "ruins",
+      "cavern",
+      "village",
+      "keep",
+      "enchanted grove",
+    ],
+    architecture: ["stone", "gothic", "timber", "carved", "ancient masonry"],
+    lighting: ["firelight", "candle", "moonlight", "torch", "overcast daylight"],
+    setting: "mixed",
+  },
+  noir: {
+    locations: ["bar", "alley", "street", "nightclub", "office", "rooftop", "diner", "warehouse"],
+    architecture: ["art deco", "brick", "neon", "industrial"],
+    lighting: ["neon", "sodium vapor", "practical", "streetlamp", "tungsten"],
+    setting: "interior",
+  },
+  "sci-fi": {
+    locations: ["hangar", "bridge", "lab", "corridor", "colony", "spaceport", "airlock", "server hall"],
+    architecture: ["glass curtain", "brutalist", "metal", "neon"],
+    lighting: ["RGB accent", "fluorescent", "cinematic", "practical"],
+    setting: "interior",
+  },
+  western: {
+    locations: ["saloon", "main street", "desert", "ranch", "jail", "stable", "canyon"],
+    architecture: ["timber", "adobe", "brick", "colonial"],
+    lighting: ["overcast daylight", "golden hour sun", "lantern", "firelight"],
+    setting: "exterior",
+  },
+  historical: {
+    locations: ["castle", "church", "temple", "palace", "market", "manor", "harbor"],
+    architecture: ["victorian", "gothic", "colonial", "stone", "timber"],
+    lighting: ["candle", "window light", "firelight", "overcast daylight"],
+  },
+  horror: {
+    locations: ["cabin", "hospital", "church", "forest", "alley", "basement", "asylum", "graveyard"],
+    architecture: ["gothic", "timber", "brutalist", "stone"],
+    lighting: ["moonlight", "practical", "fluorescent", "firelight", "candle"],
+    setting: "interior",
+  },
+  coastal: {
+    locations: ["beach", "harbor", "boardwalk", "lighthouse", "cabin", "pier", "cliff"],
+    architecture: ["timber", "colonial", "adobe", "modern"],
+    lighting: ["overcast daylight", "golden hour sun", "window light", "moonlight"],
+    setting: "exterior",
+  },
+  contemporary: {
+    locations: [],
+    architecture: [],
+    lighting: [],
+  },
+};
+
+export function sceneLocationsFor(theme: string): string[] {
+  const stack = SCENE_THEME_STACK[theme.trim().toLowerCase()];
+  if (stack?.locations?.length) return [...stack.locations];
+  return [...SCENE_LOCATIONS];
+}
+
+export function sceneArchitectureFor(theme: string): string[] {
+  const stack = SCENE_THEME_STACK[theme.trim().toLowerCase()];
+  if (stack?.architecture?.length) return [...stack.architecture];
+  return [...SCENE_ARCHITECTURE];
+}
+
+export function sceneLightingFor(theme: string): string[] {
+  const stack = SCENE_THEME_STACK[theme.trim().toLowerCase()];
+  if (stack?.lighting?.length) return [...stack.lighting];
+  return [...SCENE_LIGHTING];
+}
+
+export function sceneThemeSetting(theme: string): string {
+  return SCENE_THEME_STACK[theme.trim().toLowerCase()]?.setting || "";
+}
+
+export const PROP_THEMES = [
+  "everyday",
+  "fantasy",
+  "military",
+  "industrial",
+  "luxury",
+  "ancient",
+] as const;
+
+export const PROP_VIEWS = [
+  "hero three-quarter",
+  "front",
+  "side",
+  "top-down",
+  "detail",
+] as const;
+
+const PROP_THEME_TYPES: Record<string, readonly string[]> = {
+  everyday: ["object", "handheld", "furniture", "food", "tool", "other"],
+  fantasy: ["weapon", "object", "tool", "handheld"],
+  military: ["weapon", "tool", "object", "vehicle"],
+  industrial: ["tool", "object", "vehicle", "furniture"],
+  luxury: ["object", "furniture", "handheld"],
+  ancient: ["weapon", "object", "tool", "furniture"],
+};
+
+export function propTypesFor(theme: string): string[] {
+  const extra = PROP_THEME_TYPES[theme.trim().toLowerCase()];
+  if (extra?.length) return [...extra];
+  return [...PROP_TYPES];
+}
 
 export const PROP_TYPES = [
   "object",
@@ -727,9 +861,11 @@ export function composeSceneBrief(
   const name = bit(fields.name);
   const loc = bit(fields.location);
   const setting = bit(fields.setting);
+  const theme = bit(fields.theme);
   if (name && loc) parts.push(`${name}, a ${loc}`);
   else if (name) parts.push(name);
   else if (loc) parts.push(`${loc} location`);
+  if (theme) parts.push(`${theme} setting`);
   if (setting) parts.push(setting);
   const time = bit(fields.time);
   if (time) parts.push(`time: ${time}`);
@@ -762,6 +898,8 @@ export function composePropBrief(
   const parts: string[] = [];
   const name = bit(fields.name);
   if (name) parts.push(name);
+  const theme = bit(fields.theme);
+  if (theme) parts.push(`${theme} prop`);
   const ptype = bit(fields.ptype) || bit(fields.type);
   if (ptype) parts.push(`type: ${ptype}`);
   const mat = bit(fields.material);
@@ -772,6 +910,8 @@ export function composePropBrief(
   if (scale) parts.push(`scale: ${scale}`);
   const cond = bit(fields.condition);
   if (cond) parts.push(`condition: ${cond}`);
+  const view = bit(fields.view);
+  if (view) parts.push(`view: ${view}`);
   let head = parts.join("; ");
   const extra = bit(notes) || bit(fields.notes);
   if (extra) head = head ? `${head}. Extra: ${extra}` : extra;
@@ -790,12 +930,37 @@ export function composeSceneStill(brief: string, opts?: { detail?: boolean }): s
   ].join(" ");
 }
 
-export function composePropStill(brief: string): string {
+export function composePropStill(brief: string, opts?: { detail?: boolean }): string {
   const head = bit(brief) || "the object";
+  const view = opts?.detail
+    ? "Tight detail of material, wear, and construction. Fill the frame with the object."
+    : "Hero product still, full object visible, three-quarter or catalog angle.";
   return [
     `Product-style still of ${head}.`,
+    view,
     "Isolated on a clean neutral studio background, even lighting, no people, no text, no logo, no watermark.",
   ].join(" ");
+}
+
+export function composeSceneSheetPrompt(brief: string, extra = ""): string {
+  const bits = [
+    `Production location SHEET of ${bit(brief) || "this place"}. One image only.`,
+    "Clean studio grid of the same space: wide hero establishing, a medium view, and a detail of architecture or lighting. Match the attached stills.",
+    "Empty of prominent people. Photoreal. Optional small clean labels only.",
+    SHEET_NO_GARBLED,
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join(" ");
+}
+
+export function composePropSheetPrompt(brief: string, extra = ""): string {
+  const bits = [
+    `Product reference SHEET of ${bit(brief) || "this object"}. One image only.`,
+    "Hero three-quarter of the full prop plus a tight detail of material, edge wear, and construction. Isolated studio. Match the attached stills.",
+    SHEET_NO_GARBLED,
+  ];
+  if (bit(extra)) bits.push(bit(extra));
+  return bits.join(" ");
 }
 
 /** Identity paragraph + one framing line for the angle. No API. */

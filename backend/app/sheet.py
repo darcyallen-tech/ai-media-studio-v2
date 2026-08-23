@@ -127,6 +127,16 @@ CHAR_JAW = ("soft", "defined", "square", "rounded", "pointed", "cleft")
 CHAR_BODY_HAIR = ("none", "light", "medium", "heavy")
 CHAR_BUST = ("small", "medium", "large")
 SCENE_SETTINGS = ("interior", "exterior", "mixed")
+SCENE_THEMES = (
+    "contemporary",
+    "noir",
+    "fantasy",
+    "sci-fi",
+    "western",
+    "historical",
+    "horror",
+    "coastal",
+)
 SCENE_LOCATIONS = (
     "bar",
     "nightclub",
@@ -248,6 +258,8 @@ PROP_MATERIALS = (
 )
 PROP_SCALES = ("miniature", "handheld", "tabletop", "life-size", "oversized")
 PROP_CONDITIONS = ("pristine", "new", "worn", "rusty", "broken")
+PROP_THEMES = ("everyday", "fantasy", "military", "industrial", "luxury", "ancient")
+PROP_VIEWS = ("hero three-quarter", "front", "side", "top-down", "detail")
 COSTUME_TAGS = (
     "everyday",
     "hero",
@@ -341,6 +353,7 @@ def builder_fields(kind: str) -> dict[str, Any]:
             "ok": True,
             "kind": "scene",
             "fields": {
+                "theme": {"label": "Theme", "choices": list(SCENE_THEMES)},
                 "location": {"label": "Location type", "choices": list(SCENE_LOCATIONS)},
                 "setting": {"label": "Interior / exterior", "choices": list(SCENE_SETTINGS)},
                 "time": {"label": "Time of day", "choices": list(SCENE_TIMES)},
@@ -360,7 +373,9 @@ def builder_fields(kind: str) -> dict[str, Any]:
             "ok": True,
             "kind": "prop",
             "fields": {
+                "theme": {"label": "Theme", "choices": list(PROP_THEMES)},
                 "ptype": {"label": "Type", "choices": list(PROP_TYPES)},
+                "view": {"label": "View", "choices": list(PROP_VIEWS)},
                 "material": {"label": "Material", "choices": list(PROP_MATERIALS)},
                 "color": {"label": "Color", "type": "text"},
                 "scale": {"label": "Scale", "choices": list(PROP_SCALES)},
@@ -798,6 +813,34 @@ def dress_prompt(slot: str, outfit: str, extra: str = "") -> str:
     )
 
 
+def scene_sheet_prompt(fields: dict[str, Any] | None, extra: str = "") -> str:
+    brief = scene_prompt(fields, detail=False)
+    body = (
+        f"Production location SHEET of {brief}. One image only. "
+        "Clean grid of the same space: wide hero establishing, a medium view, "
+        "and a detail of architecture or lighting. Match the attached stills. "
+        "Empty of prominent people. Photoreal. Optional small clean labels only. "
+        "No gibberish text, no watermarks, no logos."
+    )
+    if _nv(extra):
+        body += f" {_nv(extra)}"
+    return body
+
+
+def prop_sheet_prompt(fields: dict[str, Any] | None, extra: str = "") -> str:
+    f = fields or {}
+    brief = _nv(f.get("prompt")) or _nv(f.get("name")) or "this object"
+    body = (
+        f"Product reference SHEET of {brief}. One image only. "
+        "Hero three-quarter of the full prop plus a tight detail of material, "
+        "edge wear, and construction. Isolated studio. Match the attached stills. "
+        "No gibberish text, no watermarks, no logos."
+    )
+    if _nv(extra):
+        body += f" {_nv(extra)}"
+    return body
+
+
 def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
     f = fields or {}
     override = _nv(f.get("identity_prompt")) or _nv(f.get("prompt"))
@@ -818,12 +861,15 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
         head = override
     else:
         bits: list[str] = []
+        theme = _choice(f, "theme")
         if loc:
             bits.append(f"{name}, a {loc}" if name != "the location" else f"{loc} location")
         elif name != "the location":
             bits.append(name)
         else:
             bits.append(f"Establishing still of {name}.")
+        if theme:
+            bits.append(f"{theme} setting")
         if setting:
             bits.append(setting)
         if time:
@@ -870,6 +916,9 @@ def prop_prompt(fields: dict[str, Any] | None) -> str:
         head = override
     else:
         bits = [name]
+        theme = _choice(f, "theme")
+        if theme:
+            bits.append(f"{theme} prop")
         if ptype:
             bits.append(f"type: {ptype}")
         if material:
@@ -880,6 +929,9 @@ def prop_prompt(fields: dict[str, Any] | None) -> str:
             bits.append(f"scale: {scale}")
         if condition:
             bits.append(f"condition: {condition}")
+        view = _choice(f, "view") or _nv(f.get("view"))
+        if view:
+            bits.append(f"view: {view}")
         head = "; ".join(bits)
     out = (
         f"Product-style still of {head}. Isolated on a clean neutral studio background, "
@@ -942,8 +994,12 @@ def compose_angle_prompt(
             return f"{brief}. Extra: {note}" if brief else note
         return brief
     if kind == "scene":
+        if key == SHEET_SLOT:
+            return scene_sheet_prompt(merged, extra)
         return scene_prompt(merged, detail=key != "front")
     if kind == "prop":
+        if key == SHEET_SLOT:
+            return prop_sheet_prompt(merged, extra)
         return prop_prompt(merged)
     outfit = wardrobe or _nv((fields or {}).get("wardrobe")) or costume_brief(fields)
     if key == SHEET_SLOT:
@@ -1294,8 +1350,8 @@ def generate_angle(
     costume_row = get_asset(costume_id) if costume_id else None
     is_dress = kind == "character" and bool(parent or costume_row)
     is_costume = kind == "costume"
-    if key == SHEET_SLOT and kind not in ("costume", "character"):
-        raise ValueError("Sheet generate is only for Character or Costume assets.")
+    if key == SHEET_SLOT and kind not in ("costume", "character", "scene", "prop"):
+        raise ValueError("Sheet generate is only for Character, Costume, Scene, or Prop assets.")
     outfit = _nv(wardrobe) or _nv(fields.get("wardrobe"))
     if not outfit and costume_row:
         cfields = costume_row.get("fields") if isinstance(costume_row.get("fields"), dict) else {}
@@ -1341,7 +1397,7 @@ def generate_angle(
 
     modality = "t2i"
     if refs:
-        modality = "r2i" if kind in ("character", "costume") else "i2i"
+        modality = "r2i" if kind in ("character", "costume", "scene", "prop") else "i2i"
     mid = _nv(model_id)
     entry = resolve_model(mid, mode="image", modality=modality) if mid else None
     if entry is None or (modality not in (entry.modalities or ())):

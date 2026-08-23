@@ -25,7 +25,9 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     data.slot === "sheet" ||
     data.sheetKind === "dress" ||
     data.sheetKind === "costume" ||
-    data.sheetKind === "character";
+    data.sheetKind === "character" ||
+    data.sheetKind === "scene" ||
+    data.sheetKind === "prop";
   const models = useSheetModels();
   const sheetModels = useMemo(() => {
     const r2i = Array.isArray(models.r2i) ? models.r2i.filter((m) => m?.id) : [];

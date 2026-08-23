@@ -17,7 +17,7 @@ KINDS: tuple[Kind, ...] = ("character", "scene", "prop", "costume")
 ASSETS_DIR = PROJECT_ROOT / "data" / "assets"
 ASSETS_INDEX = ASSETS_DIR / "assets.json"
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-_MAX_STILLS = {"character": 8, "scene": 3, "prop": 1, "costume": 8}
+_MAX_STILLS = {"character": 8, "scene": 4, "prop": 3, "costume": 8}
 IDENTITY_SLOTS: tuple[str, ...] = (
     "front",
     "side",

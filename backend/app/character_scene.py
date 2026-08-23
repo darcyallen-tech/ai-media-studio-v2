@@ -146,12 +146,18 @@ def _row(
     ident_raw = item.get("identity") if isinstance(item.get("identity"), dict) else {}
     identity: dict[str, str] = {}
     identity_urls: dict[str, str] = {}
-    if kind == "character":
-        for slot, raw in ident_raw.items():
-            p = str(raw or "").strip()
-            if p:
-                identity[str(slot)] = p
-                identity_urls[str(slot)] = f"/{kind}s/{cid}/still?slot={slot}"
+    for slot, raw in ident_raw.items():
+        p = str(raw or "").strip()
+        if p:
+            identity[str(slot)] = p
+            identity_urls[str(slot)] = f"/{kind}s/{cid}/still?slot={slot}"
+    primary_slot = str(item.get("primary_slot") or "front").strip().lower() or "front"
+    thumb = (
+        identity_urls.get("sheet")
+        or identity_urls.get(primary_slot)
+        or identity_urls.get("front")
+        or (f"/{kind}s/{cid}/still" if has_still else None)
+    )
     return {
         "id": cid,
         "name": name or label,
@@ -161,8 +167,9 @@ def _row(
         "has_still": has_still,
         "parent_id": str(item.get("parent_id") or "").strip() or None,
         "url": f"/{kind}s/{cid}/still" if has_still else None,
-        "thumb_url": identity_urls.get("front") or (f"/{kind}s/{cid}/still" if has_still else None),
+        "thumb_url": thumb,
         "kind": kind,
+        "primary_slot": primary_slot,
         "identity": identity,
         "identity_urls": identity_urls,
     }

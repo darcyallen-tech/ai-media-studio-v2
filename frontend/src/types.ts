@@ -249,7 +249,7 @@ export type ResultNodeData = {
   modelId?: string;
   wardrobe?: string;
   name?: string;
-  sheetKind?: "costume" | "character" | "dress";
+  sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;
@@ -384,7 +384,7 @@ export type SheetAnglePatch = {
   modelId?: string;
   wardrobe?: string;
   name?: string;
-  sheetKind?: "costume" | "character" | "dress";
+  sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;

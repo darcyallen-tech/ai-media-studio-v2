@@ -28,15 +28,19 @@ import {
   PROP_CONDITIONS,
   PROP_MATERIALS,
   PROP_SCALES,
-  PROP_TYPES,
-  SCENE_ARCHITECTURE,
+  PROP_THEMES,
+  PROP_VIEWS,
   SCENE_CAMERA,
   SCENE_GRADES,
-  SCENE_LIGHTING,
-  SCENE_LOCATIONS,
   SCENE_MOODS,
+  SCENE_THEMES,
   SCENE_TIMES,
   SCENE_WEATHER,
+  propTypesFor,
+  sceneArchitectureFor,
+  sceneLightingFor,
+  sceneLocationsFor,
+  sceneThemeSetting,
   SLOT_LABEL,
   WARDROBE_F,
   WARDROBE_M,
@@ -52,8 +56,10 @@ import {
   composeDressPrompt,
   composeDressSheetPrompt,
   composePropBrief,
+  composePropSheetPrompt,
   composePropStill,
   composeSceneBrief,
+  composeSceneSheetPrompt,
   composeSceneStill,
   pickDefaultResolution,
   pickSheetResolution,
@@ -114,6 +120,7 @@ export default function CreatorBuilderNode({
   selected,
 }: NodeProps<CreatorBuilderFlowNode>) {
   const kind = data?.kind || "character";
+  const wide = kind === "costume" || kind === "scene" || kind === "prop";
   const safe: CreatorBuilderNodeData = {
     kind,
     attachSlotId: data?.attachSlotId,
@@ -126,16 +133,15 @@ export default function CreatorBuilderNode({
     onSaved: typeof data?.onSaved === "function" ? data.onSaved : () => undefined,
   };
   const builderId = id || "";
-  const costume = kind === "costume";
   return (
     <div
       className={
-        costume
-          ? "studio-node creator-builder-node costume-builder nowheel"
+        wide
+          ? `studio-node creator-builder-node ${kind}-builder wide-builder nowheel`
           : "studio-node creator-builder-node"
       }
     >
-      {costume ? (
+      {wide ? (
         <NodeResizer
           minWidth={560}
           minHeight={240}
@@ -229,6 +235,12 @@ function pickField(value?: string | null, custom?: string | null) {
   const c = String(custom ?? "");
   if (v === "Custom") return c.trim();
   return v.trim();
+}
+
+function remapToAllowed(value: string, custom: string, allowed: readonly string[]) {
+  if (value === "Custom" || !value) return { value, custom };
+  if (allowed.includes(value)) return { value, custom };
+  return { value: "Custom", custom: value };
 }
 
 const ANGLE_ACTIONS = [...CORE_SLOTS, ...EXTRA_SLOTS] as const;
@@ -2140,6 +2152,8 @@ function SceneForm({
   builderId: string;
 }) {
   const [name, setName] = useState("");
+  const [theme, setTheme] = useState("contemporary");
+  const [themeC, setThemeC] = useState("");
   const [location, setLocation] = useState("bar");
   const [locationC, setLocationC] = useState("");
   const [setting, setSetting] = useState("interior");
@@ -2167,12 +2181,26 @@ function SceneForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
+  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
+  const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
+  const frontSizes = sizeChoices(t2iRow);
+  const angleSizes = sizeChoices(r2iRow);
+  const frontQuals = qualityChoices(t2iRow);
+  const angleQuals = qualityChoices(r2iRow);
   const slots = sheet ? ["front", "side"] : ["front"];
   const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots, models);
   const haveFront = Boolean(data.doneSlots?.front);
+  const haveSceneAngle = Boolean(
+    data.doneSlots && Object.entries(data.doneSlots).some(([k, p]) => k !== "sheet" && p),
+  );
+  const themeKey = pickField(theme, themeC);
+  const locationOpts = sceneLocationsFor(themeKey);
+  const architectureOpts = sceneArchitectureFor(themeKey);
+  const lightingOpts = sceneLightingFor(themeKey);
   function sceneFields() {
     return {
       name: name.trim(),
+      theme: themeKey,
       location: pickField(location, locationC),
       setting: pickField(setting, settingC),
       time: pickField(time, timeC),
@@ -2218,29 +2246,132 @@ function SceneForm({
     return draft.item.id;
   }
 
+  function onTheme(v: string) {
+    setTheme(v);
+    const next = v === "Custom" ? themeC : v;
+    const loc = sceneLocationsFor(next);
+    const arch = sceneArchitectureFor(next);
+    const lights = sceneLightingFor(next);
+    const locR = remapToAllowed(location, locationC, loc);
+    setLocation(locR.value);
+    setLocationC(locR.custom);
+    const archR = remapToAllowed(architecture, architectureC, arch);
+    setArchitecture(archR.value);
+    setArchitectureC(archR.custom);
+    const lightR = remapToAllowed(lighting, lightingC, lights);
+    setLighting(lightR.value);
+    setLightingC(lightR.custom);
+    const preset = sceneThemeSetting(next);
+    if (preset && !setting) setSetting(preset);
+  }
+
   function openAngle(slot: string) {
-    void ensureDraft()
-      .then((id) => {
-        spawnAngleResult({
-          builderId,
-          slot,
-          label: slot === "front" ? "Hero" : "Detail",
-          prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
-          generating: false,
-          error: null,
-          focus: true,
-          t2iModel: models.t2iId,
-          r2iModel: models.r2iId || models.t2iId,
-          assetId: id,
-          sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
-          name: name.trim() || "Scene",
-        });
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Could not open Result.";
-        setError(msg);
+    if (!name.trim()) {
+      const msg = "Name is required.";
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    const sizes = slot === "front" ? frontSizes : angleSizes;
+    const quals = slot === "front" ? frontQuals : angleQuals;
+    const sheetSize = pickDefaultResolution(sizes);
+    try {
+      spawnAngleResult({
+        builderId,
+        slot,
+        label: slot === "front" ? "Hero" : "Detail",
+        prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
+        generating: false,
+        error: null,
+        focus: true,
+        resolution: pickDefaultResolution(quals) || sheetSize,
+        resolutionChoices: sizes,
+        aspect: sheetSize,
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        name: name.trim() || "Scene",
+        sheetKind: undefined,
       });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Result.";
+      console.error("[scene] spawn failed", err);
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    if (!data.sessionAssetId) {
+      void ensureDraft()
+        .then((id) => {
+          spawnAngleResult({
+            builderId,
+            slot,
+            assetId: id,
+            label: slot === "front" ? "Hero" : "Detail",
+            prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
+            focus: true,
+            t2iModel: models.t2iId,
+            r2iModel: models.r2iId || models.t2iId,
+            sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+            name: name.trim() || "Scene",
+          });
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Create failed.";
+          setError(msg);
+          toast(msg, true);
+        });
+    }
+  }
+
+  function openSceneSheet() {
+    const refs: string[] = [];
+    for (const slot of ["front", "side", "closeup"] as const) {
+      const p = data.doneSlots?.[slot] || "";
+      if (p && !refs.includes(p)) refs.push(p);
+    }
+    if (!refs.length) {
+      setError("Generate the hero still first.");
+      return;
+    }
+    const sizes = angleSizes.length ? angleSizes : frontSizes;
+    const quals = angleQuals.length ? angleQuals : frontQuals;
+    const sheetSize = pickSheetResolution(sizes);
+    try {
+      spawnAngleResult({
+        builderId,
+        slot: COSTUME_SHEET_SLOT,
+        nodeKey: "scene-sheet",
+        label: "Scene sheet",
+        prompt: composeSceneSheetPrompt(sceneText()),
+        generating: false,
+        error: null,
+        focus: true,
+        resolution: pickDefaultResolution(quals) || sheetSize,
+        resolutionChoices: sizes,
+        aspect: sheetSize,
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: refs[0],
+        extraRefs: refs.slice(1),
+        maxRefs: sheetR2iRefCap(r2iRow),
+        name: name.trim() || "Scene",
+        sheetKind: "scene",
+      });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Scene Sheet.";
+      console.error("[scene] sheet spawn failed", err);
+      setError(msg);
+      toast(msg, true);
+    }
   }
 
   async function save() {
@@ -2277,18 +2408,28 @@ function SceneForm({
   return (
     <>
       <p className="hint">
-        Apply selection builds the location prompt. Generate Hero on a Result node, then Save.
+        Theme filters Location / Architecture / Lighting. Apply selection composes the prompt.
+        Generate Hero on a Result node. Scene Sheet when a hero still exists.
       </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <div className="params">
+      <div className="params costume-row-4">
+        <FieldSelect
+          label="Theme"
+          value={theme}
+          custom={themeC}
+          options={SCENE_THEMES}
+          allowEmpty
+          onValue={onTheme}
+          onCustom={setThemeC}
+        />
         <FieldSelect
           label="Location"
           value={location}
           custom={locationC}
-          options={SCENE_LOCATIONS}
+          options={locationOpts}
           allowEmpty
           onValue={setLocation}
           onCustom={setLocationC}
@@ -2318,7 +2459,7 @@ function SceneForm({
           onCustom={setTimeC}
         />
       </div>
-      <div className="params">
+      <div className="params costume-row-3">
         {showWeather ? (
           <FieldSelect
             label="Weather"
@@ -2343,18 +2484,18 @@ function SceneForm({
           label="Architecture"
           value={architecture}
           custom={architectureC}
-          options={SCENE_ARCHITECTURE}
+          options={architectureOpts}
           allowEmpty
           onValue={setArchitecture}
           onCustom={setArchitectureC}
         />
       </div>
-      <div className="params">
+      <div className="params costume-row-3">
         <FieldSelect
           label="Lighting"
           value={lighting}
           custom={lightingC}
-          options={SCENE_LIGHTING}
+          options={lightingOpts}
           allowEmpty
           onValue={setLighting}
           onCustom={setLightingC}
@@ -2387,7 +2528,7 @@ function SceneForm({
           onChange={(e) => setFurniture(e.target.value)}
         />
       </label>
-      <div className="params">
+      <div className="params costume-row-3">
         <FieldSelect
           label="Color grade"
           value={grade}
@@ -2462,14 +2603,46 @@ function SceneForm({
       <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
-        <button type="button" className="generate" onClick={() => openAngle("front")}>
+        <button
+          type="button"
+          className="generate nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openAngle("front");
+          }}
+        >
           Generate Hero
         </button>
         {sheet ? (
-          <button type="button" className="generate" disabled={!haveFront} onClick={() => openAngle("side")}>
+          <button
+            type="button"
+            className="generate nodrag"
+            disabled={!haveFront}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openAngle("side");
+            }}
+          >
             Generate Detail
           </button>
         ) : null}
+        <button
+          type="button"
+          className="generate nodrag"
+          disabled={!haveSceneAngle}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openSceneSheet();
+          }}
+        >
+          Generate Scene Sheet
+        </button>
         <button type="button" className="ghost" disabled={!haveFront || saving} onClick={() => void save()}>
           {saving ? "Saving…" : "Save Scene"}
         </button>
@@ -2491,6 +2664,8 @@ function PropForm({
   builderId: string;
 }) {
   const [name, setName] = useState("");
+  const [theme, setTheme] = useState("everyday");
+  const [themeC, setThemeC] = useState("");
   const [ptype, setPtype] = useState("object");
   const [ptypeC, setPtypeC] = useState("");
   const [material, setMaterial] = useState("metal");
@@ -2501,22 +2676,37 @@ function PropForm({
   const [scaleC, setScaleC] = useState("");
   const [condition, setCondition] = useState("");
   const [conditionC, setConditionC] = useState("");
+  const [view, setView] = useState("hero three-quarter");
+  const [viewC, setViewC] = useState("");
   const [notes, setNotes] = useState("");
   const [propPrompt, setPropPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
+  const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
+  const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
+  const frontSizes = sizeChoices(t2iRow);
+  const angleSizes = sizeChoices(r2iRow);
+  const frontQuals = qualityChoices(t2iRow);
+  const angleQuals = qualityChoices(r2iRow);
   const haveFront = Boolean(data.doneSlots?.front);
+  const havePropAngle = Boolean(
+    data.doneSlots && Object.entries(data.doneSlots).some(([k, p]) => k !== "sheet" && p),
+  );
   const estimate = useSheetEstimate("prop", models.t2iId, models.r2iId, ["front"], models);
+  const themeKey = pickField(theme, themeC);
+  const typeOpts = propTypesFor(themeKey);
   function propFields() {
     return {
       name: name.trim(),
+      theme: themeKey,
       ptype: pickField(ptype, ptypeC),
       material: pickField(material, materialC),
       color: pickField(color, colorC),
       scale: pickField(scale, scaleC),
       condition: pickField(condition, conditionC),
+      view: pickField(view, viewC),
     };
   }
   function propText() {
@@ -2549,27 +2739,121 @@ function PropForm({
     return draft.item.id;
   }
 
-  function openStill() {
-    void ensureDraft()
-      .then((id) => {
-        spawnAngleResult({
-          builderId,
-          slot: "front",
-          label: "Still",
-          prompt: composePropStill(propText()),
-          generating: false,
-          error: null,
-          focus: true,
-          t2iModel: models.t2iId,
-          r2iModel: models.r2iId || models.t2iId,
-          assetId: id,
-          name: name.trim() || "Prop",
-        });
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Could not open Result.");
+  function onPropTheme(v: string) {
+    setTheme(v);
+    const next = v === "Custom" ? themeC : v;
+    const types = propTypesFor(next);
+    const mapped = remapToAllowed(ptype, ptypeC, types);
+    setPtype(mapped.value);
+    setPtypeC(mapped.custom);
+  }
+
+  function openStill(slot: "front" | "closeup" = "front") {
+    if (!name.trim()) {
+      const msg = "Name is required.";
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    const sizes = slot === "front" ? frontSizes : angleSizes.length ? angleSizes : frontSizes;
+    const quals = slot === "front" ? frontQuals : angleQuals.length ? angleQuals : frontQuals;
+    const pick = pickDefaultResolution(sizes);
+    try {
+      spawnAngleResult({
+        builderId,
+        slot,
+        label: slot === "front" ? "Still" : "Detail",
+        prompt: composePropStill(propText(), { detail: slot !== "front" }),
+        generating: false,
+        error: null,
+        focus: true,
+        resolution: pickDefaultResolution(quals) || pick,
+        resolutionChoices: sizes,
+        aspect: pick,
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        name: name.trim() || "Prop",
       });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Result.";
+      console.error("[prop] spawn failed", err);
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    if (!data.sessionAssetId) {
+      void ensureDraft()
+        .then((id) => {
+          spawnAngleResult({
+            builderId,
+            slot,
+            assetId: id,
+            label: slot === "front" ? "Still" : "Detail",
+            prompt: composePropStill(propText(), { detail: slot !== "front" }),
+            focus: true,
+            t2iModel: models.t2iId,
+            r2iModel: models.r2iId || models.t2iId,
+            sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+            name: name.trim() || "Prop",
+          });
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Create failed.";
+          setError(msg);
+          toast(msg, true);
+        });
+    }
+  }
+
+  function openPropSheet() {
+    const refs: string[] = [];
+    for (const slot of ["front", "closeup"] as const) {
+      const p = data.doneSlots?.[slot] || "";
+      if (p && !refs.includes(p)) refs.push(p);
+    }
+    if (!refs.length) {
+      setError("Generate the still first.");
+      return;
+    }
+    const sizes = angleSizes.length ? angleSizes : frontSizes;
+    const quals = angleQuals.length ? angleQuals : frontQuals;
+    const sheetSize = pickSheetResolution(sizes);
+    try {
+      spawnAngleResult({
+        builderId,
+        slot: COSTUME_SHEET_SLOT,
+        nodeKey: "prop-sheet",
+        label: "Prop sheet",
+        prompt: composePropSheetPrompt(propText()),
+        generating: false,
+        error: null,
+        focus: true,
+        resolution: pickDefaultResolution(quals) || sheetSize,
+        resolutionChoices: sizes,
+        aspect: sheetSize,
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: refs[0],
+        extraRefs: refs.slice(1),
+        maxRefs: sheetR2iRefCap(r2iRow),
+        name: name.trim() || "Prop",
+        sheetKind: "prop",
+      });
+      setError(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Prop Sheet.";
+      console.error("[prop] sheet spawn failed", err);
+      setError(msg);
+      toast(msg, true);
+    }
   }
 
   async function save() {
@@ -2606,18 +2890,28 @@ function PropForm({
   return (
     <>
       <p className="hint">
-        Apply selection builds the prop prompt. Generate the still on a Result node, then Save.
+        Theme filters Type. Apply selection composes the prompt. Generate still on a Result node.
+        Optional Prop Sheet from hero + detail.
       </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <div className="params">
+      <div className="params costume-row-4">
+        <FieldSelect
+          label="Theme"
+          value={theme}
+          custom={themeC}
+          options={PROP_THEMES}
+          allowEmpty
+          onValue={onPropTheme}
+          onCustom={setThemeC}
+        />
         <FieldSelect
           label="Type"
           value={ptype}
           custom={ptypeC}
-          options={PROP_TYPES}
+          options={typeOpts}
           allowEmpty
           onValue={setPtype}
           onCustom={setPtypeC}
@@ -2641,7 +2935,7 @@ function PropForm({
           onCustom={setColorC}
         />
       </div>
-      <div className="params">
+      <div className="params costume-row-3">
         <FieldSelect
           label="Scale"
           value={scale}
@@ -2659,6 +2953,15 @@ function PropForm({
           allowEmpty
           onValue={setCondition}
           onCustom={setConditionC}
+        />
+        <FieldSelect
+          label="View"
+          value={view}
+          custom={viewC}
+          options={PROP_VIEWS}
+          allowEmpty
+          onValue={setView}
+          onCustom={setViewC}
         />
       </div>
       <label className="builder-field">
@@ -2721,10 +3024,41 @@ function PropForm({
       <div className="prompt-actions">
         <button
           type="button"
-          className="generate"
-          onClick={openStill}
+          className="generate nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openStill("front");
+          }}
         >
           Generate still
+        </button>
+        <button
+          type="button"
+          className="generate nodrag"
+          disabled={!haveFront}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openStill("closeup");
+          }}
+        >
+          Generate Detail
+        </button>
+        <button
+          type="button"
+          className="generate nodrag"
+          disabled={!havePropAngle}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPropSheet();
+          }}
+        >
+          Generate Prop Sheet
         </button>
         <button
           type="button"
