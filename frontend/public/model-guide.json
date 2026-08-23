@@ -867,7 +867,7 @@
           "tagline": "Best cinematic Kling T2V",
           "strengths": [
             "3–15s, native audio, 16:9/9:16/1:1.",
-            "Storyboard-friendly motion."
+            "Storyboard maps Shots to native multi_prompt (customize or intelligent cuts)."
           ],
           "weaknesses": [
             "V2 currently prices Standard T2V the same as Pro — treat Pro as the real SKU until that's fixed.",
@@ -886,7 +886,8 @@
           ],
           "tagline": "Best cheaper Kling 3 T2V (in theory)",
           "strengths": [
-            "Same 3–15s native-audio family."
+            "Same 3–15s native-audio family.",
+            "Storyboard multi_prompt like Pro (no @Element tray — T2V schema has no elements)."
           ],
           "weaknesses": [
             "Estimate currently matches Pro ($2.52 / 15s). Prefer O3 Standard if you want a real cheaper Kling.",
@@ -1105,7 +1106,8 @@
           "tagline": "Best cinematic Kling I2V",
           "strengths": [
             "3–15s, optional end still.",
-            "Pro motion quality."
+            "Elements tray: frontal + extra stills or a motion clip, cited as @Element1.",
+            "Storyboard maps Shots to multi_prompt (customize / intelligent cuts)."
           ],
           "weaknesses": [
             "Still-size limits (Kling proxy).",
@@ -1123,7 +1125,8 @@
           ],
           "tagline": "Best cheaper Kling 3 I2V",
           "strengths": [
-            "Same 3–15s family, actually cheaper than Pro on I2V ($1.68 vs $2.10 / 15s)."
+            "Same 3–15s family, actually cheaper than Pro on I2V ($1.68 vs $2.10 / 15s).",
+            "Same Elements (@ElementN) + Storyboard multi_prompt as Pro."
           ],
           "weaknesses": [
             "Less polish than Pro."
@@ -1494,7 +1497,8 @@
           "tagline": "Best default clip edit",
           "strengths": [
             "Motion-preserving V2V. Length matches source (3–15s).",
-            "V2 default video edit."
+            "V2 default video edit.",
+            "Elements tray (@ElementN) plus @ImageN refs (max 4 combined)."
           ],
           "weaknesses": [
             "Won't magically lengthen a clip.",
@@ -1513,7 +1517,8 @@
           ],
           "tagline": "Best quality Kling V2V",
           "strengths": [
-            "Higher quality than Standard. 3–15s source."
+            "Higher quality than Standard. 3–15s source.",
+            "Same Elements tray (@ElementN) as Standard."
           ],
           "weaknesses": [
             "Costlier. Same length lock."

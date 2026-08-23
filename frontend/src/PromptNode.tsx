@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import FrameEdit, {
   ALEPH_MAX_PINS,
@@ -6,7 +6,21 @@ import FrameEdit, {
 } from "./FrameEdit";
 import NodeClose from "./NodeClose";
 import PromptErrorBoundary from "./PromptErrorBoundary";
-import { itemMediaKind } from "./libraryDrag";
+import {
+  consumeLibraryDrag,
+  itemMediaKind,
+  peekLibraryDrag,
+  slotAccepts,
+  slotNeedLabel,
+} from "./libraryDrag";
+import {
+  hubCharactersToElements,
+  newElement,
+  serializeElements,
+  shotMultiPromptEntries,
+  storyboardKlingModality,
+  type PromptElement,
+} from "./klingUi";
 import {
   allocatedSeconds,
   composeStoryboardEnhanceBrief,
@@ -23,8 +37,10 @@ import { toast } from "./toast";
 import {
   durationOptions,
   formatDurationToken,
+  hasLibraryPayload,
   inputPlan,
   maxRefImages,
+  parseLibraryPayload,
   resolutionOptions,
   type FramePin,
   type GenerateResponse,
@@ -139,6 +155,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
   const [draft, setDraft] = useState(false);
+  const [elements, setElements] = useState<PromptElement[]>([]);
+  const [intelligentCuts, setIntelligentCuts] = useState(false);
   const [phase, setPhase] = useState<"idle" | "preparing" | "generating">("idle");
   const [localPins, setLocalPins] = useState<FramePin[]>([]);
   const pins = data.pins ?? localPins;
@@ -163,6 +181,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const isFrame = mode === "frame";
   const isStoryboard = mode === "storyboard";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
+  const showElements = Boolean(selectedModel?.supports_elements);
+  const maxElements = Math.max(0, Number(selectedModel?.max_elements) || 0);
+  const elementAllowsVideo = Boolean(selectedModel?.element_allows_video);
+  const klingBoard = isStoryboard && Boolean(selectedModel?.supports_multi_prompt);
   const characters = data.characters ?? [];
   const scenes = data.scenes ?? [];
   const filledRefs = countFilledRefs(data.source, characters, scenes);
@@ -206,19 +228,36 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const storyRefs = isStoryboard
     ? storyboardRefItems(storyAssets, storyShots)
     : [];
-  if (isStoryboard && !data.hasHub) missing.push("Asset Hub");
+  if (isStoryboard && !klingBoard && !data.hasHub) missing.push("Asset Hub");
   if (isStoryboard && storyShots.length === 0) missing.push("Shot");
-  if (isStoryboard && storyRefs.length === 0) {
+  if (isStoryboard && klingBoard) {
+    const sbMod = storyboardKlingModality(selectedModel);
+    if (sbMod === "i2v" && storyRefs.length === 0) {
+      missing.push("Start still (shot or hub)");
+    }
+    const maxS = Number(selectedModel?.duration_max) || 15;
+    const { allocated } = allocatedSeconds(storyShots);
+    if (allocated > maxS + 0.05) {
+      missing.push(`Shot total ${allocated}s exceeds ${maxS}s`);
+    }
+  } else if (isStoryboard && storyRefs.length === 0) {
     missing.push("Hub still or Shot start still");
   }
-  if (isStoryboard && maxRefs > 0 && storyRefs.length > maxRefs) {
+  if (isStoryboard && !klingBoard && maxRefs > 0 && storyRefs.length > maxRefs) {
     missing.push(`Too many refs (${storyRefs.length} / ${maxRefs})`);
   }
-  if (isStoryboard) {
+  if (isStoryboard && !klingBoard) {
     const budget = parseSeconds(duration);
     const { allocated } = allocatedSeconds(storyShots);
     if (budget > 0 && allocated > budget + 0.05) {
       missing.push(`Duration over budget (${allocated}s / ${budget}s)`);
+    }
+  }
+  if (showElements) {
+    for (const [i, row] of elements.entries()) {
+      const okFront = Boolean(row.frontal?.path);
+      const okVid = elementAllowsVideo && Boolean(row.video?.path);
+      if (!okFront && !okVid) missing.push(`Element ${i + 1} frontal still`);
     }
   }
 
@@ -373,6 +412,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setVoice(selectedModel.default_voice || selectedModel.voices?.[0] || "");
     setInstrumental(true);
     setDraft(false);
+    if (!selectedModel?.supports_elements) setElements([]);
+    if (!selectedModel?.supports_multi_prompt) setIntelligentCuts(false);
     const maxN = Math.max(
       1,
       Number(selectedModel.size_limits?.max_num_images) || 1,
@@ -442,8 +483,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setLoading(true);
     setError(null);
     try {
+      const klingMp = Boolean(selectedModel?.supports_multi_prompt);
+      const sbMod = isStoryboard ? storyboardKlingModality(selectedModel) : modality;
       const slots = isStoryboard
-        ? slotsFromStoryboard(storyAssets, storyShots, storyRefs)
+        ? slotsFromStoryboard(
+            storyAssets,
+            storyShots,
+            klingMp ? [] : storyRefs,
+          )
         : slotsFromGraph(
             modality,
             data.source,
@@ -455,15 +502,38 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           );
       const sbDuration =
         duration || storyboardDurationChoices(selectedModel)[0] || "";
+      const holds = isStoryboard
+        ? distributeShotSeconds(storyShots, sbDuration)
+        : undefined;
       const composed = isStoryboard
-        ? composeStoryboardPrompt(
-            data.hubTitle || "",
-            prompt.trim(),
-            storyAssets,
-            storyShots,
-            distributeShotSeconds(storyShots, sbDuration),
-          )
+        ? klingMp
+          ? ""
+          : composeStoryboardPrompt(
+              data.hubTitle || "",
+              prompt.trim(),
+              storyAssets,
+              storyShots,
+              holds,
+            )
         : composePrompt(prompt.trim(), characters, scenes);
+      const extra: Record<string, unknown> = isAudio
+        ? { voice: voice || null, instrumental }
+        : {};
+      const trayEls =
+        showElements && elements.length
+          ? serializeElements(elements)
+          : isStoryboard && selectedModel?.supports_elements
+            ? serializeElements(hubCharactersToElements(storyAssets))
+            : [];
+      if (trayEls.length) extra.elements = trayEls;
+      if (isStoryboard && klingMp) {
+        extra.multi_prompt = shotMultiPromptEntries(
+          storyShots,
+          holds,
+          prompt.trim(),
+        );
+        extra.shot_type = intelligentCuts ? "intelligent" : "customize";
+      }
       if (isFrame && slots.source_video) {
         setPhase("preparing");
         const prepRes = await fetch("/prepare-aleph", {
@@ -495,13 +565,26 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: isStoryboard ? "video" : mode,
-          modality: isStoryboard ? "r2v" : isFrame ? "frame" : modality,
+          modality: isStoryboard
+            ? sbMod
+            : isFrame
+              ? "frame"
+              : modality,
           model_id: modelId,
           prompt: composed,
           surface: "studio",
           params: {
             duration: isStoryboard
-              ? sbDuration
+              ? klingMp
+                ? String(
+                    Math.max(
+                      1,
+                      Math.round(allocatedSeconds(storyShots).allocated) ||
+                        Number(sbDuration) ||
+                        5,
+                    ),
+                  )
+                : sbDuration
               : isFrame && clipDuration > 0
                 ? String(clipDuration)
                 : duration || null,
@@ -519,9 +602,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               return seed.trim() && Number.isFinite(n) ? n : null;
             })(),
             draft,
-            extra: isAudio
-              ? { voice: voice || null, instrumental }
-              : {},
+            extra,
           },
           slots,
         }),
@@ -686,6 +767,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             onGenerate={() => void onGenerate()}
             onEnhance={() => void onEnhance()}
             canEnhance={canEnhance}
+            elements={elements}
+            onElements={setElements}
+            intelligentCuts={intelligentCuts}
+            onIntelligentCuts={setIntelligentCuts}
           />
         ) : null}
 
@@ -1093,6 +1178,18 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </p>
         ) : null}
 
+        {showElements ? (
+          <ElementTray
+            rows={elements}
+            max={maxElements}
+            allowsVideo={elementAllowsVideo}
+            prompt={prompt}
+            onPrompt={setPrompt}
+            onChange={setElements}
+            onLibraryPick={data.onLibraryPick}
+          />
+        ) : null}
+
         {error ? (
           <p className="hint warn" role="alert">
             {error}
@@ -1129,6 +1226,10 @@ function StoryboardPrompt({
   onGenerate,
   onEnhance,
   canEnhance,
+  elements,
+  onElements,
+  intelligentCuts,
+  onIntelligentCuts,
 }: {
   data: PromptNodeData;
   models: ModelRow[];
@@ -1152,15 +1253,25 @@ function StoryboardPrompt({
   onGenerate: () => void;
   onEnhance: () => void;
   canEnhance: boolean;
+  elements: PromptElement[];
+  onElements: (rows: PromptElement[]) => void;
+  intelligentCuts: boolean;
+  onIntelligentCuts: (v: boolean) => void;
 }) {
   const shots = data.shots ?? [];
   const refs = storyboardRefItems(data.hubAssets ?? [], shots);
-  const maxRefs = maxRefImages(selectedModel, "r2v");
+  const klingMp = Boolean(selectedModel?.supports_multi_prompt);
+  const sbMod = storyboardKlingModality(selectedModel);
+  const maxRefs = maxRefImages(selectedModel, klingMp ? sbMod : "r2v");
   const missing: string[] = [];
-  if (!data.hasHub) missing.push("Asset Hub");
+  if (!klingMp && !data.hasHub) missing.push("Asset Hub");
   if (!shots.length) missing.push("Shot");
-  if (!refs.length) missing.push("Hub still or Shot start still");
-  if (maxRefs > 0 && refs.length > maxRefs) {
+  if (klingMp && sbMod === "i2v" && !refs.length) {
+    missing.push("Start still (shot or hub)");
+  } else if (!klingMp && !refs.length) {
+    missing.push("Hub still or Shot start still");
+  }
+  if (!klingMp && maxRefs > 0 && refs.length > maxRefs) {
     missing.push(`Too many refs (${refs.length} / ${maxRefs})`);
   }
   const canGo =
@@ -1177,7 +1288,9 @@ function StoryboardPrompt({
   return (
     <>
       <p className="hint">
-        Hub + Shots feed this Prompt. Primary model: MiniMax H3 Omni (R2V).
+        {klingMp
+          ? "Kling 3.0: each Shot becomes a multi_prompt entry (not a flattened R2V prompt)."
+          : "Hub + Shots feed this Prompt. Primary model: MiniMax H3 Omni (R2V)."}
       </p>
       {data.sequenceLine ? (
         <p className="hint">Sequence: {data.sequenceLine}</p>
@@ -1312,6 +1425,27 @@ function StoryboardPrompt({
           </button>
         </div>
       ) : null}
+      {klingMp ? (
+        <label className="param check">
+          <input
+            type="checkbox"
+            checked={intelligentCuts}
+            onChange={(e) => onIntelligentCuts(e.target.checked)}
+          />
+          Intelligent cuts
+        </label>
+      ) : null}
+      {selectedModel?.supports_elements ? (
+        <ElementTray
+          rows={elements}
+          max={Math.max(0, Number(selectedModel.max_elements) || 0)}
+          allowsVideo={Boolean(selectedModel.element_allows_video)}
+          prompt={notes}
+          onPrompt={onNotes}
+          onChange={onElements}
+          onLibraryPick={data.onLibraryPick}
+        />
+      ) : null}
       <label className="field-label" htmlFor="sb-notes">
         Global notes
       </label>
@@ -1324,8 +1458,9 @@ function StoryboardPrompt({
         onChange={(e) => onNotes(e.target.value)}
       />
       <p className="hint">
-        Enhance rewrites Hub assets, these notes, and every shot into this
-        master prompt for the selected model.
+        {klingMp
+          ? "Global notes prefix every shot prompt. Enhance rewrites these notes only — shots stay mapped to multi_prompt."
+          : "Enhance rewrites Hub assets, these notes, and every shot into this master prompt for the selected model."}
       </p>
       <div className="prompt-actions">
         <button
@@ -1363,11 +1498,13 @@ function StoryboardPrompt({
 }
 
 function slotsFromStoryboard(
-  _assets: { item?: { path?: string } | null; role?: string; label?: string }[],
+  assets: { item?: { path?: string } | null; role?: string; label?: string }[],
   shots: { still?: { path?: string } | null }[],
   refs: { path: string; name?: string }[],
 ) {
-  const firstStill = shots.map((s) => s.still).find((s) => s?.path);
+  const firstStill =
+    shots.map((s) => s.still).find((s) => s?.path) ||
+    assets.map((a) => a.item).find((it) => it?.path);
   return {
     start_still: firstStill?.path,
     source_video: undefined as string | undefined,
@@ -1561,4 +1698,205 @@ function slotsFromGraph(
     if (row.catalogId) slots.scene_ids.push(row.catalogId);
   }
   return slots;
+}
+
+function ElementTray({
+  rows,
+  max,
+  allowsVideo,
+  prompt,
+  onPrompt,
+  onChange,
+  onLibraryPick,
+}: {
+  rows: PromptElement[];
+  max: number;
+  allowsVideo: boolean;
+  prompt: string;
+  onPrompt: (v: string) => void;
+  onChange: (rows: PromptElement[]) => void;
+  onLibraryPick?: (handler: (item: LibraryItem) => boolean) => void;
+}) {
+  const cap = Math.max(1, max || 3);
+  const full = rows.length >= cap;
+
+  function insertCite(token: string) {
+    onPrompt(
+      prompt.includes(token)
+        ? prompt
+        : `${prompt}${prompt && !/\s$/.test(prompt) ? " " : ""}${token}`,
+    );
+  }
+
+  function patch(id: string, next: Partial<PromptElement>) {
+    onChange(rows.map((r) => (r.id === id ? { ...r, ...next } : r)));
+  }
+
+  function takeItem(
+    event: DragEvent,
+    accept: "image" | "video",
+  ): LibraryItem | null {
+    event.preventDefault();
+    event.stopPropagation();
+    const item =
+      consumeLibraryDrag() ||
+      (hasLibraryPayload(event.dataTransfer)
+        ? parseLibraryPayload(event.dataTransfer)
+        : null);
+    if (!item) return null;
+    if (!slotAccepts(accept, item)) {
+      toast(slotNeedLabel(accept), true);
+      return null;
+    }
+    return item;
+  }
+
+  function pick(
+    accept: "image" | "video",
+    apply: (item: LibraryItem) => void,
+  ) {
+    if (!onLibraryPick) return;
+    onLibraryPick((item) => {
+      if (!slotAccepts(accept, item)) {
+        toast(slotNeedLabel(accept), true);
+        return false;
+      }
+      apply(item);
+      return true;
+    });
+  }
+
+  return (
+    <div className="element-tray">
+      <div className="element-tray-head">
+        <span className="field-label">Elements</span>
+        <button
+          type="button"
+          className="ghost nodrag"
+          disabled={full}
+          onClick={() => onChange([...rows, newElement()])}
+        >
+          Add Element
+        </button>
+      </div>
+      <p className="hint">
+        Cite in the prompt as @Element1, @Element2, … Frontal still required
+        {allowsVideo ? "; motion clip optional instead of stills." : "."}{" "}
+        {rows.length}/{cap}
+      </p>
+      {rows.length ? (
+        <div className="element-chips">
+          {rows.map((_, i) => (
+            <button
+              key={`cite-${i}`}
+              type="button"
+              className="ghost nodrag"
+              onClick={() => insertCite(`@Element${i + 1}`)}
+            >
+              @Element{i + 1}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {rows.map((row, i) => (
+        <div key={row.id} className="element-row">
+          <div className="element-row-head">
+            <strong>Element {i + 1}</strong>
+            <button
+              type="button"
+              className="ghost nodrag"
+              onClick={() => onChange(rows.filter((r) => r.id !== row.id))}
+            >
+              Remove
+            </button>
+          </div>
+          <div className="element-slots">
+            <div
+              className="element-drop"
+              onDragOver={(e) => {
+                if (peekLibraryDrag()) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }
+              }}
+              onDrop={(e) => {
+                const item = takeItem(e, "image");
+                if (item) patch(row.id, { frontal: item });
+              }}
+            >
+              <span>Frontal still</span>
+              <em>{row.frontal ? row.frontal.name : "Drop or pick"}</em>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() =>
+                  pick("image", (item) => patch(row.id, { frontal: item }))
+                }
+              >
+                Pick
+              </button>
+            </div>
+            <div
+              className="element-drop"
+              onDragOver={(e) => {
+                if (peekLibraryDrag()) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "copy";
+                }
+              }}
+              onDrop={(e) => {
+                const item = takeItem(e, "image");
+                if (item) patch(row.id, { refs: [...row.refs, item] });
+              }}
+            >
+              <span>Extra stills</span>
+              <em>
+                {row.refs.length
+                  ? row.refs.map((r) => r.name).join(", ")
+                  : "Optional"}
+              </em>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() =>
+                  pick("image", (item) =>
+                    patch(row.id, { refs: [...row.refs, item] }),
+                  )
+                }
+              >
+                Add
+              </button>
+            </div>
+            {allowsVideo ? (
+              <div
+                className="element-drop"
+                onDragOver={(e) => {
+                  if (peekLibraryDrag()) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "copy";
+                  }
+                }}
+                onDrop={(e) => {
+                  const item = takeItem(e, "video");
+                  if (item) patch(row.id, { video: item });
+                }}
+              >
+                <span>Motion clip</span>
+                <em>{row.video ? row.video.name : "Optional"}</em>
+                <button
+                  type="button"
+                  className="ghost nodrag"
+                  onClick={() =>
+                    pick("video", (item) => patch(row.id, { video: item }))
+                  }
+                >
+                  Pick
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }

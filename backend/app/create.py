@@ -207,7 +207,9 @@ def validate(state: CreateState) -> list[str]:
     slots = state.slots or CreateSlots()
     prompt = (state.prompt or "").strip()
     # Match today's helpers: I2V may run without a prompt; everything else needs one
-    if not prompt and modality != "i2v":
+    extra = (state.params.extra if state.params else None) or {}
+    has_multi = bool(extra.get("multi_prompt"))
+    if not prompt and modality != "i2v" and not has_multi:
         errors.append("Enter a prompt.")
 
     def _need(slot: str, msg: str) -> None:
@@ -270,6 +272,40 @@ def validate(state: CreateState) -> list[str]:
             errors.append(
                 f"{entry.label} allows at most {max_refs} reference images "
                 f"(got {n_refs})."
+            )
+
+    if entry.supports_elements and "v2v" in entry.modalities:
+        n_el = len(extra.get("elements") or []) if isinstance(extra.get("elements"), list) else 0
+        n_img = len(slots.existing_files("ref_images"))
+        cap = entry.max_elements or 4
+        if n_el + n_img > cap:
+            errors.append(
+                f"{entry.label} allows at most {cap} Elements + @Image refs combined "
+                f"(got {n_el} elements + {n_img} images)."
+            )
+    if entry.supports_elements:
+        from app.kling_elements import validate_element_rows
+
+        errors.extend(
+            validate_element_rows(
+                extra.get("elements"),
+                allows_video=entry.element_allows_video,
+                max_n=entry.max_elements or 3,
+            )
+        )
+    if has_multi and entry.supports_multi_prompt:
+        from app.kling_elements import clean_multi_prompt
+
+        shots, total, _notes = clean_multi_prompt(
+            extra.get("multi_prompt"),
+            max_shots=entry.max_multi_prompt or 6,
+            max_seconds=int(entry.duration_max or 15),
+        )
+        if not shots:
+            errors.append("multi_prompt needs at least one shot with a prompt.")
+        elif entry.duration_max is not None and total > entry.duration_max:
+            errors.append(
+                f"{entry.label} multi-shot total {total}s exceeds max {entry.duration_max}s."
             )
 
     dur = (state.params.duration if state.params else None) or ""
@@ -462,6 +498,7 @@ def _dispatch_vision(
         num_images=p.num_images if still else None,
         seed=p.seed,
         draft=bool(p.draft) and not still,
+        extra=dict(p.extra or {}),
         output_dir=state.output_dir or Path("."),
         on_progress=on_progress,
     )

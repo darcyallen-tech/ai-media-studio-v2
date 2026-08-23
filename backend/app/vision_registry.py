@@ -101,6 +101,11 @@ class VisionModelSpec:
     extra_defaults: dict[str, Any] = field(default_factory=dict)
     # Keep callable via resolve; omit from default dropdowns
     hidden: bool = False
+    supports_elements: bool = False
+    max_elements: int = 0
+    element_allows_video: bool = False
+    supports_multi_prompt: bool = False
+    max_multi_prompt: int = 0
 
 
 # UI sentinel when aspect follows the still (disabled control)
@@ -1024,6 +1029,8 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         default_aspect="16:9",
         resolution_choices=(),
         supports_audio=True,
+        supports_multi_prompt=True,
+        max_multi_prompt=6,
         extra_defaults={"generate_audio": True},
     ),
     "kling v3 standard t2v": VisionModelSpec(
@@ -1043,6 +1050,8 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         default_aspect="16:9",
         resolution_choices=(),
         supports_audio=True,
+        supports_multi_prompt=True,
+        max_multi_prompt=6,
         extra_defaults={"generate_audio": True},
     ),
     "kling o3 pro t2v": VisionModelSpec(
@@ -2452,13 +2461,18 @@ def build_vision_arguments(
     """Map UI fields → fal payload for the selected Vision model."""
     args: dict[str, Any] = dict(spec.extra_defaults)
     text = (prompt or "").strip()
-    if not text and "sync-lipsync" not in spec.endpoint.lower():
+    if (
+        not text
+        and "sync-lipsync" not in spec.endpoint.lower()
+        and not getattr(spec, "supports_multi_prompt", False)
+    ):
         raise ValueError(
             "Enter a prompt."
             if is_still_mode(spec.mode)
             else "Enter a motion / shot prompt."
         )
-    args["prompt"] = text
+    if text:
+        args["prompt"] = text
     if seed is not None:
         try:
             args["seed"] = int(seed)

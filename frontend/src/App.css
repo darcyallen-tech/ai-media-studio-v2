@@ -404,6 +404,65 @@
   margin-top: 8px;
 }
 
+.element-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #b4c2d2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #e4ebf2;
+}
+
+.element-tray-head,
+.element-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.element-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.element-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.element-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.element-drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  border: 1px dashed #b4c2d2;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+}
+
+.element-drop span {
+  font-weight: 650;
+  color: #3a4a5c;
+}
+
+.element-drop em {
+  font-style: normal;
+  color: #6b7584;
+  flex: 1;
+  min-width: 80px;
+}
+
 .param.check {
   flex-direction: row;
   align-items: center;
@@ -1566,6 +1625,23 @@ html[data-theme="night"] .advanced {
 }
 
 html[data-theme="night"] .advanced summary {
+  color: #9aa8b8;
+}
+
+html[data-theme="night"] .element-tray {
+  background: #1c2430;
+  border-color: #445266;
+}
+
+html[data-theme="night"] .element-drop {
+  border-color: #445266;
+}
+
+html[data-theme="night"] .element-drop span {
+  color: #c5d0dc;
+}
+
+html[data-theme="night"] .element-drop em {
   color: #9aa8b8;
 }
 

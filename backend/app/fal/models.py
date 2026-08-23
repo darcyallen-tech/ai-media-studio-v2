@@ -414,6 +414,12 @@ class VideoModelSpec:
     # Ballpark $/s for draft (no resolution param on draft endpoints)
     cost_per_second_draft: float | None = None
     hidden: bool = False
+    # Kling 3.0 / O3: @ElementN tray + native multi_prompt
+    supports_elements: bool = False
+    max_elements: int = 0
+    element_allows_video: bool = False
+    supports_multi_prompt: bool = False
+    max_multi_prompt: int = 0
 
     def nearest_duration(self, value: Any) -> str:
         """
@@ -868,7 +874,13 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         max_duration_seconds=15.0,
         allowed_durations=tuple(str(i) for i in range(3, 16)),
         cost_per_second=0.126,
-        notes="Default. Kling O3 Standard V2V edit — motion-preserving; length matches source (3–15s).",
+        supports_elements=True,
+        max_elements=4,
+        element_allows_video=False,
+        notes=(
+            "Default. Kling O3 Standard V2V edit — motion-preserving; length matches source (3–15s). "
+            "Elements (@ElementN) + optional @ImageN refs (max 4 combined)."
+        ),
     ),
     "kling o3 pro edit": VideoModelSpec(
         key="kling o3 pro edit",
@@ -882,7 +894,13 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         max_duration_seconds=15.0,
         allowed_durations=tuple(str(i) for i in range(3, 16)),
         cost_per_second=0.168,
-        notes="Kling O3 Pro V2V edit — higher quality; length matches source (3–15s).",
+        supports_elements=True,
+        max_elements=4,
+        element_allows_video=False,
+        notes=(
+            "Kling O3 Pro V2V edit — higher quality; length matches source (3–15s). "
+            "Elements (@ElementN) + optional @ImageN refs (max 4 combined)."
+        ),
     ),
     "kling o1 standard edit": VideoModelSpec(
         key="kling o1 standard edit",
@@ -1110,11 +1128,17 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         duration_param="duration",
         default_duration="5",
         max_duration_seconds=15.0,
+        i2v_image_field="start_image_url",
         supports_end_frame=True,
+        supports_elements=True,
+        max_elements=3,
+        element_allows_video=True,
+        supports_multi_prompt=True,
+        max_multi_prompt=6,
         cost_per_second=0.112,
         notes=(
             "Kling 3.0 Standard image-to-video. "
-            "Start still + optional end_image_url (Last Frame)."
+            "Start still + optional Last Frame. Elements (@Element1) and multi_prompt."
         ),
     ),
     "kling v3 pro i2v": VideoModelSpec(
@@ -1128,11 +1152,17 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         duration_param="duration",
         default_duration="5",
         max_duration_seconds=15.0,
+        i2v_image_field="start_image_url",
         supports_end_frame=True,
+        supports_elements=True,
+        max_elements=3,
+        element_allows_video=True,
+        supports_multi_prompt=True,
+        max_multi_prompt=6,
         cost_per_second=0.14,
         notes=(
             "Kling 3.0 Pro image-to-video. "
-            "Start still + optional end_image_url (Last Frame)."
+            "Start still + optional Last Frame. Elements (@Element1) and multi_prompt."
         ),
     ),
     "kling 2.6 pro i2v": VideoModelSpec(
@@ -2417,8 +2447,11 @@ def build_video_edit_arguments(
         notes.append(aspect_omit_note(spec.endpoint))
 
     from app.aspect_omit import sanitize_seedance_r2v_arguments
+    from app.kling_elements import apply_kling_extras
 
     args = sanitize_seedance_r2v_arguments(args, endpoint=spec.endpoint)
+    args, kling_notes = apply_kling_extras(args, params, spec=spec)
+    notes.extend(kling_notes)
     return args, notes
 
 
@@ -2740,8 +2773,11 @@ def build_i2v_arguments(
         args["negative_prompt"] = neg_s
 
     from app.aspect_omit import sanitize_seedance_r2v_arguments
+    from app.kling_elements import apply_kling_extras
 
     args = sanitize_seedance_r2v_arguments(args, endpoint=spec.endpoint)
+    args, kling_notes = apply_kling_extras(args, params, spec=spec)
+    notes.extend(kling_notes)
     return args, notes
 
 

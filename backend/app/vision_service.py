@@ -140,6 +140,7 @@ def run_vision(
     num_images: int | None = None,
     seed: int | None = None,
     draft: bool = False,
+    extra: dict[str, Any] | None = None,
     output_dir: str | Path,
     on_progress: ProgressCallback | None = None,
 ) -> VisionResult:
@@ -503,6 +504,12 @@ def run_vision(
                 num_images=want_n if mode == "text_to_image" else 1,
                 seed=seed,
             )
+            from app.kling_elements import apply_kling_extras
+
+            arguments, kling_notes = apply_kling_extras(
+                arguments, dict(extra or {}), spec=spec
+            )
+            build_notes.extend(kling_notes)
             endpoint_for_run = spec.endpoint
             model_key_for_result = spec.key
             # FLUX 3 draft: switch endpoint + drop resolution (+ aspect on I2V draft)

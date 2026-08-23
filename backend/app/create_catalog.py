@@ -60,6 +60,11 @@ class ModelEntry:
     hidden: bool = False
     first_last: bool = False
     supports_draft: bool = False
+    supports_elements: bool = False
+    max_elements: int = 0
+    element_allows_video: bool = False
+    supports_multi_prompt: bool = False
+    max_multi_prompt: int = 0
 
 
 def _parse_duration_token(tok: str | None) -> int | None:
@@ -131,6 +136,16 @@ def _size_limits(
             out["max_still_side"] = 1920
             out["max_still_bytes"] = 8 * 1024 * 1024
     return out
+
+
+def _kling_ui_flags(spec: Any) -> dict[str, Any]:
+    return {
+        "supports_elements": bool(getattr(spec, "supports_elements", False)),
+        "max_elements": int(getattr(spec, "max_elements", 0) or 0),
+        "element_allows_video": bool(getattr(spec, "element_allows_video", False)),
+        "supports_multi_prompt": bool(getattr(spec, "supports_multi_prompt", False)),
+        "max_multi_prompt": int(getattr(spec, "max_multi_prompt", 0) or 0),
+    }
 
 
 def _slots_for(
@@ -341,6 +356,7 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         hidden=bool(getattr(spec, "hidden", False)),
         first_last=first_last,
         supports_draft=supports_draft,
+        **_kling_ui_flags(spec),
     )
 
 
@@ -503,6 +519,7 @@ def _entry_from_video(spec: Any) -> ModelEntry:
         hidden=bool(getattr(spec, "hidden", False)),
         first_last=first_last,
         supports_draft=supports_draft,
+        **_kling_ui_flags(spec),
     )
 
 

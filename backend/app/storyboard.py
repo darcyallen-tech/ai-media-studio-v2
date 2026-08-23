@@ -16,6 +16,19 @@ PRIMARY_STORYBOARD_LABEL = "MiniMax H3 Omni Reference (R2V)"
 
 def list_storyboard_models() -> dict[str, Any]:
     rows = list_models_for_ui("video", "r2v")
+    seen = {(e.endpoint or "").strip().lower() for e in rows if e.endpoint}
+    extra: list[Any] = []
+    for modality in ("i2v", "t2v"):
+        for e in list_models_for_ui("video", modality):
+            if not e.supports_multi_prompt:
+                continue
+            key = (e.endpoint or "").strip().lower()
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            extra.append(e)
+    rows = list(rows) + extra
     default = default_model_for("video", "r2v")
     return {
         "mode": "storyboard",
@@ -26,7 +39,8 @@ def list_storyboard_models() -> dict[str, Any]:
         "models": rows,
         "notes": (
             "Primary path: MiniMax H3 Omni Reference-to-Video. "
-            "Hub stills + Shot start frames are sent as refs (max per model). "
+            "Kling 3.0 I2V/T2V maps Shots to native multi_prompt instead of a flattened R2V prompt. "
+            "Hub stills + Shot start frames are sent as refs on R2V (max per model). "
             "Too many refs returns a clear error — nothing is silently dropped."
         ),
     }

@@ -287,6 +287,7 @@ function StudioCanvas() {
   const openLibrary = () => setSideTab("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const libraryPickRef = useRef<((item: LibraryItem) => boolean) | null>(null);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
   const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
   const [lastItem, setLastItem] = useState<LibraryItem | null>(null);
@@ -2149,6 +2150,11 @@ function StudioCanvas() {
 
   const attachMedia = useCallback(
     (item: LibraryItem) => {
+      const intercept = libraryPickRef.current;
+      if (intercept) {
+        libraryPickRef.current = null;
+        if (intercept(item)) return;
+      }
       if (studioMode === "frame") {
         addSourceNode();
         tryAttachSlot("source", item);
@@ -2448,6 +2454,10 @@ function StudioCanvas() {
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
               onOpenLibrary: () => openLibrary(),
+              onLibraryPick: (handler) => {
+                libraryPickRef.current = handler;
+                openLibrary();
+              },
               onAddPromptBuilder: addPromptBuilder,
               instrumental,
               onInstrumental: setInstrumental,

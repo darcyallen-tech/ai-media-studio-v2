@@ -128,6 +128,22 @@ def run_image_to_video(
         if extra_urls:
             params["image_urls"] = extra_urls
 
+        from app.kling_elements import (
+            materialize_elements,
+            spec_element_allows_video,
+            spec_max_elements,
+            spec_supports_elements,
+        )
+
+        if spec_supports_elements(spec) and params.get("elements"):
+            params["elements"] = materialize_elements(
+                params.get("elements"),
+                allows_video=spec_element_allows_video(spec),
+                max_n=spec_max_elements(spec),
+                upload=lambda p: upload_file(p, on_progress=progress),
+                progress=progress,
+            )
+
         # Optional end frame (first→last) — local path in parameters
         end_local = params.pop("end_image_path", None) or params.pop(
             "end_image_file", None

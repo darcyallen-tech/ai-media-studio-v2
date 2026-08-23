@@ -32,6 +32,12 @@ export type ModelRow = {
   supports_end_frame?: boolean;
   first_last?: boolean;
   supports_draft?: boolean;
+  supports_elements?: boolean;
+  max_elements?: number;
+  element_allows_video?: boolean;
+  supports_multi_prompt?: boolean;
+  max_multi_prompt?: number;
+  modalities?: string[];
   required_slots?: string[];
   optional_slots?: string[];
   size_limits?: {
@@ -165,6 +171,7 @@ export type PromptNodeData = {
   ) => void;
   onOpenSettings?: () => void;
   onOpenLibrary?: () => void;
+  onLibraryPick?: (handler: (item: LibraryItem) => boolean) => void;
   onAttachSource?: (item: LibraryItem) => void;
   onClose?: () => void;
   onAddPromptBuilder?: () => void;

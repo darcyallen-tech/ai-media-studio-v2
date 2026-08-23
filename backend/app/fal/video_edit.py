@@ -144,6 +144,22 @@ def run_video_edit(
         image_urls: list[str] = []
         for p in refs:
             image_urls.append(upload_file(p, on_progress=progress))
+        from app.kling_elements import (
+            materialize_elements,
+            spec_element_allows_video,
+            spec_max_elements,
+            spec_supports_elements,
+        )
+
+        parameters = dict(parameters or {})
+        if spec_supports_elements(spec) and parameters.get("elements"):
+            parameters["elements"] = materialize_elements(
+                parameters.get("elements"),
+                allows_video=spec_element_allows_video(spec),
+                max_n=spec_max_elements(spec),
+                upload=lambda p: upload_file(p, on_progress=progress),
+                progress=progress,
+            )
     except (FalClientError, Exception) as exc:
         return VideoEditResult(
             ok=False,
