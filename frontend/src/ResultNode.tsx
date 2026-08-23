@@ -21,7 +21,11 @@ import { writeLibraryPayload, type ResultNodeData, type ToolKind } from "./types
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
 export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
-  const isSheet = data.slot === "sheet";
+  const isSheet =
+    data.slot === "sheet" ||
+    data.sheetKind === "dress" ||
+    data.sheetKind === "costume" ||
+    data.sheetKind === "character";
   const models = useSheetModels();
   const sheetModels = useMemo(() => {
     const r2i = Array.isArray(models.r2i) ? models.r2i.filter((m) => m?.id) : [];

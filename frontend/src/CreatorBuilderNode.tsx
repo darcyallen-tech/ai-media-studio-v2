@@ -1838,77 +1838,77 @@ function DressForm({
   }
 
   function openDressedSheet() {
-    const ident = char
-      ? char.fields?.identity_prompt ||
-        composeCharacterIdentity(char.fields || {}, char.notes || "")
-      : "the character";
-    const outfit = costume?.fields?.wardrobe || costume?.name || "the costume";
-    const cap = Math.max(1, maxRefs);
-    const refs = dressFrontRefs().slice(0, cap);
-    const chips = dressDefaultRefChips(char, costume);
-    const extraChips = extraCandidates
-      .filter((o) => extraOn[o.id])
-      .map((o) => ({
-        id: o.id,
-        label: o.label,
-        path: o.path,
-        url: o.url || "",
-      }));
-    const previews = [...chips, ...extraChips]
-      .filter((c, i, all) => c.path && all.findIndex((x) => x.path === c.path) === i)
-      .slice(0, cap);
-    const sheetSize = dressSizes.includes(dressSize) ? dressSize : pickSheetResolution(dressSizes);
-    const warn =
-      !char || !costume
-        ? "Pick a Character and a Costume."
-        : refs.length < 1
-          ? "Need a Character sheet (or Front) and Costume sheet (or Front)."
-          : null;
-    const patch = {
-      builderId,
-      slot: COSTUME_SHEET_SLOT,
-      label: "Dressed sheet",
-      prompt: composeDressSheetPrompt(ident, outfit),
-      generating: false,
-      error: warn,
-      focus: true,
-      resolution: pickDefaultResolution(dressQuals) || sheetSize,
-      resolutionChoices: dressSizes,
-      aspect: sheetSize,
-      quality: pickDefaultResolution(dressQuals),
-      qualityChoices: dressQuals,
-      t2iModel: models.t2iId,
-      r2iModel: models.r2iId || models.t2iId,
-      assetId: data.sessionAssetId || "",
-      sourceStill: refs[0] || "",
-      extraRefs: refs.slice(1),
-      maxRefs: cap,
-      wardrobe: outfit,
-      name: name.trim() || (char && costume ? `${char.name} / ${costume.name}` : "Dressed sheet"),
-      sheetKind: "dress" as const,
-      characterId,
-      costumeId,
-      refPreviews: previews,
-    };
     try {
-      spawnAngleResult(patch);
+      if (!builderId) {
+        throw new Error("Dress builder id missing — could not place the Result node.");
+      }
+      const ident = char
+        ? char.fields?.identity_prompt ||
+          composeCharacterIdentity(char.fields || {}, char.notes || "")
+        : "the character";
+      const outfit = costume?.fields?.wardrobe || costume?.name || "the costume";
+      const cap = Math.max(1, maxRefs || 3);
+      const refs = dressFrontRefs().slice(0, cap);
+      const chips = dressDefaultRefChips(char, costume);
+      const extraChips = extraCandidates
+        .filter((o) => extraOn[o.id])
+        .map((o) => ({
+          id: o.id,
+          label: o.label,
+          path: o.path,
+          url: o.url || "",
+        }));
+      const previews = [...chips, ...extraChips]
+        .filter((c, i, all) => c.path && all.findIndex((x) => x.path === c.path) === i)
+        .slice(0, cap);
+      const sheetSize = dressSizes.includes(dressSize) ? dressSize : pickSheetResolution(dressSizes);
+      const warn =
+        !char || !costume
+          ? "Pick a Character and a Costume."
+          : refs.length < 1
+            ? "Need a Character sheet (or Front) and Costume sheet (or Front)."
+            : null;
+      const nodeKey = `dressed-${characterId || "na"}-${costumeId || "na"}`;
+      console.info("[dress] spawn Dressed Sheet node", {
+        builderId,
+        nodeKey,
+        refs: refs.length,
+        characterId,
+        costumeId,
+      });
+      spawnAngleResult({
+        builderId,
+        slot: COSTUME_SHEET_SLOT,
+        nodeKey,
+        label: "Dressed sheet",
+        prompt: composeDressSheetPrompt(ident, outfit),
+        generating: false,
+        error: warn,
+        focus: true,
+        resolution: pickDefaultResolution(dressQuals) || sheetSize,
+        resolutionChoices: dressSizes,
+        aspect: sheetSize,
+        quality: pickDefaultResolution(dressQuals),
+        qualityChoices: dressQuals,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        assetId: data.sessionAssetId || "",
+        sourceStill: refs[0] || "",
+        extraRefs: refs.slice(1),
+        maxRefs: cap,
+        wardrobe: outfit,
+        name: name.trim() || (char && costume ? `${char.name} / ${costume.name}` : "Dressed sheet"),
+        sheetKind: "dress",
+        characterId,
+        costumeId,
+        refPreviews: previews,
+      });
       setError(warn);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Could not open dressed sheet.";
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[dress] Dressed Sheet spawn failed", err);
       setError(msg);
       toast(msg, true);
-      return;
-    }
-    if (!data.sessionAssetId && characterId && costumeId) {
-      void ensureVariant()
-        .then((id) => {
-          spawnAngleResult({ ...patch, assetId: id, error: warn, focus: true });
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : "Dress draft failed.";
-          setError(msg);
-          toast(msg, true);
-        });
     }
   }
 
@@ -2080,7 +2080,17 @@ function DressForm({
           : estimate}
       </p>
       <div className="prompt-actions">
-        <button type="button" className="generate" onClick={() => openDressedSheet()}>
+        <button
+          type="button"
+          className="generate nodrag"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openDressedSheet();
+          }}
+        >
           Generate Dressed Sheet
         </button>
       </div>
@@ -2089,9 +2099,15 @@ function DressForm({
           <button
             key={slot}
             type="button"
-            className="generate"
+            className="generate nodrag"
             disabled={slot !== "front" && !haveFront}
-            onClick={() => openAngle(slot)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openAngle(slot);
+            }}
           >
             Generate {SLOT_LABEL[slot]}
           </button>

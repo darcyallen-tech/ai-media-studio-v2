@@ -1276,8 +1276,9 @@ function StudioCanvas() {
 
   const upsertSheetAngle = useCallback(
     (builderId: string, slot: string, patch: SheetAnglePatch) => {
-      const angleId = `sang-${builderId}-${slot}`;
-      const edgeId = `e-${builderId}-${slot}`;
+      const key = patch.nodeKey || slot;
+      const angleId = `sang-${builderId}-${key}`;
+      const edgeId = `e-${builderId}-${key}`;
       const order = [
         "front",
         "side",
@@ -1288,7 +1289,11 @@ function StudioCanvas() {
         "top",
         "sheet",
       ];
-      const idx = Math.max(0, order.indexOf(slot));
+      const sheetish =
+        slot === "sheet" ||
+        patch.sheetKind === "dress" ||
+        key.startsWith("dressed");
+      const idx = sheetish ? 0 : Math.max(0, order.indexOf(slot));
       let panTo: { x: number; y: number } | null = patch.focus ? { x: 0, y: 0 } : null;
       try {
         setNodes((current) => {
@@ -1297,10 +1302,10 @@ function StudioCanvas() {
           const existing = current.find((n) => n.id === angleId);
           const position = existing?.position ?? {
             x: Math.max(
-              (builder?.position.x ?? PROMPT_POS.x) + 400,
+              (builder?.position.x ?? PROMPT_POS.x) + (sheetish ? 460 : 400),
               (promptNode?.position.x ?? PROMPT_POS.x) + 520,
             ),
-            y: (builder?.position.y ?? PROMPT_POS.y) + idx * 270,
+            y: (builder?.position.y ?? PROMPT_POS.y) + (sheetish ? 36 : idx * 270),
           };
           if (panTo) panTo = position;
           const prev = existing?.type === "result" ? existing.data : null;
@@ -1334,6 +1339,7 @@ function StudioCanvas() {
                   characterId: patch.characterId ?? n.data.characterId,
                   costumeId: patch.costumeId ?? n.data.costumeId,
                   refPreviews: patch.refPreviews ?? n.data.refPreviews,
+                  nodeKey: key,
                   assetId: patch.assetId || n.data.assetId,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
                 },
@@ -1371,6 +1377,7 @@ function StudioCanvas() {
               characterId: patch.characterId ?? prev?.characterId,
               costumeId: patch.costumeId ?? prev?.costumeId,
               refPreviews: patch.refPreviews ?? prev?.refPreviews,
+              nodeKey: key,
               wardrobe: patch.wardrobe ?? prev?.wardrobe,
               name: patch.name ?? prev?.name,
               generating: patch.generating ?? prev?.generating ?? false,
@@ -1431,12 +1438,12 @@ function StudioCanvas() {
             current,
           );
         });
-        if (panTo && (panTo.x || panTo.y) && !patch.generating) {
-          const x = panTo.x;
-          const y = panTo.y;
+        if (patch.focus && !patch.generating) {
+          const x = panTo?.x ?? 0;
+          const y = panTo?.y ?? 0;
           window.setTimeout(() => {
-            setCenter(x + 200, y + 150, { duration: 180, zoom: 1 });
-          }, 50);
+            setCenter(x + 220, y + 160, { duration: 180, zoom: 1 });
+          }, 40);
         }
       } catch (err: unknown) {
         console.error("Angle Result spawn failed", err);
@@ -1451,7 +1458,9 @@ function StudioCanvas() {
     function onSpawn(ev: Event) {
       const detail = (ev as CustomEvent<AngleSpawnDetail>).detail;
       if (!detail?.builderId || !detail.slot) {
-        toast("Could not open Result node (missing builder or slot).", true);
+        const msg = "Could not open Result node (missing builder or slot).";
+        console.error("[sheet] spawn rejected", msg, detail);
+        toast(msg, true);
         return;
       }
       try {
@@ -2660,6 +2669,7 @@ function StudioCanvas() {
                 sheetKind: n.data.sheetKind,
                 characterId: n.data.characterId,
                 costumeId: n.data.costumeId,
+                nodeKey: n.data.nodeKey,
                 refPreviews: n.data.refPreviews,
                 wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
                 name: n.data.name || builderSessions[builderId]?.name,

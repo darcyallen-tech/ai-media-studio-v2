@@ -252,6 +252,7 @@ export type ResultNodeData = {
   sheetKind?: "costume" | "character" | "dress";
   characterId?: string;
   costumeId?: string;
+  nodeKey?: string;
   refPreviews?: { id?: string; label: string; path: string; url?: string }[];
   onPrompt?: (prompt: string) => void;
   onModel?: (id: string) => void;
@@ -386,6 +387,7 @@ export type SheetAnglePatch = {
   sheetKind?: "costume" | "character" | "dress";
   characterId?: string;
   costumeId?: string;
+  nodeKey?: string;
   refPreviews?: { id?: string; label: string; path: string; url?: string }[];
 };
 
