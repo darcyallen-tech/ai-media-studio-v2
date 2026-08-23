@@ -58,6 +58,7 @@ _MODEL_ALIASES: dict[str, str] = {
     "seedance 2.0 fast v2v": "seedance-2-fast-v2v",
     "elevenlabs music": "el-music",
     "lyria 2": "lyria-2",
+    "lyria 3 pro": "lyria-3-pro",
     "minimax music 2.6": "minimax-music-26",
     "minimax music 3": "minimax-music-3",
     "sonilo text music": "sonilo-music",

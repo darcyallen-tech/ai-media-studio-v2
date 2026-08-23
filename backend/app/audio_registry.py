@@ -164,6 +164,22 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
             "output_format": "mp3_44100_128",
         },
     ),
+    "lyria 3 pro": AudioSpec(
+        key="lyria 3 pro",
+        label="Google Lyria 3 Pro",
+        category="music",
+        endpoint="fal-ai/lyria3/pro",
+        cost_estimate_usd=0.08,
+        notes=(
+            "Google Lyria 3 Pro — full songs up to 3 min (commercial use on fal). "
+            "Duration is steered in the prompt (no duration API field). Est. $0.08/track."
+        ),
+        supports_duration=True,
+        duration_min_s=15.0,
+        duration_max_s=180.0,
+        duration_default_s=30.0,
+        extra_defaults={},
+    ),
     "lyria 2": AudioSpec(
         key="lyria 2",
         label="Google Lyria 2",
@@ -564,6 +580,25 @@ def build_music_args(
             ms = int(max(spec.duration_min_s, min(spec.duration_max_s, duration_s)) * 1000)
             args["music_length_ms"] = ms
         args["force_instrumental"] = bool(instrumental)
+    elif "lyria3" in spec.endpoint:
+        # fal-ai/lyria3/pro: prompt + optional image_url. Length via natural language.
+        text = prompt
+        if duration_s is not None:
+            try:
+                secs = int(
+                    round(max(spec.duration_min_s, min(spec.duration_max_s, float(duration_s))))
+                )
+            except (TypeError, ValueError):
+                secs = int(spec.duration_default_s or 30)
+            if not re.search(
+                r"\b\d+\s*(s|sec|secs|second|seconds|min|mins|minute|minutes)\b",
+                text,
+                re.I,
+            ):
+                text = text.rstrip(".") + f". Target length about {secs} seconds."
+        if instrumental and "instrumental" not in text.lower():
+            text = text.rstrip(".") + ". Instrumental only — no vocals, no lyrics, no choir."
+        args["prompt"] = text
     elif "lyria2" in spec.endpoint:
         args["prompt"] = prompt
         # Defaults include "vocals, lyrics…" in negative_prompt for instrumental beds.
