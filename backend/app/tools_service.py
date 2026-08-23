@@ -88,6 +88,8 @@ def _registries(category: str, kind: str) -> dict[str, ToolSpec]:
         src = IMAGE_DEBLUR_MODELS if media != "video" else VIDEO_DEBLUR_MODELS
         return _vis(src)
     if cat == "interpolate":
+        if media != "video":
+            return {}
         return _vis(VIDEO_INTERPOLATE_MODELS)
     return {}
 
@@ -504,7 +506,7 @@ def estimate_tool_label(
 ) -> str:
     spec = resolve_tool(model_id, category, kind)
     if spec is None:
-        return "Est. cost: —"
+        return ""
     dur = float(duration_s or 5.0)
     if category == "upscale" and kind == "video":
         return format_video_upscale_cost(spec, target_label=factor or "1080p", duration_s=dur)

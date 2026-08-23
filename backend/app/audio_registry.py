@@ -14,8 +14,8 @@ from typing import Any, Literal
 Category = Literal["music", "sfx", "ambience", "video_sfx", "voiceover", "voice_clone"]
 # per_second: cost_per_second × duration (Sonilo, ElevenLabs Music, …)
 # flat_per_track: one price per generation regardless of length (Lyria 3 Pro)
-# If fal starts billing Lyria by length, switch to per_second and set cost_per_second.
-PricingMode = Literal["per_second", "flat_per_track"]
+# If fal starts billing Lyria by length, switch to per_sec and set cost_per_second.
+PricingMode = Literal["per_sec", "per_second", "flat_per_track", "per_char"]
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,18 @@ class AudioSpec:
     # Soft/hard prompt length limit (chars). None = no enforced limit.
     max_prompt_chars: int | None = None
     extra_defaults: dict[str, Any] = field(default_factory=dict)
+
+    def resolved_pricing_mode(self) -> str:
+        raw = (self.pricing_mode or "").strip().lower()
+        if raw in ("per_second", "per_sec"):
+            return "per_sec"
+        if raw in ("flat_per_track", "per_char"):
+            return raw
+        if self.category == "voiceover":
+            return "per_char"
+        if self.cost_per_second is not None:
+            return "per_sec"
+        return "flat_per_track"
 
 
 # Built-in ElevenLabs voices (name or ID on fal endpoints)
@@ -118,6 +130,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         duration_max_s=300.0,
         duration_default_s=60.0,
         cost_per_second=0.002,
+        pricing_mode="per_sec",
         extra_defaults={},
     ),
     "minimax music 2.6": AudioSpec(
@@ -128,6 +141,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         cost_estimate_usd=0.15,
         notes="Default. Full tracks from style prompt. Instrumental-friendly for listings.",
         supports_duration=False,
+        pricing_mode="flat_per_track",
         extra_defaults={
             "is_instrumental": True,
             "lyrics_optimizer": False,
@@ -148,6 +162,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         duration_max_s=600.0,
         duration_default_s=90.0,
         cost_per_second=0.0025,
+        pricing_mode="per_sec",
         extra_defaults={
             "num_samples": 1,
         },
@@ -164,6 +179,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         duration_max_s=180.0,
         duration_default_s=30.0,
         cost_per_second=0.0133,  # ~$0.80/min on fal
+        pricing_mode="per_sec",
         extra_defaults={
             "force_instrumental": True,
             "output_format": "mp3_44100_128",
@@ -212,6 +228,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         duration_max_s=190.0,
         duration_default_s=30.0,
         cost_per_second=0.01,
+        pricing_mode="per_sec",
         extra_defaults={},
     ),
 }
@@ -235,6 +252,7 @@ AMBIENCE_MODELS: dict[str, AudioSpec] = {
         duration_max_s=190.0,
         duration_default_s=30.0,
         cost_per_second=0.01,
+        pricing_mode="per_sec",
         extra_defaults={},
     ),
 }
@@ -253,6 +271,7 @@ SFX_MODELS: dict[str, AudioSpec] = {
         duration_max_s=22.0,
         duration_default_s=5.0,
         cost_per_second=0.002,
+        pricing_mode="per_sec",
         extra_defaults={
             "prompt_influence": 0.3,
             "output_format": "mp3_44100_128",
@@ -271,6 +290,7 @@ SFX_MODELS: dict[str, AudioSpec] = {
         duration_max_s=30.0,
         duration_default_s=5.0,
         cost_per_second=0.0018,
+        pricing_mode="per_sec",
         extra_defaults={
             "audio_format": "mp3",
         },
@@ -403,7 +423,12 @@ VOICEOVER_MODELS: dict[str, AudioSpec] = {
         category="voiceover",
         endpoint="fal-ai/minimax/speech-02-hd",
         cost_estimate_usd=0.04,
-        notes="Default for My Voices. MiniMax HD TTS with emotion + speed control.",
+        notes=(
+            "Default for My Voices. MiniMax HD TTS with emotion + speed control. "
+            "Empty prompt → flat catalog estimate; per-character when a script is set "
+            "(optional char-count param later)."
+        ),
+        pricing_mode="per_char",
         supports_voice=True,
         default_voice="Wise_Woman",
         voice_provider="minimax",
@@ -420,8 +445,10 @@ VOICEOVER_MODELS: dict[str, AudioSpec] = {
         notes=(
             "xAI Grok TTS via fal. Voices: Eve, Ara, Leo, Rex, Sal. "
             "Delivery notes map to wrapping tags (slow/soft/whisper); "
-            "script can also use [laugh], [pause], [sigh]."
+            "script can also use [laugh], [pause], [sigh]. "
+            "Empty prompt → flat catalog estimate; per-character when a script is set."
         ),
+        pricing_mode="per_char",
         supports_voice=True,
         default_voice="Eve",
         voice_provider="grok",
@@ -435,7 +462,11 @@ VOICEOVER_MODELS: dict[str, AudioSpec] = {
         category="voiceover",
         endpoint="fal-ai/elevenlabs/tts/eleven-v3",
         cost_estimate_usd=0.05,
-        notes="Natural TTS. Tags: [laughs], [whispers]. Stock voices.",
+        notes=(
+            "Natural TTS. Tags: [laughs], [whispers]. Stock voices. "
+            "Empty prompt → flat catalog estimate; per-character when a script is set."
+        ),
+        pricing_mode="per_char",
         supports_voice=True,
         default_voice="Rachel",
         voice_provider="elevenlabs",
@@ -447,7 +478,11 @@ VOICEOVER_MODELS: dict[str, AudioSpec] = {
         category="voiceover",
         endpoint="fal-ai/elevenlabs/tts/turbo-v2.5",
         cost_estimate_usd=0.03,
-        notes="Fast multilingual TTS for quick listing reads.",
+        notes=(
+            "Fast multilingual TTS for quick listing reads. "
+            "Empty prompt → flat catalog estimate; per-character when a script is set."
+        ),
+        pricing_mode="per_char",
         supports_voice=True,
         default_voice="Rachel",
         voice_provider="elevenlabs",
@@ -524,7 +559,11 @@ def find_audio(label_or_key: str | None, registry: dict[str, AudioSpec]) -> Audi
 
 
 def is_flat_per_track(spec: AudioSpec) -> bool:
-    return (spec.pricing_mode or "") == "flat_per_track"
+    return spec.resolved_pricing_mode() == "flat_per_track"
+
+
+def is_per_char(spec: AudioSpec) -> bool:
+    return spec.resolved_pricing_mode() == "per_char"
 
 
 def estimate_audio_cost(
@@ -575,11 +614,14 @@ def format_audio_cost(
     unit = None
     if spec.category == "voice_clone":
         unit = "clone job"
-    elif spec.cost_per_second is not None and duration_s is not None and duration_s > 0:
+    elif is_per_char(spec):
+        if text and text.strip():
+            unit = f"{max(1, len(text.strip()))} chars"
+        else:
+            unit = "empty prompt"
+    elif spec.resolved_pricing_mode() == "per_sec" and duration_s is not None and duration_s > 0:
         unit = f"{float(duration_s):.0f}s"
-    elif spec.category == "voiceover" and text:
-        unit = f"{max(1, len(text.strip()))} chars"
-    elif duration_s is not None and duration_s > 0:
+    elif spec.cost_per_second is not None and duration_s is not None and duration_s > 0:
         unit = f"{float(duration_s):.0f}s"
     return format_job_cost(amount, unit=unit, model=spec.label)
 

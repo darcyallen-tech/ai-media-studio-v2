@@ -397,8 +397,12 @@ def estimate_audio_label(
 ) -> str:
     spec = resolve_audio_spec(model_id, modality)
     if spec is None:
-        return "Est. cost: —"
+        return ""
+    from app.audio_registry import is_flat_per_track, is_per_char
+
     dur = parse_duration_s(duration)
+    if is_flat_per_track(spec) or is_per_char(spec):
+        return format_audio_cost(spec, duration_s=None, text=prompt)
     if dur is None:
         dur = spec.duration_default_s if spec.supports_duration else spec.fixed_duration_s
     return format_audio_cost(spec, duration_s=dur, text=prompt)

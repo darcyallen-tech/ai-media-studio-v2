@@ -28,12 +28,14 @@ from app.audio_service import (  # noqa: E402
     duration_tokens,
     estimate_audio_label,
     generate_audio,
+    resolve_audio_spec,
     ui_audio_registries,
 )
 from app.tools_service import (  # noqa: E402
     estimate_tool_label,
     generate_tool,
     list_tools,
+    resolve_tool,
 )
 from app.config import APP_TITLE, OUTPUT_DIR, ensure_output_dir  # noqa: E402
 from app.character_scene import (  # noqa: E402
@@ -77,7 +79,7 @@ from app.aleph_service import (  # noqa: E402
 from app.video_prep import prepare_aleph_source  # noqa: E402
 from app.create import CreateResult, estimate_create_cost, generate  # noqa: E402
 from app.enhance import enhance_prompt_text  # noqa: E402
-from app.create_catalog import default_model_for, list_models_for_ui  # noqa: E402
+from app.create_catalog import default_model_for, list_models_for_ui, resolve_model  # noqa: E402
 from app.create_state import CreateParams, CreateSlots, CreateState  # noqa: E402
 from app.runware_client import has_runware_key  # noqa: E402
 from app.library import (  # noqa: E402
@@ -408,7 +410,7 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     "endpoint": spec.endpoint,
                     "notes": spec.notes,
                     "cost_estimate_usd": spec.cost_estimate_usd,
-                    "pricing_mode": spec.pricing_mode,
+                    "pricing_mode": spec.resolved_pricing_mode(),
                     "cost": estimate_audio_label(spec.key, spec.category),
                     "backend": "audio",
                     "source_key": spec.key,
@@ -549,8 +551,15 @@ def estimate_get(
     resolution: str | None = Query(default=None),
     generate_audio: bool | None = Query(default=None),
     prompt: str | None = Query(default=None),
+    factor: str | None = Query(default=None),
+    kind: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Cost-only estimate from catalog helpers (query form)."""
+    extra: dict[str, Any] = {}
+    if factor:
+        extra["factor"] = factor
+    if kind:
+        extra["kind"] = kind
     body = CreateStateIn(
         mode=mode,
         modality=modality,
@@ -561,6 +570,7 @@ def estimate_get(
             aspect=aspect,
             resolution=resolution,
             audio_on=generate_audio,
+            extra=extra,
         ),
     )
     return _estimate_payload(body)
@@ -585,9 +595,42 @@ def estimate_post(body: CreateStateIn) -> dict[str, Any]:
     return _estimate_payload(body)
 
 
+def _unknown_model_payload(model_id: str) -> dict[str, Any]:
+    mid = (model_id or "").strip() or "(none)"
+    return {
+        "ok": False,
+        "cost": None,
+        "result_paths": [],
+        "duration_sec": 0,
+        "error": f"Unknown model_id: {mid}",
+    }
+
+
 def _estimate_payload(body: CreateStateIn) -> dict[str, Any]:
     mode = (body.mode or "").strip().lower()
+    mid = (body.model_id or "").strip()
+    extra = body.params.extra if isinstance(body.params.extra, dict) else {}
+
+    if mode == "tool":
+        cat = (body.modality or extra.get("category") or "").strip().lower()
+        kind = str(extra.get("kind") or "video").strip().lower()
+        if not mid or resolve_tool(mid, cat, kind) is None:
+            return _unknown_model_payload(mid)
+        from app.pricing import parse_duration_seconds
+
+        dur = parse_duration_seconds(body.params.duration)
+        cost = estimate_tool_label(
+            category=cat,
+            model_id=mid,
+            kind=kind,
+            factor=str(extra.get("factor") or body.params.resolution or "") or None,
+            duration_s=dur,
+        )
+        return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
+
     if mode == "audio":
+        if not mid or resolve_audio_spec(mid, body.modality) is None:
+            return _unknown_model_payload(mid)
         cost = _audio_estimate(
             body.model_id,
             body.modality,
@@ -598,6 +641,8 @@ def _estimate_payload(body: CreateStateIn) -> dict[str, Any]:
     if mode == "frame":
         cost = estimate_frame_label(body.params.duration)
         return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}
+    if not mid or resolve_model(mid, mode=mode or None, modality=body.modality or None) is None:
+        return _unknown_model_payload(mid)
     state = _state_from_body(body)
     cost = estimate_create_cost(state)
     return {"ok": True, "cost": cost, "result_paths": [], "duration_sec": 0, "error": None}

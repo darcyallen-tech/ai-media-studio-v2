@@ -1031,11 +1031,11 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         label="Kling 3.0 Standard · Text→Video",
         mode="text_to_video",
         endpoint="fal-ai/kling-video/v3/standard/text-to-video",
-        cost_estimate_usd=0.84,
-        cost_per_second=0.168,
+        cost_estimate_usd=0.63,  # 5s × $0.126 audio on
+        cost_per_second=0.126,
         notes=(
             "Kling 3.0 Standard T2V — 3–15s · native audio. "
-            "Est. $0.112/s audio off · $0.168/s audio on."
+            "Est. $0.084/s audio off · $0.126/s audio on (not Pro)."
         ),
         duration_choices=tuple(str(i) for i in range(3, 16)),
         default_duration="5",
@@ -1113,10 +1113,10 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         cost_per_second=0.30,
         notes=(
             "Mirage Avatar X talking-head from a script (prompt = spoken script, 50–1500 chars). "
-            "Stock avatar Jasmine. Est. ~$0.30/s."
+            "Stock avatar Jasmine. Est. ~$0.30/s. Duration follows script; cap 60s for estimates."
         ),
-        duration_choices=(),
-        default_duration="",
+        duration_choices=("5", "10", "15", "20", "30", "45", "60"),
+        default_duration="15",
         aspect_choices=(),
         default_aspect="",
         resolution_choices=(),
@@ -1555,10 +1555,10 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         cost_per_second=0.30,
         notes=(
             "Mirage Avatar X identity lock. Needs a voice/audio ref (and optional "
-            "talking-head video). Est. $0.30/s."
+            "talking-head video). Est. $0.30/s. Duration follows audio; cap 60s for estimates."
         ),
-        duration_choices=(),
-        default_duration="",
+        duration_choices=("5", "10", "15", "20", "30", "45", "60"),
+        default_duration="15",
         aspect_choices=(),
         default_aspect="",
         resolution_choices=(),
@@ -1728,15 +1728,16 @@ V2V_MODELS: dict[str, VisionModelSpec] = {
         label="FLUX 3 · Extend (V2V)",
         mode="video_to_video",
         endpoint="blackforestlabs/flux-3/extend-video",
-        cost_estimate_usd=1.36,
-        cost_per_second=0.17,
-        cost_per_second_by_resolution={"720p": 0.17, "1080p": 0.29},
+        cost_estimate_usd=3.28,  # 8s × $0.41 @720p
+        cost_per_second=0.41,
+        cost_per_second_by_resolution={"720p": 0.41, "1080p": 0.53},
         draft_endpoint="blackforestlabs/flux-3/extend-video/draft",
         enhance_endpoint="blackforestlabs/flux-3/draft-enhance",
         cost_per_second_draft=0.06,
         notes=(
             "Continue a clip with prompt + optional native audio. "
-            "Same family as Extend Video tab; listed here for Studio-aligned V2V."
+            "Same family as Extend Video tab; listed here for Studio-aligned V2V. "
+            "Est. $0.41/s @720p · $0.53/s @1080p (extend, not I2V)."
         ),
         duration_choices=("auto",) + tuple(str(i) for i in range(5, 21)),
         default_duration="8",
@@ -1756,10 +1757,10 @@ V2V_MODELS: dict[str, VisionModelSpec] = {
         cost_per_second=8.0 / 60.0,
         notes=(
             "sync-3 lipsync — source clip + dialogue audio. Est. $8/min. "
-            "Prompt is unused; attach an audio ref."
+            "Prompt is unused; attach an audio ref. Estimate uses source length (max 120s)."
         ),
-        duration_choices=(),
-        default_duration="",
+        duration_choices=("5", "10", "15", "30", "60", "90", "120"),
+        default_duration="10",
         aspect_choices=(),
         resolution_choices=(),
         supports_audio=False,
@@ -2027,9 +2028,9 @@ EXTEND_MODELS: dict[str, VisionModelSpec] = {
         label="FLUX 3 · Extend Video",
         mode="extend",
         endpoint="blackforestlabs/flux-3/extend-video",
-        cost_estimate_usd=1.36,  # 8s × $0.17
-        cost_per_second=0.17,
-        cost_per_second_by_resolution={"720p": 0.17, "1080p": 0.29},
+        cost_estimate_usd=3.28,  # 8s × $0.41 @720p
+        cost_per_second=0.41,
+        cost_per_second_by_resolution={"720p": 0.41, "1080p": 0.53},
         draft_endpoint="blackforestlabs/flux-3/extend-video/draft",
         enhance_endpoint="blackforestlabs/flux-3/draft-enhance",
         cost_per_second_draft=0.06,
@@ -2037,7 +2038,7 @@ EXTEND_MODELS: dict[str, VisionModelSpec] = {
             "FLUX 3 extend (BFL on fal) — continue an existing clip with a prompt. "
             "Source video under 50 MB / 15s. 5–20s or auto · 720p/1080p · optional audio. "
             "Draft first → Enhance to full. "
-            "Est. ~$0.17/s @720p · ~$0.29/s @1080p · draft ~$0.06/s. Also Studio V2V."
+            "Est. $0.41/s @720p · $0.53/s @1080p (extend, not I2V) · draft ~$0.06/s."
         ),
         duration_choices=("auto",) + tuple(str(i) for i in range(5, 21)),
         default_duration="8",
@@ -2142,6 +2143,20 @@ def is_r2v_mode(mode: VisionMode | str | None) -> bool:
 
 def is_r2i_mode(mode: VisionMode | str | None) -> bool:
     return mode == "reference_to_image"
+
+
+def vision_duration_eff(
+    spec: VisionModelSpec,
+    duration_token: str | None,
+) -> tuple[float, str]:
+    """Clamp requested duration to this model's enum / max before pricing."""
+    from app.pricing import clamp_estimate_duration
+
+    return clamp_estimate_duration(
+        duration_token,
+        duration_enum=spec.duration_choices,
+        default=spec.default_duration,
+    )
 
 
 def duration_seconds(token: str | None) -> float:
@@ -2297,9 +2312,8 @@ def estimate_vision_cost(
             base *= 1.15
         return round(max(0.01, base * n), 3)
 
-    # --- Video: total = per-second rate × duration ---
-    dur_token = duration_token if duration_token not in (None, "") else spec.default_duration
-    secs = duration_seconds(dur_token)
+    # --- Video: total = per-second rate × duration_eff (clamped to enum / max) ---
+    secs, _dur_tok = vision_duration_eff(spec, duration_token)
     default_secs = duration_seconds(spec.default_duration) or 8.0
 
     # Seedance 2.5 — token formula (prefer over flat $/s tables)
@@ -2396,8 +2410,7 @@ def format_vision_cost(
         if n > api_max:
             unit = f"{unit} · {n} sequential runs"
         return format_job_cost(amt, unit=unit, model=spec.label)
-    dur_token = duration_token if duration_token not in (None, "") else spec.default_duration
-    secs = duration_seconds(dur_token)
+    secs, _dur_tok = vision_duration_eff(spec, duration_token)
     dur_txt = f"{secs:.0f}" if abs(secs - round(secs)) < 1e-6 else f"{secs:.1f}"
     unit = f"{dur_txt}s"
     if is_seedance_25_spec(spec) and has_video_refs:

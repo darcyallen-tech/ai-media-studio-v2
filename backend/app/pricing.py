@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from app.fal.models import (
     resolve_image_edit_model,
@@ -117,6 +118,96 @@ def format_job_cost(
         # Avoid double-wrapping if model already has parens-heavy labels
         return " · ".join(parts) + f" ({m})"
     return " · ".join(parts)
+
+
+_DURATION_LEAD = re.compile(r"^\s*(\d+(?:\.\d+)?)")
+
+
+def parse_duration_seconds(token: str | float | None) -> float | None:
+    """Parse UI duration tokens (``8s``, ``8``, ``10``) to seconds. ``auto`` → None."""
+    if token is None or token == "":
+        return None
+    if isinstance(token, (int, float)) and not isinstance(token, bool):
+        v = float(token)
+        return v if v > 0 else None
+    t = str(token).strip().lower()
+    if t in ("auto", "default", "none", "—", "-", "n/a", "na"):
+        return None
+    m = _DURATION_LEAD.match(t.replace("seconds", "s").replace("sec", "s"))
+    if not m:
+        return None
+    try:
+        v = float(m.group(1))
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
+def clamp_estimate_duration(
+    requested: str | float | None,
+    *,
+    duration_min: float | None = None,
+    duration_max: float | None = None,
+    duration_enum: Sequence[str] | None = None,
+    default: str | float | None = None,
+) -> tuple[float, str]:
+    """
+    Duration used for pricing labels.
+
+    ``duration_eff = nearest(enum)`` after ``min(requested, duration_max)``.
+    Returns ``(seconds, token)`` e.g. ``(8.0, "8")``.
+    """
+    enum = tuple(str(x).strip() for x in (duration_enum or ()) if str(x).strip())
+    nums: list[float] = []
+    has_auto = False
+    for e in enum:
+        el = e.lower()
+        if el in ("auto", "default"):
+            has_auto = True
+            continue
+        n = parse_duration_seconds(e)
+        if n is not None:
+            nums.append(n)
+
+    lo = float(duration_min) if duration_min is not None else None
+    hi = float(duration_max) if duration_max is not None else None
+    if nums:
+        lo = min(nums) if lo is None else max(lo, min(nums))
+        hi = max(nums) if hi is None else min(hi, max(nums))
+
+    req_raw = (
+        str(requested).strip().lower()
+        if requested is not None and str(requested).strip()
+        else ""
+    )
+    if req_raw in ("auto", "default") and has_auto:
+        secs = parse_duration_seconds(default)
+        if secs is None:
+            secs = nums[len(nums) // 2] if nums else (lo or 8.0)
+        if hi is not None:
+            secs = min(secs, hi)
+        if lo is not None:
+            secs = max(secs, lo)
+        return float(secs), "auto"
+
+    secs = parse_duration_seconds(requested)
+    if secs is None:
+        secs = parse_duration_seconds(default)
+    if secs is None:
+        secs = lo if lo is not None else 5.0
+
+    if hi is not None:
+        secs = min(secs, hi)
+    if lo is not None:
+        secs = max(secs, lo)
+    if nums:
+        secs = min(nums, key=lambda a: (abs(a - secs), a))
+
+    if abs(secs - round(secs)) < 1e-6:
+        tok = str(int(round(secs)))
+    else:
+        tok = f"{secs:.1f}".rstrip("0").rstrip(".")
+    return float(secs), tok
 
 
 def format_render_metrics(
@@ -280,31 +371,40 @@ def live_estimate_cost(
         spec = resolve_video_model(model_choice) or default_i2v_model()
         if spec.task != "image_to_video":
             spec = default_i2v_model()
-        secs = float(dur_f) if dur_f is not None and dur_f > 0 else float(
-            spec.default_duration or 5
-        )
+        secs, tok = _studio_duration_eff(spec, dur_f, params.get("duration") or other.get("duration"))
         amount = spec.estimate_cost(
             secs,
             generate_audio=gen_audio,
             resolution=str(resolution) if resolution else None,
         )
         return format_job_cost(
-            amount, unit=f"{secs:.0f}s", model=spec.label
+            amount, unit=f"{tok}s" if tok != "auto" else f"{secs:.0f}s", model=spec.label
         )
 
     # video edit — cost often scales with source length
     spec = resolve_video_model(model_choice) or default_video_edit_model()
     if spec.task != "video_edit":
         spec = default_video_edit_model()
-    secs = float(dur_f) if dur_f is not None and dur_f > 0 else float(
-        spec.default_duration or 5
-    )
+    secs, tok = _studio_duration_eff(spec, dur_f, params.get("duration") or other.get("duration"))
     amount = spec.estimate_cost(
         secs,
         generate_audio=gen_audio,
         resolution=str(resolution) if resolution else None,
     )
-    return format_job_cost(amount, unit=f"{secs:.0f}s", model=spec.label)
+    return format_job_cost(
+        amount, unit=f"{tok}s" if tok != "auto" else f"{secs:.0f}s", model=spec.label
+    )
+
+
+def _studio_duration_eff(spec: Any, dur_f: float | None, dur_token: Any) -> tuple[float, str]:
+    requested: str | float | None = dur_token if dur_token not in (None, "") else dur_f
+    return clamp_estimate_duration(
+        requested,
+        duration_min=getattr(spec, "min_duration_seconds", None),
+        duration_max=getattr(spec, "max_duration_seconds", None),
+        duration_enum=getattr(spec, "allowed_durations", ()) or (),
+        default=getattr(spec, "default_duration", None),
+    )
 
 
 def image_cost_usd(model_key: str, num_images: int, resolution: str | None = None) -> float | None:

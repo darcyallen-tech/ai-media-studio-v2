@@ -496,12 +496,17 @@ class VideoModelSpec:
             rate = self.cost_per_second_by_resolution.get(res, rate)
         if rate is None and self.cost_fixed is None:
             return None
-        secs = duration_seconds
-        if secs is None or secs <= 0:
+        tok = self.nearest_duration(duration_seconds)
+        if tok == "auto":
             try:
-                secs = float(self.default_duration or 5)
+                secs = float(str(self.default_duration or 5).replace("s", "").strip())
             except (TypeError, ValueError):
                 secs = 5.0
+        else:
+            try:
+                secs = float(str(tok).replace("s", "").strip())
+            except (TypeError, ValueError):
+                secs = float(duration_seconds or 5)
         total = (rate or 0.0) * float(secs)
         if self.cost_fixed is not None:
             total += float(self.cost_fixed)
@@ -1183,6 +1188,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         task="image_to_video",
         image_field=None,
         i2v_image_field="image_url",
+        max_ref_images=1,
         keep_audio_param=None,
         generate_audio_param="generate_audio",
         default_generate_audio=True,
@@ -1523,8 +1529,8 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         ),
         default_aspect_ratio="auto",
         auto_image_refs_in_prompt=False,
-        cost_per_second=0.17,
-        cost_per_second_by_resolution={"720p": 0.17, "1080p": 0.29},
+        cost_per_second=0.41,
+        cost_per_second_by_resolution={"720p": 0.41, "1080p": 0.53},
         extra_defaults={"safety_tolerance": 2},
         draft_endpoint="blackforestlabs/flux-3/extend-video/draft",
         enhance_endpoint="blackforestlabs/flux-3/draft-enhance",
@@ -1533,7 +1539,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "FLUX 3 extend (BFL on fal) — continue an existing clip with prompt + native audio. "
             "Source video + prompt. 5–20s or auto · 720p/1080p. "
             "Optional Draft first → Enhance to full. "
-            "Est. ~$0.17/s @720p · ~$0.29/s @1080p · draft ~$0.06/s (ballpark)."
+            "Est. $0.41/s @720p · $0.53/s @1080p (extend, not I2V) · draft ~$0.06/s."
         ),
     ),
     # --- MiniMax H3 (Hailuo-03) — multimodal T2V/I2V/omni reference ---

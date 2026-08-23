@@ -119,6 +119,7 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
             "Topaz Proteus — best default general upscale for most listing clips. "
             "Est. ~$0.01/s ≤720p, ~$0.02/s →1080p, ~$0.08/s above 1080p (60fps ×2)."
         ),
+        cost_per_second=0.02,
         extra_defaults={"model": "Proteus", "upscale_factor": 2},
     ),
     "topaz artemis hq": ToolSpec(
@@ -129,8 +130,10 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
         cost_estimate_usd=0.20,
         notes=(
             "Topaz Artemis HQ — denoise + sharpen for degraded / compressed sources. "
-            "Prefer Video Denoise tool for pure noise cleanup without a big scale-up."
+            "Prefer Video Denoise tool for pure noise cleanup without a big scale-up. "
+            "Est. ~$0.02/s @1080p on fal-ai/topaz/upscale/video."
         ),
+        cost_per_second=0.02,
         extra_defaults={"model": "Artemis HQ", "upscale_factor": 2},
     ),
     "topaz nyx": ToolSpec(
@@ -141,8 +144,10 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
         cost_estimate_usd=0.20,
         notes=(
             "Topaz Nyx — dedicated denoise family. For one-click high-ISO cleanup "
-            "with noise/compression sliders, use the Video Denoise tool."
+            "with noise/compression sliders, use the Video Denoise tool. "
+            "Est. ~$0.02/s @1080p on fal-ai/topaz/upscale/video."
         ),
+        cost_per_second=0.02,
         extra_defaults={"model": "Nyx", "upscale_factor": 2},
     ),
     "topaz starlight hq": ToolSpec(
@@ -153,8 +158,10 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
         cost_estimate_usd=0.25,
         notes=(
             "Topaz Starlight HQ — generative diffusion restore/upscale. "
-            "Heavier; use when detail needs inventing, not just denoise."
+            "Heavier; use when detail needs inventing, not just denoise. "
+            "Est. placeholder ~$0.04/s @1080p (fal does not list a per-model rate on this SKU)."
         ),
+        cost_per_second=0.04,
         extra_defaults={"model": "Starlight HQ", "upscale_factor": 2},
     ),
     "topaz gaia hq": ToolSpec(
@@ -165,8 +172,10 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
         cost_estimate_usd=0.20,
         notes=(
             "Topaz Gaia HQ — refined rendered / CG content. "
-            "Gaia 2 is half price for animation/motion graphics at 2×."
+            "Gaia 2 is half price for animation/motion graphics at 2×. "
+            "Est. ~$0.02/s @1080p on fal-ai/topaz/upscale/video."
         ),
+        cost_per_second=0.02,
         extra_defaults={"model": "Gaia HQ", "upscale_factor": 2},
     ),
     # Legacy key alias kept for sessions that still store "Topaz Video Upscale"
@@ -1469,6 +1478,8 @@ def estimate_video_upscale_cost(
     dur = max(1.0, float(duration_s or 8.0))
     ep = spec.endpoint.lower()
     key = spec.key.lower()
+    if spec.cost_per_second is not None and float(spec.cost_per_second) > 0:
+        return max(0.05, float(spec.cost_per_second) * dur)
 
     if "seedvr" in ep or "seedvr" in key:
         # ~$0.001 / MP of frames; assume 30fps, common targets

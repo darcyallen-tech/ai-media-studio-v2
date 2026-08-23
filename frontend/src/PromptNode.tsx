@@ -393,7 +393,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         if (!res.ok) throw new Error(`Estimate ${res.status}`);
         return res.json();
       })
-      .then((body: { cost?: string }) => {
+      .then((body: { ok?: boolean; cost?: string; error?: string | null }) => {
+        if (body.ok === false) {
+          setEstimate(body.error || "Unknown model");
+          return;
+        }
         setEstimate(body.cost || "Est. cost: —");
       })
       .catch((err: unknown) => {

@@ -56,9 +56,35 @@ export default function ToolNode({ data }: NodeProps<ToolFlowNode>) {
   }, [data.kind, data.mediaKind]);
 
   useEffect(() => {
-    const row = models.find((m) => m.id === modelId);
-    if (row) setEstimate(row.cost || "Est. cost: —");
-  }, [modelId, models]);
+    if (!modelId) {
+      setEstimate("Est. cost: —");
+      return;
+    }
+    const ac = new AbortController();
+    const qs = new URLSearchParams({
+      mode: "tool",
+      modality: data.kind,
+      model_id: modelId,
+      kind: data.mediaKind,
+    });
+    if (factor) qs.set("factor", factor);
+    const dur = data.source?.duration_sec;
+    if (dur && dur > 0) qs.set("duration", String(dur));
+    fetch(`/estimate?${qs}`, { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { ok?: boolean; cost?: string; error?: string | null } | null) => {
+        if (!body) return;
+        if (body.ok === false) {
+          setEstimate(body.error || "Unknown model");
+          return;
+        }
+        if (body.cost) setEstimate(body.cost);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      });
+    return () => ac.abort();
+  }, [modelId, factor, data.kind, data.mediaKind, data.source?.duration_sec]);
 
   function onDropReplace(itemIn: LibraryItem) {
     const accept = data.mediaKind === "video" ? "video" : "image";
