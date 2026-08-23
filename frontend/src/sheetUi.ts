@@ -98,32 +98,262 @@ export const COSTUME_CONDITIONS = [
   "battle-damaged",
 ] as const;
 
-export const LAYER_ITEMS: Record<(typeof COSTUME_LAYERS)[number], readonly string[]> = {
-  top: ["shirt", "blouse", "tunic", "jacket", "cuirass", "robe"],
-  bottom: ["trousers", "skirt", "shorts", "greaves", "leggings"],
-  footwear: ["boots", "shoes", "sandals", "barefoot"],
-  over: ["cloak", "coat", "cape", "overcoat", "pauldron set"],
-  head: ["helmet", "hood", "hat", "crown", "circlet"],
-  hands: ["gloves", "gauntlets", "rings"],
-  accessories: ["belt", "jewelry", "bag", "sheath", "amulet"],
+export type CostumeLayer = (typeof COSTUME_LAYERS)[number];
+
+const CLOTHES: Record<CostumeLayer, readonly string[]> = {
+  top: [
+    "t-shirt",
+    "shirt",
+    "blouse",
+    "sweater",
+    "hoodie",
+    "tunic",
+    "bodice",
+    "vest",
+  ],
+  bottom: ["jeans", "trousers", "skirt", "shorts", "leggings", "chinos"],
+  footwear: ["sneakers", "shoes", "boots", "sandals", "loafers", "barefoot"],
+  over: ["cardigan", "denim jacket", "coat", "raincoat", "blazer", "hoodie zip"],
+  head: ["beanie", "cap", "hat", "headband", "hood"],
+  hands: ["none", "gloves", "watch"],
+  accessories: ["belt", "bag", "scarf", "jewelry", "backpack"],
+};
+
+const LAYERED_CLOTHES: Record<CostumeLayer, readonly string[]> = {
+  top: ["shirt", "tunic", "gambeson", "padded jacket", "doublet", "vest over shirt"],
+  bottom: ["trousers", "hose", "skirt", "kilt"],
+  footwear: ["boots", "soft shoes", "wraps"],
+  over: ["cloak", "coat", "surcoat", "cape", "overcoat", "shawl"],
+  head: ["hood", "hat", "kerchief", "circlet"],
+  hands: ["gloves", "wraps"],
+  accessories: ["belt", "pouch", "cloak pin", "sash"],
+};
+
+const ARMOR_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["gambeson", "mail shirt", "cuirass", "breastplate", "plate cuirass"],
+  bottom: ["mail chausses", "greaves", "plate legs", "tassets"],
+  footwear: ["sabatons", "armored boots"],
+  over: ["cloak", "surcoat", "pauldron set", "cape"],
+  head: ["helm", "great helm", "mail coif", "nasal helm"],
+  hands: ["gauntlets", "mail mittens"],
+  accessories: ["sword belt", "sheath", "gorget", "crest"],
+};
+
+const HERO_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["hero suit base", "bodysuit", "armored bodysuit", "unitard"],
+  bottom: ["suit legs", "armored legs", "tights"],
+  footwear: ["hero boots", "combat boots"],
+  over: ["cape", "short cape", "hero cloak", "jacket over suit"],
+  head: ["mask", "cowl", "domino mask", "helm"],
+  hands: ["gauntlets", "hero gloves"],
+  accessories: ["chest emblem", "utility belt", "emblem", "cape clasp"],
+};
+
+const FORMAL_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["dress shirt", "blouse", "waistcoat", "tuxedo shirt"],
+  bottom: ["dress trousers", "skirt", "gown lower"],
+  footwear: ["oxfords", "heels", "dress boots"],
+  over: ["blazer", "tuxedo jacket", "evening coat", "opera cloak"],
+  head: ["none", "fascinator", "top hat"],
+  hands: ["none", "dress gloves"],
+  accessories: ["tie", "bow tie", "clutch", "cufflinks"],
+};
+
+const SPORT_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["jersey", "tank", "track top", "compression shirt"],
+  bottom: ["shorts", "track pants", "leggings"],
+  footwear: ["trainers", "cleats", "running shoes"],
+  over: ["track jacket", "warmup", "none"],
+  head: ["cap", "headband", "none"],
+  hands: ["none", "wristbands", "grip gloves"],
+  accessories: ["water bottle sling", "number bib"],
+};
+
+const WORK_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["work shirt", "coveralls torso", "hi-vis vest", "scrub top"],
+  bottom: ["cargo trousers", "coveralls", "scrub pants"],
+  footwear: ["work boots", "clogs", "safety shoes"],
+  over: ["hi-vis jacket", "lab coat", "apron", "none"],
+  head: ["hard hat", "cap", "none"],
+  hands: ["work gloves", "none"],
+  accessories: ["tool belt", "badge lanyard"],
+};
+
+const CEREMONIAL_STACK: Record<CostumeLayer, readonly string[]> = {
+  top: ["robe", "ornate tunic", "ceremonial jacket"],
+  bottom: ["robe lower", "ornate trousers", "skirt"],
+  footwear: ["slippers", "ornate boots"],
+  over: ["ceremonial cloak", "cape", "mantle"],
+  head: ["crown", "circlet", "mitre", "veil"],
+  hands: ["ornate gloves", "rings"],
+  accessories: ["scepter", "amulet", "chain of office"],
+};
+
+const ERA_EXTRAS: Record<string, Partial<Record<CostumeLayer, readonly string[]>>> = {
+  medieval: {
+    top: ["tunic", "gambeson"],
+    over: ["cloak", "surcoat"],
+    head: ["coif", "hood"],
+  },
+  victorian: {
+    top: ["waistcoat", "high-collar shirt"],
+    over: ["frock coat", "capelet"],
+    head: ["top hat", "bonnet"],
+  },
+  "1920s": {
+    top: ["cloche-era blouse"],
+    over: ["drop-waist coat"],
+    head: ["cloche hat"],
+  },
+  "far future": {
+    top: ["exo vest", "tech bodysuit"],
+    over: ["hard-light cloak", "vac jacket"],
+    head: ["visor helm"],
+  },
+  ancient: {
+    top: ["linen tunic", "chiton"],
+    over: ["himation", "cloak"],
+    footwear: ["sandals"],
+  },
+};
+
+export const ARMOR_PIECES = new Set(
+  [
+    "cuirass",
+    "breastplate",
+    "plate cuirass",
+    "mail",
+    "mail shirt",
+    "mail chausses",
+    "mail coif",
+    "mail mittens",
+    "gambeson",
+    "greaves",
+    "plate legs",
+    "tassets",
+    "sabatons",
+    "armored boots",
+    "pauldron set",
+    "helm",
+    "great helm",
+    "nasal helm",
+    "helmet",
+    "gauntlets",
+    "gorget",
+  ].map((s) => s.toLowerCase()),
+);
+
+function uniq(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of items) {
+    const s = String(raw || "").trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+function stackForCategory(category: string): Record<CostumeLayer, readonly string[]> {
+  const cat = category.trim().toLowerCase();
+  if (cat === "armor" || cat === "fantasy") {
+    const out = { ...LAYERED_CLOTHES };
+    const merged = { ...out };
+    for (const layer of COSTUME_LAYERS) {
+      merged[layer] = uniq([...LAYERED_CLOTHES[layer], ...ARMOR_STACK[layer]]);
+    }
+    return merged;
+  }
+  if (cat === "hero") return HERO_STACK;
+  if (cat === "formal") return FORMAL_STACK;
+  if (cat === "sport") return SPORT_STACK;
+  if (cat === "workwear") return WORK_STACK;
+  if (cat === "ceremonial") return CEREMONIAL_STACK;
+  if (cat === "era") return LAYERED_CLOTHES;
+  return CLOTHES;
+}
+
+export function layerItemsFor(
+  layer: CostumeLayer,
+  category: string,
+  era = "",
+): string[] {
+  const cat = category.trim().toLowerCase();
+  let items = [...(stackForCategory(cat)[layer] || [])];
+  const eraKey = era.trim().toLowerCase();
+  if (eraKey && ERA_EXTRAS[eraKey]?.[layer]) {
+    items = uniq([...items, ...(ERA_EXTRAS[eraKey][layer] || [])]);
+  }
+  if (cat === "everyday" || cat === "sport" || cat === "workwear" || cat === "formal") {
+    items = items.filter((s) => !ARMOR_PIECES.has(s.toLowerCase()));
+  }
+  return items;
+}
+
+export function signatureItemsFor(category: string): string[] {
+  const cat = category.trim().toLowerCase();
+  if (cat === "hero") return ["suit base", "cape", "emblem", "mask", "cowl"];
+  if (cat === "armor" || cat === "fantasy") return ["helm", "cloak", "crest", "surcoat"];
+  if (cat === "ceremonial") return ["crown", "cloak", "chain of office"];
+  if (cat === "formal") return ["tie", "bow tie", "pocket square"];
+  return ["watch", "bag", "scarf", "none"];
+}
+
+function allLayerItems(layer: CostumeLayer): string[] {
+  return uniq([
+    ...CLOTHES[layer],
+    ...LAYERED_CLOTHES[layer],
+    ...ARMOR_STACK[layer],
+    ...HERO_STACK[layer],
+    ...FORMAL_STACK[layer],
+    ...SPORT_STACK[layer],
+    ...WORK_STACK[layer],
+    ...CEREMONIAL_STACK[layer],
+  ]);
+}
+
+export const LAYER_ITEMS: Record<CostumeLayer, readonly string[]> = {
+  top: allLayerItems("top"),
+  bottom: allLayerItems("bottom"),
+  footwear: allLayerItems("footwear"),
+  over: allLayerItems("over"),
+  head: allLayerItems("head"),
+  hands: allLayerItems("hands"),
+  accessories: allLayerItems("accessories"),
 };
 
 export const SCENE_LOCATIONS = [
   "bar",
+  "nightclub",
+  "diner",
   "street",
+  "alley",
   "apartment",
+  "kitchen",
   "office",
+  "lobby",
+  "hotel",
   "warehouse",
+  "garage",
+  "studio",
+  "library",
+  "hospital",
+  "rooftop",
+  "subway",
+  "marketplace",
+  "park",
   "forest",
   "beach",
+  "cabin",
   "castle",
   "temple",
-  "studio",
-  "alley",
-  "diner",
+  "church",
 ] as const;
 export const SCENE_TIMES = ["dawn", "day", "golden hour", "dusk", "night"] as const;
-export const SCENE_WEATHER = ["clear", "overcast", "rain", "fog", "snow", "storm"] as const;
+export const SCENE_WEATHER = ["clear", "overcast", "rain", "fog", "snow", "storm", "wind"] as const;
 export const SCENE_MOODS = [
   "calm",
   "tense",
@@ -132,6 +362,13 @@ export const SCENE_MOODS = [
   "luxurious",
   "playful",
   "ominous",
+  "melancholic",
+  "energetic",
+  "sterile",
+  "cozy",
+  "chaotic",
+  "mysterious",
+  "nostalgic",
 ] as const;
 export const SCENE_ARCHITECTURE = [
   "modern",
@@ -141,6 +378,13 @@ export const SCENE_ARCHITECTURE = [
   "timber",
   "stone",
   "neon",
+  "art deco",
+  "gothic",
+  "mid-century",
+  "colonial",
+  "glass curtain",
+  "brick",
+  "adobe",
 ] as const;
 export const SCENE_LIGHTING = [
   "practical",
@@ -150,6 +394,12 @@ export const SCENE_LIGHTING = [
   "fluorescent",
   "cinematic",
   "window light",
+  "tungsten",
+  "streetlamp",
+  "firelight",
+  "overcast daylight",
+  "sodium vapor",
+  "RGB accent",
 ] as const;
 export const SCENE_CAMERA = [
   "wide establishing",
@@ -158,6 +408,21 @@ export const SCENE_CAMERA = [
   "high angle",
   "handheld",
   "locked-off still",
+  "medium shot",
+  "close-up",
+  "dutch angle",
+  "aerial",
+  "over-the-shoulder",
+  "anamorphic wide",
+] as const;
+export const SCENE_GRADES = [
+  "natural",
+  "warm tungsten",
+  "cool moonlight",
+  "teal-orange",
+  "bleach bypass",
+  "neon night",
+  "faded film",
 ] as const;
 
 export const PROP_TYPES = [
@@ -340,14 +605,16 @@ export function composeSceneBrief(
 ): string {
   const parts: string[] = [];
   const name = bit(fields.name);
-  const loc = bit(fields.location) || bit(fields.setting);
+  const loc = bit(fields.location);
+  const setting = bit(fields.setting);
   if (name && loc) parts.push(`${name}, a ${loc}`);
   else if (name) parts.push(name);
   else if (loc) parts.push(`${loc} location`);
+  if (setting) parts.push(setting);
   const time = bit(fields.time);
   if (time) parts.push(`time: ${time}`);
   const weather = bit(fields.weather);
-  if (weather) parts.push(`weather: ${weather}`);
+  if (weather && setting !== "interior") parts.push(`weather: ${weather}`);
   const mood = bit(fields.mood);
   if (mood) parts.push(`mood: ${mood}`);
   const arch = bit(fields.architecture);
@@ -358,6 +625,10 @@ export function composeSceneBrief(
   if (cam) parts.push(`camera: ${cam}`);
   const els = bit(fields.elements);
   if (els) parts.push(`key elements: ${els}`);
+  const furn = bit(fields.furniture);
+  if (furn) parts.push(`furniture / fixtures: ${furn}`);
+  const grade = bit(fields.grade);
+  if (grade) parts.push(`color grade: ${grade}`);
   let head = parts.join("; ");
   const extra = bit(notes) || bit(fields.notes);
   if (extra) head = head ? `${head}. Extra: ${extra}` : extra;

@@ -13,18 +13,21 @@ import {
   COSTUME_ERAS,
   COSTUME_LAYERS,
   COSTUME_MATERIALS,
+  type CostumeLayer,
   COSTUME_REGIONS,
   COSTUME_SILHOUETTES,
   COSTUME_SLOTS,
   COSTUME_TAGS,
   EXTRA_SLOTS,
-  LAYER_ITEMS,
+  layerItemsFor,
+  signatureItemsFor,
   PROP_CONDITIONS,
   PROP_MATERIALS,
   PROP_SCALES,
   PROP_TYPES,
   SCENE_ARCHITECTURE,
   SCENE_CAMERA,
+  SCENE_GRADES,
   SCENE_LIGHTING,
   SCENE_LOCATIONS,
   SCENE_MOODS,
@@ -1069,6 +1072,40 @@ function CostumeForm({
     [...COSTUME_SLOTS],
     models,
   );
+  const catKey = pickField(category, categoryC);
+  const eraKey = pickField(era, eraC);
+  const signatureOpts = signatureItemsFor(catKey);
+
+  function remapIncompatible(cat: string, eraVal: string, cur: Record<string, LayerState>) {
+    const next: Record<string, LayerState> = { ...cur };
+    for (const layer of COSTUME_LAYERS) {
+      const allowed = layerItemsFor(layer as CostumeLayer, cat, eraVal);
+      const L = cur[layer] || emptyLayer();
+      if (L.item === "Custom" || !L.item) continue;
+      const item = pickField(L.item, L.itemC);
+      if (item && !allowed.includes(item)) {
+        next[layer] = { ...L, item: "Custom", itemC: item };
+      }
+    }
+    return next;
+  }
+
+  function onCategory(v: string) {
+    setCategory(v);
+    const cat = v === "Custom" ? categoryC : v;
+    setLayers((cur) => remapIncompatible(cat, eraKey, cur));
+    if (signature && signature !== "Custom" && !signatureItemsFor(cat).includes(signature)) {
+      setSignature("Custom");
+      setSignatureC(signature);
+    }
+    if (cat === "everyday" && silhouette === "bulky armor") setSilhouette("");
+  }
+
+  function onEra(v: string) {
+    setEra(v);
+    const eraVal = v === "Custom" ? eraC : v;
+    setLayers((cur) => remapIncompatible(catKey, eraVal, cur));
+  }
 
   const costumeFields = useMemo(() => {
     const flat: Record<string, string> = {
@@ -1217,7 +1254,7 @@ function CostumeForm({
           custom={categoryC}
           options={COSTUME_TAGS}
           allowEmpty
-          onValue={setCategory}
+          onValue={onCategory}
           onCustom={setCategoryC}
         />
         <FieldSelect
@@ -1226,7 +1263,7 @@ function CostumeForm({
           custom={eraC}
           options={COSTUME_ERAS}
           allowEmpty
-          onValue={setEra}
+          onValue={onEra}
           onCustom={setEraC}
         />
         <FieldSelect
@@ -1262,7 +1299,7 @@ function CostumeForm({
           label="Signature"
           value={signature}
           custom={signatureC}
-          options={LAYER_ITEMS.head}
+          options={signatureOpts}
           allowEmpty
           onValue={setSignature}
           onCustom={setSignatureC}
@@ -1272,7 +1309,7 @@ function CostumeForm({
         <LayerBlock
           key={key}
           label={LAYER_LABEL[key] || key}
-          itemOpts={LAYER_ITEMS[key]}
+          itemOpts={layerItemsFor(key, catKey, eraKey)}
           layer={layers[key] || emptyLayer()}
           onChange={(next) => setLayers((cur) => ({ ...cur, [key]: next }))}
         />
@@ -1610,6 +1647,9 @@ function SceneForm({
   const [camera, setCamera] = useState("wide establishing");
   const [cameraC, setCameraC] = useState("");
   const [elements, setElements] = useState("");
+  const [furniture, setFurniture] = useState("");
+  const [grade, setGrade] = useState("");
+  const [gradeC, setGradeC] = useState("");
   const [notes, setNotes] = useState("");
   const [scenePrompt, setScenePrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
@@ -1632,8 +1672,12 @@ function SceneForm({
       lighting: pickField(lighting, lightingC),
       camera: pickField(camera, cameraC),
       elements: elements.trim(),
+      furniture: furniture.trim(),
+      grade: pickField(grade, gradeC),
     };
   }
+  const settingVal = pickField(setting, settingC);
+  const showWeather = settingVal === "exterior" || settingVal === "mixed";
   function sceneText() {
     return scenePrompt.trim() || composeSceneBrief(sceneFields(), notes);
   }
@@ -1743,9 +1787,15 @@ function SceneForm({
           label="Interior / ext."
           value={setting}
           custom={settingC}
-          options={["interior", "exterior"]}
+          options={["interior", "exterior", "mixed"]}
           allowEmpty
-          onValue={setSetting}
+          onValue={(v) => {
+            setSetting(v);
+            if (v === "interior") {
+              setWeather("");
+              setWeatherC("");
+            }
+          }}
           onCustom={setSettingC}
         />
         <FieldSelect
@@ -1759,15 +1809,17 @@ function SceneForm({
         />
       </div>
       <div className="params">
-        <FieldSelect
-          label="Weather"
-          value={weather}
-          custom={weatherC}
-          options={SCENE_WEATHER}
-          allowEmpty
-          onValue={setWeather}
-          onCustom={setWeatherC}
-        />
+        {showWeather ? (
+          <FieldSelect
+            label="Weather"
+            value={weather}
+            custom={weatherC}
+            options={SCENE_WEATHER}
+            allowEmpty
+            onValue={setWeather}
+            onCustom={setWeatherC}
+          />
+        ) : null}
         <FieldSelect
           label="Mood"
           value={mood}
@@ -1809,8 +1861,33 @@ function SceneForm({
       </div>
       <label className="builder-field">
         <span className="field-label">Key elements</span>
-        <input className="model" value={elements} onChange={(e) => setElements(e.target.value)} />
+        <input
+          className="model"
+          value={elements}
+          placeholder="neon sign, wet bar top, bottles…"
+          onChange={(e) => setElements(e.target.value)}
+        />
       </label>
+      <label className="builder-field">
+        <span className="field-label">Furniture / fixtures</span>
+        <input
+          className="model"
+          value={furniture}
+          placeholder="bar stools, booths, pendant lamps…"
+          onChange={(e) => setFurniture(e.target.value)}
+        />
+      </label>
+      <div className="params">
+        <FieldSelect
+          label="Color grade"
+          value={grade}
+          custom={gradeC}
+          options={SCENE_GRADES}
+          allowEmpty
+          onValue={setGrade}
+          onCustom={setGradeC}
+        />
+      </div>
       <label className="builder-field">
         <span className="field-label">Notes</span>
         <textarea

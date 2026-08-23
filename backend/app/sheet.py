@@ -125,24 +125,52 @@ CHAR_NOSE = ("straight", "button", "roman", "wide", "narrow", "upturned")
 CHAR_JAW = ("soft", "defined", "square", "rounded", "pointed", "cleft")
 CHAR_BODY_HAIR = ("none", "light", "medium", "heavy")
 CHAR_BUST = ("small", "medium", "large")
-SCENE_SETTINGS = ("interior", "exterior")
+SCENE_SETTINGS = ("interior", "exterior", "mixed")
 SCENE_LOCATIONS = (
     "bar",
+    "nightclub",
+    "diner",
     "street",
+    "alley",
     "apartment",
+    "kitchen",
     "office",
+    "lobby",
+    "hotel",
     "warehouse",
+    "garage",
+    "studio",
+    "library",
+    "hospital",
+    "rooftop",
+    "subway",
+    "marketplace",
+    "park",
     "forest",
     "beach",
+    "cabin",
     "castle",
     "temple",
-    "studio",
-    "alley",
-    "diner",
+    "church",
 )
 SCENE_TIMES = ("dawn", "day", "golden hour", "dusk", "night")
-SCENE_WEATHER = ("clear", "overcast", "rain", "fog", "snow", "storm")
-SCENE_MOODS = ("calm", "tense", "romantic", "gritty", "luxurious", "playful", "ominous")
+SCENE_WEATHER = ("clear", "overcast", "rain", "fog", "snow", "storm", "wind")
+SCENE_MOODS = (
+    "calm",
+    "tense",
+    "romantic",
+    "gritty",
+    "luxurious",
+    "playful",
+    "ominous",
+    "melancholic",
+    "energetic",
+    "sterile",
+    "cozy",
+    "chaotic",
+    "mysterious",
+    "nostalgic",
+)
 SCENE_ARCHITECTURE = (
     "modern",
     "industrial",
@@ -151,6 +179,13 @@ SCENE_ARCHITECTURE = (
     "timber",
     "stone",
     "neon",
+    "art deco",
+    "gothic",
+    "mid-century",
+    "colonial",
+    "glass curtain",
+    "brick",
+    "adobe",
 )
 SCENE_LIGHTING = (
     "practical",
@@ -160,6 +195,12 @@ SCENE_LIGHTING = (
     "fluorescent",
     "cinematic",
     "window light",
+    "tungsten",
+    "streetlamp",
+    "firelight",
+    "overcast daylight",
+    "sodium vapor",
+    "RGB accent",
 )
 SCENE_CAMERA = (
     "wide establishing",
@@ -168,6 +209,21 @@ SCENE_CAMERA = (
     "high angle",
     "handheld",
     "locked-off still",
+    "medium shot",
+    "close-up",
+    "dutch angle",
+    "aerial",
+    "over-the-shoulder",
+    "anamorphic wide",
+)
+SCENE_GRADES = (
+    "natural",
+    "warm tungsten",
+    "cool moonlight",
+    "teal-orange",
+    "bleach bypass",
+    "neon night",
+    "faded film",
 )
 PROP_TYPES = (
     "object",
@@ -292,6 +348,8 @@ def builder_fields(kind: str) -> dict[str, Any]:
                 "lighting": {"label": "Lighting", "choices": list(SCENE_LIGHTING)},
                 "camera": {"label": "Camera feel", "choices": list(SCENE_CAMERA)},
                 "elements": {"label": "Key elements", "type": "text"},
+                "furniture": {"label": "Furniture / fixtures", "type": "text"},
+                "grade": {"label": "Color grade", "choices": list(SCENE_GRADES)},
                 "notes": {"label": "Notes", "type": "text"},
             },
         }
@@ -641,7 +699,8 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
     f = fields or {}
     override = _nv(f.get("identity_prompt")) or _nv(f.get("prompt"))
     name = _nv(f.get("name")) or "the location"
-    loc = _choice(f, "location") or _choice(f, "setting")
+    loc = _choice(f, "location")
+    setting = _choice(f, "setting")
     time = _choice(f, "time")
     weather = _choice(f, "weather")
     mood = _choice(f, "mood")
@@ -649,6 +708,8 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
     light = _choice(f, "lighting")
     cam = _choice(f, "camera")
     elements = _nv(f.get("elements"))
+    furniture = _nv(f.get("furniture"))
+    grade = _choice(f, "grade") or _nv(f.get("grade"))
     notes = _nv(f.get("notes"))
     if override:
         head = override
@@ -656,11 +717,15 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
         bits: list[str] = []
         if loc:
             bits.append(f"{name}, a {loc}" if name != "the location" else f"{loc} location")
+        elif name != "the location":
+            bits.append(name)
         else:
             bits.append(f"Establishing still of {name}.")
+        if setting:
+            bits.append(setting)
         if time:
             bits.append(f"time: {time}")
-        if weather:
+        if weather and setting != "interior":
             bits.append(f"weather: {weather}")
         if mood:
             bits.append(f"mood: {mood}")
@@ -672,6 +737,10 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
             bits.append(f"camera: {cam}")
         if elements:
             bits.append(f"key elements: {elements}")
+        if furniture:
+            bits.append(f"furniture / fixtures: {furniture}")
+        if grade:
+            bits.append(f"color grade: {grade}")
         head = "; ".join(bits) if bits else f"Establishing still of {name}."
     view = (
         "Closer detail angle of the same space, matching lighting and architecture."
