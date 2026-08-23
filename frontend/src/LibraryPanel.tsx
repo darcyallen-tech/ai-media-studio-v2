@@ -18,9 +18,31 @@ import {
   type StudioAsset,
 } from "./types";
 
-type Pane = "media" | "assets";
 type AssetFilter = "all" | AssetKind;
 type Filter = "all" | MediaKind;
+export type SideTab = "library" | "assets";
+
+const LS_LIB_SECTION = "ams-v2-library-section";
+const LS_LIB_FILTER = "ams-v2-library-filter";
+const LS_ASSET_FILTER = "ams-v2-assets-filter";
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key) || "";
+    if ((allowed as readonly string[]).includes(raw)) return raw as T;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All" },
@@ -45,6 +67,7 @@ const ASSET_TABS: { id: AssetFilter; label: string }[] = [
 
 type Props = {
   open: boolean;
+  tab: SideTab;
   onClose: () => void;
   onPick: (item: LibraryItem) => void;
   onNewAsset?: (
@@ -53,13 +76,18 @@ type Props = {
   ) => void;
 };
 
-export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Props) {
-  const [pane, setPane] = useState<Pane>("media");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [section, setSection] = useState<LibrarySource>("uploads");
+export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }: Props) {
+  const [filter, setFilter] = useState<Filter>(() =>
+    readStored(LS_LIB_FILTER, ["all", "image", "video", "audio"], "all"),
+  );
+  const [section, setSection] = useState<LibrarySource>(() =>
+    readStored(LS_LIB_SECTION, ["resolve", "uploads", "generated"], "uploads"),
+  );
   const [buckets, setBuckets] = useState<Record<string, LibraryBucket>>({});
   const [assets, setAssets] = useState<StudioAsset[]>([]);
-  const [assetFilter, setAssetFilter] = useState<AssetFilter>("all");
+  const [assetFilter, setAssetFilter] = useState<AssetFilter>(() =>
+    readStored(LS_ASSET_FILTER, ["all", "character", "costume", "scene", "prop"], "all"),
+  );
   const [creating, setCreating] = useState<AssetRole | null>(null);
   const [editing, setEditing] = useState<StudioAsset | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,11 +130,20 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
   }
 
   useEffect(() => {
+    writeStored(LS_LIB_FILTER, filter);
+  }, [filter]);
+  useEffect(() => {
+    writeStored(LS_LIB_SECTION, section);
+  }, [section]);
+  useEffect(() => {
+    writeStored(LS_ASSET_FILTER, assetFilter);
+  }, [assetFilter]);
+
+  useEffect(() => {
     if (!open) return;
-    void reload();
-    void reloadAssets();
+    if (tab === "library") void reload();
+    else void reloadAssets();
     function onImported() {
-      setPane("media");
       setSection("uploads");
       void reload();
     }
@@ -116,14 +153,14 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
     window.addEventListener("ams-library-imported", onImported);
     window.addEventListener("ams-assets-changed", onAssets);
     const id = window.setInterval(() => {
-      if (pane === "media" && section === "resolve") void reload();
+      if (tab === "library" && section === "resolve") void reload();
     }, 4000);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("ams-library-imported", onImported);
       window.removeEventListener("ams-assets-changed", onAssets);
     };
-  }, [open, filter, section, pane]);
+  }, [open, filter, section, tab]);
 
   async function importFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
@@ -227,7 +264,7 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
   }
 
   function onPanelDragEnter(event: DragEvent) {
-    if (pane !== "media") return;
+    if (tab !== "library") return;
     event.preventDefault();
     event.stopPropagation();
     if (peekLibraryDrag()) return;
@@ -236,7 +273,7 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
   }
 
   function onPanelDragOver(event: DragEvent) {
-    if (pane !== "media") return;
+    if (tab !== "library") return;
     event.preventDefault();
     event.stopPropagation();
     if (peekLibraryDrag()) return;
@@ -252,7 +289,7 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
   }
 
   function onPanelDrop(event: DragEvent) {
-    if (pane !== "media") return;
+    if (tab !== "library") return;
     event.preventDefault();
     event.stopPropagation();
     setDropHot(false);
@@ -281,37 +318,20 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
     <aside
       className={dropHot ? "library drop-hot" : "library"}
       ref={dropRef}
-      data-os-drop="library"
-      onDragEnter={onPanelDragEnter}
-      onDragOver={onPanelDragOver}
-      onDragLeave={onPanelDragLeave}
-      onDrop={onPanelDrop}
+      data-os-drop={tab === "library" ? "library" : undefined}
+      onDragEnter={tab === "library" ? onPanelDragEnter : undefined}
+      onDragOver={tab === "library" ? onPanelDragOver : undefined}
+      onDragLeave={tab === "library" ? onPanelDragLeave : undefined}
+      onDrop={tab === "library" ? onPanelDrop : undefined}
     >
       <header className="library-head">
-        <h2>Library</h2>
+        <h2>{tab === "assets" ? "Assets" : "Library"}</h2>
         <button type="button" className="ghost" onClick={onClose}>
           Close
         </button>
       </header>
 
-      <div className="pills chips">
-        <button
-          type="button"
-          className={pane === "media" ? "pill mode on" : "pill mode"}
-          onClick={() => setPane("media")}
-        >
-          Media
-        </button>
-        <button
-          type="button"
-          className={pane === "assets" ? "pill mode on" : "pill mode"}
-          onClick={() => setPane("assets")}
-        >
-          Assets
-        </button>
-      </div>
-
-      {pane === "media" ? (
+      {tab === "library" ? (
         <>
       <div className="pills chips">
         {SECTIONS.map((s) => (
@@ -462,16 +482,16 @@ export default function LibraryPanel({ open, onClose, onPick, onNewAsset }: Prop
       ) : (
         <>
           <div className="pills chips">
-            {ASSET_TABS.map((tab) => (
+            {ASSET_TABS.map((chip) => (
               <button
-                key={tab.id}
+                key={chip.id}
                 type="button"
                 className={
-                  assetFilter === tab.id ? "pill modality on" : "pill modality"
+                  assetFilter === chip.id ? "pill modality on" : "pill modality"
                 }
-                onClick={() => setAssetFilter(tab.id)}
+                onClick={() => setAssetFilter(chip.id)}
               >
-                {tab.label}
+                {chip.label}
               </button>
             ))}
           </div>

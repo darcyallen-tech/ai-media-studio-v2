@@ -48,6 +48,12 @@
   box-shadow: 0 6px 16px rgba(60, 80, 110, 0.12);
 }
 
+.library-toggle.on {
+  background: #1c2530;
+  color: #f4f7fb;
+  border-color: #1c2530;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: 1.05rem;
@@ -1362,6 +1368,12 @@ html[data-theme="night"] .library-toggle {
   border-color: #4a5a6e;
   color: #e6ebf2;
   box-shadow: 0 6px 16px rgba(8, 12, 18, 0.28);
+}
+
+html[data-theme="night"] .library-toggle.on {
+  background: #e6ebf2;
+  color: #1c2530;
+  border-color: #e6ebf2;
 }
 
 html[data-theme="night"] .topbar h1 {

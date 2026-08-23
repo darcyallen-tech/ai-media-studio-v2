@@ -282,7 +282,8 @@ const initialNodes: StudioNode[] = [
 ];
 
 function StudioCanvas() {
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [sideTab, setSideTab] = useState<"library" | "assets" | null>(null);
+  const openLibrary = () => setSideTab("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sourceItem, setSourceItem] = useState<LibraryItem | null>(null);
   const [firstItem, setFirstItem] = useState<LibraryItem | null>(null);
@@ -895,7 +896,7 @@ function StudioCanvas() {
             onClose: () => closeNode(id),
             onGenerated: () => undefined,
             onReplace: () => undefined,
-            onOpenLibrary: () => setLibraryOpen(true),
+            onOpenLibrary: () => openLibrary(),
           },
         };
         return [...current, node];
@@ -938,7 +939,7 @@ function StudioCanvas() {
             accept,
             item: null,
             onClear: () => undefined,
-            onOpenLibrary: () => setLibraryOpen(true),
+            onOpenLibrary: () => openLibrary(),
             onAttach: () => undefined,
             onOsFiles: () => undefined,
             onClose: () => closeNode(id),
@@ -1154,7 +1155,7 @@ function StudioCanvas() {
                   ? sceneCatalog
                   : propCatalog,
             onClear: () => undefined,
-            onOpenLibrary: () => setLibraryOpen(true),
+            onOpenLibrary: () => openLibrary(),
             onAttach: () => undefined,
             onPickCatalog: () => undefined,
             onNote: () => undefined,
@@ -1905,7 +1906,7 @@ function StudioCanvas() {
           onPatch: () => undefined,
           onAttachStill: () => undefined,
           onClearStill: () => undefined,
-          onOpenLibrary: () => setLibraryOpen(true),
+          onOpenLibrary: () => openLibrary(),
           onClose: () => closeNode(id),
         },
       };
@@ -2432,7 +2433,7 @@ function StudioCanvas() {
               hasHub: current.some((n) => n.id === HUB_ID),
               onModalityChange,
               onOpenSettings: () => setSettingsOpen(true),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAddPromptBuilder: addPromptBuilder,
               instrumental,
               onInstrumental: setInstrumental,
@@ -2562,7 +2563,7 @@ function StudioCanvas() {
               accept: sourceAccept,
               item: sourceItem,
               onClear: () => setSourceItem(null),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => tryAttachSlot(SOURCE_ID, item),
               onOsFiles: (files) => {
                 void importOsFiles(files)
@@ -2590,7 +2591,7 @@ function StudioCanvas() {
               accept: "image",
               item: firstItem,
               onClear: () => setFirstItem(null),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => setFirstItem(item),
               onOsFiles: (files) => {
                 void importOsFiles(files)
@@ -2618,7 +2619,7 @@ function StudioCanvas() {
               accept: "image",
               item: lastItem,
               onClear: () => setLastItem(null),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => setLastItem(item),
               onOsFiles: (files) => {
                 void importOsFiles(files)
@@ -2801,7 +2802,7 @@ function StudioCanvas() {
               onGenerated: (res) => spawnResultNear(n.id, res),
               onReplace: (item) =>
                 setToolSources((cur) => ({ ...cur, [n.id]: item })),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
             },
           };
         }
@@ -2827,7 +2828,7 @@ function StudioCanvas() {
                       : r,
                   ),
                 ),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => tryAttachSlot(n.id, item),
               onPickCatalog: (id) => pickCatalog(n.id, "character", id),
               onNote: (note) =>
@@ -2869,7 +2870,7 @@ function StudioCanvas() {
                       : r,
                   ),
                 ),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => tryAttachSlot(n.id, item),
               onPickCatalog: (id) => pickCatalog(n.id, "scene", id),
               onNote: (note) =>
@@ -2911,7 +2912,7 @@ function StudioCanvas() {
                       : r,
                   ),
                 ),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAttach: (item) => tryAttachSlot(n.id, item),
               onPickCatalog: (id) => pickCatalog(n.id, "prop", id),
               onNote: (note) =>
@@ -2962,7 +2963,7 @@ function StudioCanvas() {
                 setShots((cur) =>
                   cur.map((s) => (s.id === n.id ? { ...s, still: null } : s)),
                 ),
-              onOpenLibrary: () => setLibraryOpen(true),
+              onOpenLibrary: () => openLibrary(),
               onAddBuilder: () => addShotBuilder(n.id),
               onClose: () => closeNode(n.id),
             },
@@ -3145,7 +3146,7 @@ function StudioCanvas() {
             tryAttachSlot(slot, items[0]);
             return;
           }
-          setLibraryOpen(true);
+          openLibrary();
           toast(`Imported ${items.length} file(s) to Uploads.`);
         })
         .catch((err: unknown) => {
@@ -3233,7 +3234,7 @@ function StudioCanvas() {
         void importOsFiles(files)
           .then((items) => {
             if (items.length) {
-              setLibraryOpen(true);
+              openLibrary();
               toast(`Imported ${items.length} file(s) to Uploads.`);
             }
           })
@@ -3354,10 +3355,17 @@ function StudioCanvas() {
           </button>
           <button
             type="button"
-            className="library-toggle"
-            onClick={() => setLibraryOpen((v) => !v)}
+            className={sideTab === "library" ? "library-toggle on" : "library-toggle"}
+            onClick={() => setSideTab((v) => (v === "library" ? null : "library"))}
           >
             Library
+          </button>
+          <button
+            type="button"
+            className={sideTab === "assets" ? "library-toggle on" : "library-toggle"}
+            onClick={() => setSideTab((v) => (v === "assets" ? null : "assets"))}
+          >
+            Assets
           </button>
         </div>
       </header>
@@ -3458,8 +3466,9 @@ function StudioCanvas() {
         />
       </ReactFlow>
       <LibraryPanel
-        open={libraryOpen}
-        onClose={() => setLibraryOpen(false)}
+        open={sideTab !== null}
+        tab={sideTab || "library"}
+        onClose={() => setSideTab(null)}
         onPick={attachMedia}
         onNewAsset={(kind, seeds) => addCreatorBuilder(kind, undefined, seeds)}
       />
