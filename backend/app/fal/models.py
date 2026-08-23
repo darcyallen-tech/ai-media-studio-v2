@@ -255,6 +255,7 @@ class ImageEditModelSpec:
     resolution_cost_mult: dict[str, float] = field(default_factory=dict)
     extra_defaults: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
+    hidden: bool = False
 
     def clamp_num_images(self, n: int | None) -> int:
         if n is None or n < 1:
@@ -412,6 +413,7 @@ class VideoModelSpec:
     enhance_endpoint: str | None = None  # e.g. blackforestlabs/flux-3/draft-enhance
     # Ballpark $/s for draft (no resolution param on draft endpoints)
     cost_per_second_draft: float | None = None
+    hidden: bool = False
 
     def nearest_duration(self, value: Any) -> str:
         """
@@ -802,6 +804,33 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         allowed_resolutions=("1K",),
         cost_per_image=0.039,
         notes="Original Nano Banana edit (legacy). Up to 4 refs.",
+        hidden=True,
+    ),
+    "qwen image 3": ImageEditModelSpec(
+        key="qwen image 3",
+        label="Image · Qwen Image 3 (edit)",
+        endpoint="alibaba/qwen-image-3/edit",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=3,
+        max_num_images=4,
+        resolution_param=None,
+        image_size_param=None,
+        allowed_resolutions=("1K", "2K"),
+        default_resolution="1K",
+        max_resolution="2K",
+        aspect_ratio_param=None,
+        default_output_format="png",
+        cost_per_image=0.04,
+        resolution_cost_mult={"1K": 1.0, "2K": 1.875, "1k": 1.0, "2k": 1.875},
+        extra_defaults={
+            "enable_prompt_expansion": True,
+            "enable_safety_checker": True,
+        },
+        notes=(
+            "Qwen Image 3 edit — 1–3 refs. Faces, type, signage. "
+            "Est. $0.04 @1K · $0.075 @2K."
+        ),
     ),
 }
 
@@ -849,6 +878,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         allowed_durations=tuple(str(i) for i in range(3, 11)),
         cost_per_second=0.126,
         notes="Kling O1 Standard V2V — natural-language edit, motion structure preserved.",
+        hidden=True,
     ),
     "kling o1 pro edit": VideoModelSpec(
         key="kling o1 pro edit",
@@ -863,6 +893,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         allowed_durations=tuple(str(i) for i in range(3, 11)),
         cost_per_second=0.168,
         notes="Kling O1 Pro V2V — stronger semantic edits; motion-preserving.",
+        hidden=True,
     ),
     "ltx retake": VideoModelSpec(
         key="ltx retake",
@@ -1143,6 +1174,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Optional end frame via end_image_url. Duration 4–15s or auto. "
             "Est. ~$0.30/s @720p, higher at 1080p/4K."
         ),
+        hidden=True,
     ),
     "seedance 2.5 i2v": VideoModelSpec(
         key="seedance 2.5 i2v",
@@ -1202,6 +1234,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Seedance 2.0 Fast I2V — cheaper/faster tests (up to 720p). "
             "Optional end frame. Est. ~$0.15/s @720p."
         ),
+        hidden=True,
     ),
     "seedance 2.0 reference": VideoModelSpec(
         key="seedance 2.0 reference",
@@ -1247,6 +1280,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "aspect_ratio: auto (default) or listed ratios · res 480p/720p. "
             "Prompt: @Image1 / @Video1. Est. ~$0.18/s @720p."
         ),
+        hidden=True,
     ),
     "seedance 2.5 reference": VideoModelSpec(
         key="seedance 2.5 reference",
@@ -1336,6 +1370,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "@Video1 + optional ref still as @Image1. aspect_ratio auto or listed ratios. "
             "Strong alternative to Kling for furniture/product V2V. Est. ~$0.30/s @720p."
         ),
+        hidden=True,
     ),
     "seedance 2.0 fast v2v": VideoModelSpec(
         key="seedance 2.0 fast v2v",
@@ -1377,6 +1412,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "aspect_ratio auto or listed ratios. "
             "Source clip @Video1 + optional still @Image1. Est. ~$0.15/s @720p."
         ),
+        hidden=True,
     ),
     # --- FLUX 3 Video (Black Forest Labs on fal) — full quality ---
     "flux 3 i2v": VideoModelSpec(
@@ -1593,6 +1629,11 @@ _ALIASES: dict[str, str] = {
     "fal-ai/nano-banana-2/edit": "nano banana 2",
     "nano banana": "nano banana",
     "image · nano banana (edit)": "nano banana",
+    "qwen image 3": "qwen image 3",
+    "qwen image 3 (edit)": "qwen image 3",
+    "image · qwen image 3 (edit)": "qwen image 3",
+    "alibaba/qwen-image-3/edit": "qwen image 3",
+    "qwen": "qwen image 3",
     "flux 2 pro": "flux 2 pro",
     "flux 2 pro (edit)": "flux 2 pro",
     "image · flux 2 pro (edit)": "flux 2 pro",
@@ -1798,6 +1839,7 @@ def model_dropdown_choices() -> list[str]:
         "mai image 2.5",
         "nano banana pro",
         "nano banana 2",
+        "qwen image 3",
         "seedream 5 pro",
         "flux 2 flex",
         "flux kontext pro",
@@ -1805,22 +1847,20 @@ def model_dropdown_choices() -> list[str]:
         "grok imagine quality edit",
         "grok imagine 2.0 edit",
     ):
-        if key in IMAGE_EDIT_MODELS:
-            labels.append(IMAGE_EDIT_MODELS[key].label)
+        spec = IMAGE_EDIT_MODELS.get(key)
+        if spec and not spec.hidden:
+            labels.append(spec.label)
     # Video V2V edit (camera-lock workflow) + extend
     for key in (
         "kling o3 standard edit",
         "kling o3 pro edit",
-        "kling o1 standard edit",
-        "kling o1 pro edit",
-        "seedance 2.0 v2v",
-        "seedance 2.0 fast v2v",
         "flux 3 extend",
         "ltx retake",
         "grok imagine edit video",
     ):
-        if key in VIDEO_MODELS:
-            labels.append(VIDEO_MODELS[key].label)
+        spec = VIDEO_MODELS.get(key)
+        if spec and not spec.hidden:
+            labels.append(spec.label)
     # Image-to-video (when starting from a still)
     for key in (
         "kling o3 standard i2v",
@@ -1833,16 +1873,14 @@ def model_dropdown_choices() -> list[str]:
         "grok imagine 1.5 reference",
         "seedance 2.5 i2v",
         "seedance 2.5 reference",
-        "seedance 2.0 i2v",
-        "seedance 2.0 fast i2v",
-        "seedance 2.0 reference",
         "flux 3 i2v",
         "flux 3 first last",
         "minimax h3 i2v",
         "minimax h3 reference",
     ):
-        if key in VIDEO_MODELS:
-            labels.append(VIDEO_MODELS[key].label)
+        spec = VIDEO_MODELS.get(key)
+        if spec and not spec.hidden:
+            labels.append(spec.label)
     return labels
 
 

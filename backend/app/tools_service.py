@@ -71,17 +71,24 @@ def _registries(category: str, kind: str) -> dict[str, ToolSpec]:
     cat = (category or "").strip().lower()
     media = (kind or "").strip().lower()
     if cat == "upscale":
-        return UPSCALERS if media != "video" else {
-            k: v for k, v in VIDEO_UPSCALERS.items() if k != "topaz video"
+        src = UPSCALERS if media != "video" else VIDEO_UPSCALERS
+        return {
+            k: v for k, v in src.items()
+            if not v.hidden and k != "topaz video"
         }
+    def _vis(reg: dict) -> dict:
+        return {k: v for k, v in reg.items() if not getattr(v, "hidden", False)}
+
     if cat == "denoise":
-        return VIDEO_DENOISE_MODELS
+        return _vis(VIDEO_DENOISE_MODELS)
     if cat == "restore":
-        return RESTORE_IMAGE_NO_REF if media != "video" else RESTORE_VIDEO_MODELS
+        src = RESTORE_IMAGE_NO_REF if media != "video" else RESTORE_VIDEO_MODELS
+        return _vis(src)
     if cat == "deblur":
-        return IMAGE_DEBLUR_MODELS if media != "video" else VIDEO_DEBLUR_MODELS
+        src = IMAGE_DEBLUR_MODELS if media != "video" else VIDEO_DEBLUR_MODELS
+        return _vis(src)
     if cat == "interpolate":
-        return VIDEO_INTERPOLATE_MODELS
+        return _vis(VIDEO_INTERPOLATE_MODELS)
     return {}
 
 

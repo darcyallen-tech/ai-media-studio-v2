@@ -29,6 +29,7 @@ class ToolSpec:
     ref_mode: str = "reference_image_url"
     # V2V tools: when set, cost UI uses rate × duration (not "1 image")
     cost_per_second: float | None = None
+    hidden: bool = False
 
 
 # --- Upscalers (image) ---
@@ -59,6 +60,23 @@ UPSCALERS: dict[str, ToolSpec] = {
         cost_estimate_usd=0.004,
         notes="Recraft crisp upscale — detail/faces focus, low cost.",
         extra_defaults={},
+    ),
+    "topaz wonder": ToolSpec(
+        key="topaz wonder",
+        label="Topaz Wonder 3.5 (generative)",
+        category="upscale",
+        endpoint="topaz/upscale/image/generative",
+        cost_estimate_usd=0.24,
+        notes=(
+            "Topaz Wonder 3.5 generative image upscale. "
+            "Est. ~$0.24 / 24MP output. Face enhance on by default."
+        ),
+        extra_defaults={
+            "model": "Wonder 3.5",
+            "upscale_factor": 2,
+            "output_format": "png",
+            "face_enhancement": True,
+        },
     ),
 }
 
@@ -172,6 +190,33 @@ VIDEO_UPSCALERS: dict[str, ToolSpec] = {
             "No temporal denoise — not ideal for high-ISO interiors."
         ),
         extra_defaults={"scale": 2},
+    ),
+    "flux video upscale": ToolSpec(
+        key="flux video upscale",
+        label="FLUX Video Upscale",
+        category="upscale",
+        endpoint="blackforestlabs/flux-video-upscale",
+        cost_estimate_usd=1.40,
+        cost_per_second=0.14,
+        notes=(
+            "FLUX 3 super-resolution. Precise (creativity 0) or creative (1). "
+            "Est. $0.14/s @1080p precise · $0.20/s creative · $0.25–0.35/s 2K · $0.55–0.79/s 4K. "
+            "Max 20s / 50 MB."
+        ),
+        extra_defaults={"upscale_factor": 2, "creativity": 0, "safety_tolerance": 2},
+    ),
+    "topaz starlight gen": ToolSpec(
+        key="topaz starlight gen",
+        label="Topaz · Starlight Precise 2.6 (generative)",
+        category="upscale",
+        endpoint="topaz/upscale/video/generative",
+        cost_estimate_usd=1.20,
+        cost_per_second=0.12,
+        notes=(
+            "Topaz Starlight Precise 2.6 generative video restore/upscale. "
+            "Est. $1.20 / 10s ≤1080p · $2.60 / 10s 4K. Starlight Fast 2 is half."
+        ),
+        extra_defaults={"model": "Starlight Precise 2.6", "upscale_factor": 2},
     ),
 }
 
@@ -618,9 +663,10 @@ VIDEO_SKY_MODELS: dict[str, ToolSpec] = {
         endpoint="fal-ai/kling-video/o1/standard/video-to-video/edit",
         cost_estimate_usd=0.63,
         cost_per_second=0.126,
-        notes="Kling O1 Standard V2V sky — motion-preserving. Est. ~$0.13/s.",
+        notes="Kling O1 Standard V2V sky — archived; prefer O3.",
         extra_defaults={"keep_audio": True},
         supports_ref=True,
+        hidden=True,
     ),
     "kling o1 pro sky": ToolSpec(
         key="kling o1 pro sky",
@@ -629,9 +675,10 @@ VIDEO_SKY_MODELS: dict[str, ToolSpec] = {
         endpoint="fal-ai/kling-video/o1/video-to-video/edit",
         cost_estimate_usd=0.84,
         cost_per_second=0.168,
-        notes="Kling O1 Pro V2V sky. Est. ~$0.17/s.",
+        notes="Kling O1 Pro V2V sky — archived; prefer O3.",
         extra_defaults={"keep_audio": True},
         supports_ref=True,
+        hidden=True,
     ),
     "seedance v2v sky": ToolSpec(
         key="seedance v2v sky",
@@ -640,9 +687,10 @@ VIDEO_SKY_MODELS: dict[str, ToolSpec] = {
         endpoint="bytedance/seedance-2.0/reference-to-video",
         cost_estimate_usd=1.50,
         cost_per_second=0.30,
-        notes="Seedance sky transfer via @Video1 (+ optional sky ref still). Est. ~$0.30/s.",
+        notes="Seedance 2.0 V2V sky — archived; prefer Seedance 2.5 / Kling O3.",
         extra_defaults={},
         supports_ref=True,
+        hidden=True,
     ),
 }
 
@@ -702,6 +750,23 @@ RELIGHT_MODELS: dict[str, ToolSpec] = {
 # Without reference: CodeFormer (fidelity) default; NAFNet whole-frame deblur.
 # With reference: multi-image identity lock default; specialized models still listed.
 RESTORE_IMAGE_NO_REF: dict[str, ToolSpec] = {
+    "topaz recovery": ToolSpec(
+        key="topaz recovery",
+        label="Topaz Recovery V2 (generative restore)",
+        category="restore",
+        endpoint="topaz/upscale/image/generative",
+        cost_estimate_usd=0.48,
+        notes=(
+            "Topaz Recovery V2 — rebuild extreme low-resolution stills. "
+            "Est. ~$0.48 / 24MP output."
+        ),
+        extra_defaults={
+            "model": "Recovery V2",
+            "upscale_factor": 2,
+            "output_format": "png",
+            "face_enhancement": True,
+        },
+    ),
     "codeformer": ToolSpec(
         key="codeformer",
         label="CodeFormer (face restore)",
@@ -1172,22 +1237,21 @@ REASPECT_PROMPT_CORE = (
 )
 
 
+def _visible_labels(reg: dict[str, ToolSpec], *, skip: frozenset[str] = frozenset()) -> list[str]:
+    return [s.label for s in reg.values() if not s.hidden and s.key not in skip]
+
+
 def upscale_labels() -> list[str]:
-    return [s.label for s in UPSCALERS.values()]
+    return _visible_labels(UPSCALERS)
 
 
 def video_upscale_labels() -> list[str]:
     # Prefer family-named Topaz entries; hide legacy alias from the picker
-    out: list[str] = []
-    for s in VIDEO_UPSCALERS.values():
-        if s.key == "topaz video":
-            continue
-        out.append(s.label)
-    return out
+    return _visible_labels(VIDEO_UPSCALERS, skip=frozenset({"topaz video"}))
 
 
 def video_denoise_labels() -> list[str]:
-    return [s.label for s in VIDEO_DENOISE_MODELS.values()]
+    return _visible_labels(VIDEO_DENOISE_MODELS)
 
 
 def video_interpolate_labels() -> list[str]:
@@ -1203,11 +1267,11 @@ def video_cleanup_labels() -> list[str]:
 
 
 def sky_labels() -> list[str]:
-    return [s.label for s in SKY_MODELS.values()]
+    return _visible_labels(SKY_MODELS)
 
 
 def video_sky_labels() -> list[str]:
-    return [s.label for s in VIDEO_SKY_MODELS.values()]
+    return _visible_labels(VIDEO_SKY_MODELS)
 
 
 def mirror_labels() -> list[str]:
@@ -1244,11 +1308,11 @@ def relight_labels() -> list[str]:
 
 def restore_image_labels(*, has_reference: bool) -> list[str]:
     reg = RESTORE_IMAGE_WITH_REF if has_reference else RESTORE_IMAGE_NO_REF
-    return [s.label for s in reg.values()]
+    return _visible_labels(reg)
 
 
 def restore_video_labels() -> list[str]:
-    return [s.label for s in RESTORE_VIDEO_MODELS.values()]
+    return _visible_labels(RESTORE_VIDEO_MODELS)
 
 
 def restore_image_registry(*, has_reference: bool) -> dict[str, ToolSpec]:

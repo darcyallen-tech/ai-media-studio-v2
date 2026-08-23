@@ -99,6 +99,8 @@ class VisionModelSpec:
     # Never send aspect_ratio (e.g. FLUX 3 I2V — frame follows the still)
     omit_aspect_ratio: bool = False
     extra_defaults: dict[str, Any] = field(default_factory=dict)
+    # Keep callable via resolve; omit from default dropdowns
+    hidden: bool = False
 
 
 # UI sentinel when aspect follows the still (disabled control)
@@ -169,6 +171,23 @@ _T2I_ASPECT_TO_IMAGE_SIZE: dict[str, str] = {
     "auto_4k": "auto_4K",
     "auto_1k": "auto_1K",
 }
+
+
+_QWEN_2K_SIZE: dict[str, dict[str, int]] = {
+    "landscape_16_9": {"width": 2048, "height": 1152},
+    "portrait_16_9": {"width": 1152, "height": 2048},
+    "landscape_4_3": {"width": 2048, "height": 1536},
+    "portrait_4_3": {"width": 1536, "height": 2048},
+    "square_hd": {"width": 2048, "height": 2048},
+    "square": {"width": 2048, "height": 2048},
+}
+
+
+def qwen_t2i_image_size(size_enum: str, resolution: str | None) -> str | dict[str, int]:
+    """1K uses Flux-style enums; 2K uses explicit 2048-capped dimensions."""
+    if (resolution or "").strip().lower() in ("2k", "2048"):
+        return _QWEN_2K_SIZE.get(size_enum, {"width": 2048, "height": 1152})
+    return size_enum
 
 
 def map_t2i_image_size(aspect_label: str | None) -> str:
@@ -342,13 +361,34 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         max_num_images=4,
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "2"},
     ),
+    "recraft v4 t2i": VisionModelSpec(
+        key="recraft v4 t2i",
+        label="Recraft V4 (T2I)",
+        mode="text_to_image",
+        endpoint="fal-ai/recraft/v4/text-to-image",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Recraft V4 text→image — design/illustration, type, brand stills. "
+            "~$0.04/image. Replaces V3 in the default list."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=("16:9 landscape", "9:16 portrait", "1:1 square", "4:3 landscape"),
+        default_aspect="16:9 landscape",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=1,
+        extra_defaults={"enable_safety_checker": True},
+    ),
     "recraft v3 t2i": VisionModelSpec(
         key="recraft v3 t2i",
-        label="Recraft V3 (T2I)",
+        label="Recraft V3 (T2I · archive)",
         mode="text_to_image",
         endpoint="fal-ai/recraft/v3/text-to-image",
         cost_estimate_usd=0.04,
-        notes="Recraft V3 text→image — strong design/illustration alternative.",
+        notes="Recraft V3 text→image — archived; V4 is the default Recraft.",
         duration_choices=(),
         default_duration="",
         aspect_choices=("16:9 landscape", "9:16 portrait", "1:1 square", "4:3 landscape"),
@@ -359,15 +399,42 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         max_num_images=1,
         extra_defaults={},
+        hidden=True,
+    ),
+    "qwen image 3 t2i": VisionModelSpec(
+        key="qwen image 3 t2i",
+        label="Qwen Image 3 (T2I)",
+        mode="text_to_image",
+        endpoint="alibaba/qwen-image-3/text-to-image",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Qwen Image 3 — faces, type, signage, multilingual text. "
+            "Up to 2K. Est. $0.04 @1K · $0.075 @2K."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=T2I_ASPECT_CHOICES,
+        default_aspect="16:9 landscape",
+        resolution_choices=("1K", "2K"),
+        default_resolution="1K",
+        supports_audio=False,
+        supports_negative=True,
+        max_num_images=4,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "enable_prompt_expansion": True,
+            "enable_safety_checker": True,
+        },
     ),
     # --- Nano Banana family ---
     "nano banana t2i": VisionModelSpec(
         key="nano banana t2i",
-        label="Nano Banana (T2I)",
+        label="Nano Banana (T2I · archive)",
         mode="text_to_image",
         endpoint="fal-ai/nano-banana",
         cost_estimate_usd=0.04,
-        notes="Nano Banana text→image — solid general stills, many aspect ratios.",
+        notes="Original Nano Banana T2I — archived; prefer Nano Banana 2 / Pro.",
         duration_choices=(),
         default_duration="",
         aspect_choices=T2I_NANO_ASPECT_CHOICES,
@@ -378,6 +445,7 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         max_num_images=4,
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
+        hidden=True,
     ),
     "nano banana 2 t2i": VisionModelSpec(
         key="nano banana 2 t2i",
@@ -689,11 +757,11 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
     ),
     "nano banana i2i": VisionModelSpec(
         key="nano banana i2i",
-        label="Nano Banana (edit)",
+        label="Nano Banana (edit · archive)",
         mode="image_to_image",
         endpoint="fal-ai/nano-banana/edit",
         cost_estimate_usd=0.04,
-        notes="Original Nano Banana edit — multi-ref (primary + up to 3).",
+        notes="Original Nano Banana edit — archived; prefer Nano Banana 2 / Pro.",
         duration_choices=(),
         default_duration="",
         aspect_choices=("Match source",) + T2I_NANO_ASPECT_CHOICES,
@@ -707,6 +775,36 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="nano banana",
         supports_strength=False,
         extra_defaults={"num_images": 1},
+        hidden=True,
+    ),
+    "qwen image 3 i2i": VisionModelSpec(
+        key="qwen image 3 i2i",
+        label="Qwen Image 3 (edit)",
+        mode="image_to_image",
+        endpoint="alibaba/qwen-image-3/edit",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Qwen Image 3 edit — 1–3 refs. Strong faces, type, and signage. "
+            "Est. $0.04 @1K · $0.075 @2K."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=I2I_ASPECT_CHOICES,
+        default_aspect="Match source",
+        resolution_choices=("1K", "2K"),
+        default_resolution="1K",
+        supports_audio=False,
+        supports_negative=True,
+        max_refs=2,
+        image_field="image_urls",
+        edit_model_key="qwen image 3",
+        supports_strength=False,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "enable_prompt_expansion": True,
+            "enable_safety_checker": True,
+        },
     ),
     "seedream 5 pro i2i": VisionModelSpec(
         key="seedream 5 pro i2i",
@@ -909,6 +1007,76 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         extra_defaults={"generate_audio": True},
     ),
+    "kling v3 pro t2v": VisionModelSpec(
+        key="kling v3 pro t2v",
+        label="Kling 3.0 Pro · Text→Video",
+        mode="text_to_video",
+        endpoint="fal-ai/kling-video/v3/pro/text-to-video",
+        cost_estimate_usd=0.84,  # 5s × $0.168 audio on
+        cost_per_second=0.168,
+        notes=(
+            "Kling 3.0 Pro T2V — cinematic 3–15s · 16:9/9:16/1:1 · native audio. "
+            "Est. $0.112/s audio off · $0.168/s audio on."
+        ),
+        duration_choices=tuple(str(i) for i in range(3, 16)),
+        default_duration="5",
+        aspect_choices=("16:9", "9:16", "1:1"),
+        default_aspect="16:9",
+        resolution_choices=(),
+        supports_audio=True,
+        extra_defaults={"generate_audio": True},
+    ),
+    "kling v3 standard t2v": VisionModelSpec(
+        key="kling v3 standard t2v",
+        label="Kling 3.0 Standard · Text→Video",
+        mode="text_to_video",
+        endpoint="fal-ai/kling-video/v3/standard/text-to-video",
+        cost_estimate_usd=0.84,
+        cost_per_second=0.168,
+        notes=(
+            "Kling 3.0 Standard T2V — 3–15s · native audio. "
+            "Est. $0.112/s audio off · $0.168/s audio on."
+        ),
+        duration_choices=tuple(str(i) for i in range(3, 16)),
+        default_duration="5",
+        aspect_choices=("16:9", "9:16", "1:1"),
+        default_aspect="16:9",
+        resolution_choices=(),
+        supports_audio=True,
+        extra_defaults={"generate_audio": True},
+    ),
+    "kling o3 pro t2v": VisionModelSpec(
+        key="kling o3 pro t2v",
+        label="Kling O3 Pro · Text→Video",
+        mode="text_to_video",
+        endpoint="fal-ai/kling-video/o3/pro/text-to-video",
+        cost_estimate_usd=0.84,
+        cost_per_second=0.168,
+        notes="Kling O3 Pro T2V — 3–15s · native audio. Est. ~$0.168/s with audio.",
+        duration_choices=tuple(str(i) for i in range(3, 16)),
+        default_duration="5",
+        aspect_choices=("16:9", "9:16", "1:1"),
+        default_aspect="16:9",
+        resolution_choices=(),
+        supports_audio=True,
+        extra_defaults={"generate_audio": True},
+    ),
+    "kling o3 standard t2v": VisionModelSpec(
+        key="kling o3 standard t2v",
+        label="Kling O3 Standard · Text→Video",
+        mode="text_to_video",
+        endpoint="fal-ai/kling-video/o3/standard/text-to-video",
+        cost_estimate_usd=0.56,
+        cost_per_second=0.112,
+        notes="Kling O3 Standard T2V — 3–15s · native audio. Est. ~$0.112/s.",
+        duration_choices=tuple(str(i) for i in range(3, 16)),
+        default_duration="5",
+        aspect_choices=("16:9", "9:16", "1:1"),
+        default_aspect="16:9",
+        resolution_choices=(),
+        supports_audio=True,
+        extra_defaults={"generate_audio": True},
+    ),
     "ltx 2.5 fast t2v": VisionModelSpec(
         key="ltx 2.5 fast t2v",
         label="LTX 2.5 Fast · Text→Video",
@@ -1031,17 +1199,18 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
     ),
     "seedance 2.0 i2v": VisionModelSpec(
         key="seedance 2.0 i2v",
-        label="Seedance 2.0 · Image→Video",
+        label="Seedance 2.0 · Image→Video (archive)",
         mode="image_to_video",
         endpoint="bytedance/seedance-2.0/image-to-video",
         cost_estimate_usd=0.30,
         cost_per_second=0.05,
-        notes="ByteDance I2V. Good motion value.",
+        notes="ByteDance Seedance 2.0 I2V — archived; prefer Seedance 2.5.",
         duration_choices=("5", "8", "10"),
         default_duration="5",
         supports_audio=False,
         resolution_choices=(),
         extra_defaults={},
+        hidden=True,
     ),
     "seedance 2.5 i2v": VisionModelSpec(
         key="seedance 2.5 i2v",
@@ -1080,7 +1249,7 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
     ),
     "hailuo 02 i2v": VisionModelSpec(
         key="hailuo 02 i2v",
-        label="MiniMax Hailuo 02 · Image→Video",
+        label="MiniMax Hailuo 02 · Image→Video (archive)",
         mode="image_to_video",
         endpoint="fal-ai/minimax/hailuo-02/standard/image-to-video",
         cost_estimate_usd=0.28,
@@ -1094,6 +1263,7 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
         resolution_choices=("512P", "768P"),
         default_resolution="768P",
         extra_defaults={"prompt_optimizer": True},
+        hidden=True,
     ),
     "minimax h3 i2v": VisionModelSpec(
         key="minimax h3 i2v",
@@ -1258,6 +1428,34 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 pro",
         supports_strength=False,
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
+    ),
+    "qwen image 3 r2i": VisionModelSpec(
+        key="qwen image 3 r2i",
+        label="Qwen Image 3 · R2I",
+        mode="reference_to_image",
+        endpoint="alibaba/qwen-image-3/edit",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Build a still from 1–3 identity/style/signage refs. "
+            "Strong type and faces. Est. $0.04 @1K · $0.075 @2K."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=I2I_ASPECT_CHOICES,
+        default_aspect="Match source",
+        resolution_choices=("1K", "2K"),
+        default_resolution="1K",
+        supports_audio=False,
+        supports_negative=True,
+        max_refs=3,
+        image_field="image_urls",
+        edit_model_key="qwen image 3",
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "enable_prompt_expansion": True,
+            "enable_safety_checker": True,
+        },
     ),
     "flux 2 max r2i": VisionModelSpec(
         key="flux 2 max r2i",
@@ -1443,6 +1641,7 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=False,  # API expects string "15" / "auto", not int
         image_field="image_urls",
         extra_defaults={"generate_audio": True},
+        hidden=True,
     ),
     "seedance 2.5 reference": VisionModelSpec(
         key="seedance 2.5 reference",
@@ -1548,6 +1747,27 @@ V2V_MODELS: dict[str, VisionModelSpec] = {
         video_field="video_url",
         extra_defaults={"generate_audio": True, "safety_tolerance": 2},
     ),
+    "sync 3 lipsync": VisionModelSpec(
+        key="sync 3 lipsync",
+        label="sync-3 · Lipsync (V2V)",
+        mode="video_to_video",
+        endpoint="fal-ai/sync-lipsync/v3",
+        cost_estimate_usd=1.33,  # ~10s at $8/min
+        cost_per_second=8.0 / 60.0,
+        notes=(
+            "sync-3 lipsync — source clip + dialogue audio. Est. $8/min. "
+            "Prompt is unused; attach an audio ref."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(),
+        resolution_choices=(),
+        supports_audio=False,
+        supports_negative=False,
+        max_ref_audios=1,
+        video_field="video_url",
+        extra_defaults={"sync_mode": "cut_off"},
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -1602,6 +1822,7 @@ BRIDGE_MODELS: dict[str, VisionModelSpec] = {
         resolution_choices=("512P", "768P"),
         default_resolution="768P",
         extra_defaults={"prompt_optimizer": True},
+        hidden=True,
     ),
     # --- First→Last via I2V endpoints (Kling / Seedance / H3) — listed early ---
     "kling o3 pro bridge": VisionModelSpec(
@@ -1672,6 +1893,7 @@ BRIDGE_MODELS: dict[str, VisionModelSpec] = {
         requires_end_frame=True,
         resolution_choices=(),
         extra_defaults={},
+        hidden=True,
     ),
     "flux 3 bridge": VisionModelSpec(
         key="flux 3 bridge",
@@ -1765,6 +1987,7 @@ BRIDGE_MODELS: dict[str, VisionModelSpec] = {
         requires_end_frame=True,
         duration_as_int=False,
         extra_defaults={"generate_audio": True},
+        hidden=True,
     ),
     "minimax h3 bridge": VisionModelSpec(
         key="minimax h3 bridge",
@@ -1854,7 +2077,7 @@ def models_for_mode(mode: VisionMode) -> dict[str, VisionModelSpec]:
 
 
 def vision_labels(mode: VisionMode) -> list[str]:
-    return [s.label for s in models_for_mode(mode).values()]
+    return [s.label for s in models_for_mode(mode).values() if not s.hidden]
 
 
 def find_vision_model(
@@ -2047,6 +2270,12 @@ def estimate_vision_cost(
     Seedance 2.5 uses fal's token formula ($0.0214/1k tokens; video refs ×0.6).
     """
     if is_still_mode(spec.mode):
+        ep_still = (spec.endpoint or "").lower()
+        n = clamp_vision_num_images(spec, num_images)
+        res = (resolution or spec.default_resolution or "").lower()
+        if "qwen-image-3" in ep_still:
+            unit = 0.075 if res in ("2k", "2048") else 0.04
+            return round(max(0.01, unit * n), 3)
         # Flat per-image estimates; bump for large aspect / higher resolution
         base = float(spec.cost_estimate_usd)
         asp = (aspect_ratio or spec.default_aspect or "").lower()
@@ -2066,7 +2295,6 @@ def estimate_vision_cost(
         # Nano Banana Pro is steeper at high res
         if "nano-banana-pro" in spec.endpoint and res in ("2k", "4k"):
             base *= 1.15
-        n = clamp_vision_num_images(spec, num_images)
         return round(max(0.01, base * n), 3)
 
     # --- Video: total = per-second rate × duration ---
@@ -2198,13 +2426,15 @@ def build_vision_arguments(
     """Map UI fields → fal payload for the selected Vision model."""
     args: dict[str, Any] = dict(spec.extra_defaults)
     text = (prompt or "").strip()
-    if not text:
+    if not text and "sync-lipsync" not in spec.endpoint.lower():
         raise ValueError(
             "Enter a prompt."
             if is_still_mode(spec.mode)
             else "Enter a motion / shot prompt."
         )
     args["prompt"] = text
+    if "sync-lipsync" in spec.endpoint.lower():
+        args.pop("prompt", None)
     if "avatar-x" in spec.endpoint.lower():
         args["script"] = text
         args.pop("prompt", None)
@@ -2244,6 +2474,10 @@ def build_vision_arguments(
                 args["resolution"] = picked or (spec.default_resolution or "1K")
         elif "seedream" in ep or "bytedance" in ep:
             # Seedream T2I: image_size preset or auto_2K / auto_4K
+            args["image_size"] = size
+        elif "qwen-image-3" in ep:
+            args["image_size"] = qwen_t2i_image_size(size, res)
+        elif "recraft/v4" in ep:
             args["image_size"] = size
         elif "recraft" in ep:
             args["aspect_ratio"] = colon_ar
@@ -2531,6 +2765,12 @@ def build_vision_arguments(
             )
         vfield = (getattr(spec, "video_field", None) or "video_url").strip() or "video_url"
         args[vfield] = vid
+        if "sync-lipsync" in ep:
+            auds = [u for u in (ref_audio_urls or []) if u]
+            if not auds:
+                raise ValueError("sync-3 lipsync needs a dialogue audio clip.")
+            args["audio_url"] = auds[0]
+            args.pop("prompt", None)
 
     elif spec.mode == "text_to_video":
         if getattr(spec, "omni_reference", False) or (

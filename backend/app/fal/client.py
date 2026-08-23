@@ -2,6 +2,8 @@
 Thin fal.ai client helpers.
 
 Designed so video models can reuse upload / subscribe / download later.
+
+Phase 22: replace fal_client.subscribe (long-poll) with queue.submit + webhook.
 """
 
 from __future__ import annotations

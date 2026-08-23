@@ -1342,7 +1342,13 @@ export function pickSheetResolution(choices: string[]): string {
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = `${row.id || ""} ${row.label || ""}`.toLowerCase();
-  return blob.includes("flux") || blob.includes("seedream") || blob.includes("nano");
+  return (
+    blob.includes("flux") ||
+    blob.includes("seedream") ||
+    blob.includes("nano") ||
+    blob.includes("qwen") ||
+    blob.includes("recraft")
+  );
 }
 
 function asModelRows(raw: unknown): ModelRow[] {

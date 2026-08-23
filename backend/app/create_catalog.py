@@ -57,6 +57,7 @@ class ModelEntry:
     supports_audio: bool = False
     supports_strength: bool = False
     native_stereo_audio: bool = False
+    hidden: bool = False
 
     @property
     def first_last(self) -> bool:
@@ -188,7 +189,10 @@ def _slots_for(
             "scene_ids",
         )
     if m == "v2v":
-        return ("source_video",), ("start_still", "ref_images")
+        opt = ["start_still", "ref_images"]
+        if max_ref_audios > 0:
+            opt.append("ref_audios")
+        return ("source_video",), tuple(opt)
     if m == "bridge":
         return ("start_still", "end_still"), ()
     if m == "extend":
@@ -331,6 +335,7 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         supports_audio=bool(getattr(spec, "supports_audio", False)),
         supports_strength=bool(getattr(spec, "supports_strength", False)),
         native_stereo_audio=bool(getattr(spec, "native_stereo_audio", False)),
+        hidden=bool(getattr(spec, "hidden", False)),
     )
 
 
@@ -392,6 +397,7 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
         supports_audio=False,
         supports_strength=True,
         native_stereo_audio=False,
+        hidden=bool(getattr(spec, "hidden", False)),
     )
 
 
@@ -478,6 +484,7 @@ def _entry_from_video(spec: Any) -> ModelEntry:
         ),
         supports_strength=False,
         native_stereo_audio=bool(getattr(spec, "native_stereo_audio", False)),
+        hidden=bool(getattr(spec, "hidden", False)),
     )
 
 
@@ -669,8 +676,8 @@ _DEFAULT_HINTS: dict[str, tuple[str, ...]] = {
     "t2i": ("flux 2 pro t2i", "Flux 2 Pro (T2I)"),
     "r2i": ("flux 2 pro", "Image · Flux 2 Pro (edit)"),
     "region": ("seedream 5 pro", "Image · Seedream 5 Pro (edit)"),
-    "i2v": ("kling o3 standard i2v", "Kling O3 Standard"),
-    "t2v": ("veo 3.1 fast", "Veo 3.1 Fast"),
+    "i2v": ("kling o3 standard i2v", "Kling O3 Standard", "seedance 2.5 i2v"),
+    "t2v": ("veo 3.1 fast", "Veo 3.1 Fast", "seedance 2.5 t2v"),
     "v2v": ("kling o3 standard edit", "Kling O3 Standard – V2V"),
     "r2v": ("minimax h3", "Omni"),
     "bridge": ("kling o3 pro bridge", "Kling O3 Pro · First→Last"),
@@ -692,6 +699,8 @@ def list_models_for_ui(mode: str | None, modality: str | None) -> list[ModelEntr
     seen: set[str] = set()
     out: list[ModelEntry] = []
     for e in rows:
+        if e.hidden:
+            continue
         key = (e.endpoint or "").strip().lower()
         if key and key in seen:
             continue
