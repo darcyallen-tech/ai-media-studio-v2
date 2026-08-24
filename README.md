@@ -2,7 +2,7 @@
 
 A free desktop app for stills, video, audio, and a clip Frame Editor. You work on a node canvas, pick a model, and generate. You bring your own API keys (fal for almost everything; optional xAI for prompt enhance; optional Runware for Frame Editor / Aleph). You pay those providers for usage. This app does not sell credits.
 
-Version **2.0.0-rc1**.
+Version **2.0.0-rc2**.
 
 **Windows** has a Release zip with an `.exe`. **macOS and Linux** run from source (no packaged binary yet).
 
@@ -15,6 +15,8 @@ Image catalog includes **Bria Fibo Gen 1.5** (T2I) and **Fibo Edit** (I2I, optio
 ---
 
 ## Windows (Release zip)
+
+Current package: **`AIMediaStudioV2-2.0.0-rc2-windows.zip`** (GitHub Releases). Includes Wan 3.0 (T2V / I2V / R2V) and Fibo Gen 1.5 (T2I) / Fibo Edit (I2I).
 
 1. Download the Release zip for this repo (GitHub Releases). Unzip it.
 2. Run `AIMediaStudioV2.exe` or `AMS_V2.bat`. Keep the `_internal` folder next to the exe.

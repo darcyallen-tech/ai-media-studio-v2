@@ -141,12 +141,12 @@ APP_DESCRIPTION = (
 try:
     from app import __version__ as _pkg_ver
 
-    APP_VERSION = str(_pkg_ver or "2.0.0-rc1").strip() or "2.0.0-rc1"
+    APP_VERSION = str(_pkg_ver or "2.0.0-rc2").strip() or "2.0.0-rc2"
 except Exception:
-    APP_VERSION = "2.0.0-rc1"
+    APP_VERSION = "2.0.0-rc2"
 # Calendar day of this build/release (YYYY-MM-DD). Bump on tagged releases.
 # Same-day remote commits are treated as current unless the git SHA differs.
-APP_BUILD_DATE = os.environ.get("AI_MEDIA_STUDIO_BUILD_DATE", "2026-08-23").strip()
+APP_BUILD_DATE = os.environ.get("AI_MEDIA_STUDIO_BUILD_DATE", "2026-08-24").strip()
 
 
 def _resolve_app_git_sha() -> str:

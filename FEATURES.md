@@ -1,6 +1,6 @@
 # AI Media Studio V2 — Features
 
-**Version:** 2.0.0-rc1 (Windows)
+**Version:** 2.0.0-rc2 (Windows)
 
 Free desktop app. You bring your own API keys. You pay the providers for what you generate — not a subscription to this app.
 
@@ -173,4 +173,4 @@ Estimates are helpers, not invoices. Provider dashboards are the source of truth
 - Not a hosted SaaS. No included credits.
 - Not a second catalog on Runware (Aleph / Frame only).
 - Not an After Effects or Resolve plugin. Resolve is a handoff, not a host.
-- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc1**.
+- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc2**.
