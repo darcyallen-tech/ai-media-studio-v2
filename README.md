@@ -1,169 +1,78 @@
 # AI Media Studio V2
 
-Greenfield web app (FastAPI + Vite/React). This repo is a **sibling** of V1.
+A free Windows desktop app for stills, video, audio, and a clip Frame Editor. You work on a node canvas, pick a model, and generate. You bring your own API keys (fal for almost everything; optional xAI for prompt enhance; optional Runware for Frame Editor / Aleph). You pay those providers for usage. This app does not sell credits.
 
-**V1 remains at `../ai-media-studio` for production.** Do not modify V1 from this tree.
+Version **2.0.0-rc1**.
 
-Version **2.0.0-rc1**. Dev: Vite on :5173 + API on :8000. Production: one origin on :8000.
+**Docs:** [FEATURES.md](FEATURES.md) (what is in the catalog) · [HOW_TO.md](HOW_TO.md) (first-run walkthrough)
 
-## Production run
+---
 
-Build the SPA, then start the production server (no `--reload`). A desktop window titled **AI Media Studio V2** opens on `http://127.0.0.1:8000/` (Edge WebView2). If WebView2 is missing, the default browser opens instead.
+## Windows (Release zip)
 
-```powershell
-cd frontend
-npm install
-npm run build
-cd ..
-python run_server.py
-```
+1. Download the Release zip for this repo (GitHub Releases). Unzip it.
+2. Run `AIMediaStudioV2.exe` or `AMS_V2.bat`. Keep the `_internal` folder next to the exe.
+3. Open **Settings**, paste your keys, **Save keys**.
 
-- Same origin: UI + `/generate`, `/draft-enhance`, `/library`, `/outputs`.
-- Data (outputs, uploads, library, assets, thumbs) goes to `%LOCALAPPDATA%\AI Media Studio V2\`.
-- Keys: Settings inside the window → secrets store. Repo-root `.env` is **not** required.
-- V1 root / Resolve inbox: optional in Settings (blank = disabled).
-- Port 8000 busy: console says so, then the app tries **8001**. Close the other process if both are taken.
-- Dev checkout: `cd backend; python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` plus `npm run dev` in `frontend`. Set `AMS_DEV=1` to force repo-relative `outputs/` and `data/`.
+A window titled **AI Media Studio V2** opens (Microsoft Edge WebView2). If the window fails, install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) and retry; the app can fall back to your default browser.
 
-## Windows build
+Generated files and secrets live under `%LOCALAPPDATA%\AI Media Studio V2\` -- not inside the zip. See [HOW_TO.md](HOW_TO.md) if a port is busy or a key is missing.
 
-One-folder PyInstaller package (not one-file). Console window stays visible for RC.
+---
 
-```powershell
-cd frontend
-npm run build
-cd ..
-powershell -File packaging/build_windows.ps1
-```
 
-Run the folder (no repo checkout required):
+## From source
 
-```
-dist\AIMediaStudioV2\AMS_V2.bat
-```
+Need Node 20 and Python 3.11 or newer.
 
-or double-click `AIMediaStudioV2.exe`. A native window titled **AI Media Studio V2** opens (not a browser tab). Closing the window shuts down the server.
+Build the SPA in the frontend directory.
+Install the backend requirements file.
+From the repo root, run the production entry (run_server). That serves UI and API on port 8000, opens the desktop window, and stores data under LOCALAPPDATA (AMS_DEV off).
 
-First run: open **Settings** inside the window, paste fal / xAI / Runware keys (saved under `%LOCALAPPDATA%\AI Media Studio V2\`). Outputs and Library write there, not next to the exe.
+### Dev checkout (hot reload)
 
-Windows uses the **Microsoft Edge WebView2** runtime (already on most Windows 10/11 PCs). If the window fails to open, install the Evergreen runtime from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/) and retry. Without WebView2 the app falls back to your default browser and keeps the console message.
+Use two terminals. Turn AMS_DEV on so outputs and data stay in the repo.
+Run the FastAPI app from backend on port 8000.
+Run the frontend dev server, then open localhost port 5173 (it proxies API calls).
+Paste keys in Settings, or copy `.env.example` to `.env` at the repo root (gitignored).
+
+---
+
+## Keys
+
+Bring your own. Never commit `.env` or `secrets.json`.
+
+| Key | Used for | Where to get it |
+|-----|----------|-----------------|
+| fal (`FAL_KEY`) | Image, video, audio, Tools | https://fal.ai/dashboard/keys |
+| xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
+| Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
+
+Packaged app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). Dev: Settings or repo-root `.env` (gitignored).
+
+---
 
 ## Layout
 
 ```
 ai-media-studio-v2/
-  backend/app/     FastAPI + create_state / catalog / generate (V1 logic, imports adapted)
-  frontend/        Vite + React day canvas (Prompt, Source, Result + Library)
-  outputs/         generated media (served at /outputs/...)
-  data/uploads/    imported Library files
+  backend/          FastAPI
+  frontend/         Vite + React canvas
+  packaging/        Windows one-folder build
+  FEATURES.md
+  HOW_TO.md
+  run_server.py     production entry (SPA + API + window)
 ```
 
-## Prerequisites
+`dist/` is the PyInstaller output. It is gitignored. Publish a zip from GitHub Releases; do not commit `dist/` as source.
 
-- Python 3.11+ (3.14 works)
-- Node.js 20+ (for the frontend)
-- Windows desktop window: [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (usually already installed on Windows 10/11)
+---
 
-## Keys
+## License
 
-**Production:** paste keys in Settings (stored under `%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). No repo `.env` required.
+Free to use. No warranty. You are responsible for API bills, keys, and what you generate.
 
-**Dev checkout:** copy `.env.example` → `.env` at the repo root, or paste in Settings. Never commit real keys.
+Optional support: [Donate via PayPal](https://www.paypal.com/donate/?business=B8KD4347C4F9L&no_recurring=0&currency_code=CAD)
 
-| Env | Used for |
-|-----|----------|
-| `FAL_KEY` | Almost all generation (image / video / audio on fal) |
-| `XAI_KEY` or `XAI_API_KEY` | Optional Grok enhance / text |
-| `RUNWARE_KEY` or `RUNWARE_API_KEY` | Optional Aleph / Runware only |
+Built with [Grok](https://grok.com).
 
-## Backend
-
-```powershell
-cd C:\Users\Darcy\ai-media-studio-v2\backend
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-From a checkout this keeps repo-relative `outputs/` and `data/`. Production: `python run_server.py` from the repo root (adds `backend` to `sys.path`, `AMS_DEV=0`).
-
-| Method | Path | Notes |
-|--------|------|--------|
-| GET | `/health` | App + whether keys are loaded (not the values) |
-| GET | `/models?mode=image\|video\|audio&modality=t2i` | Catalog for the dropdown |
-| GET | `/estimate?mode=&modality=&model_id=` | Cost only |
-| POST | `/estimate` | Same CreateState JSON as generate |
-| POST | `/generate` | `{ ok, result_paths[], local_paths[], cost, duration_sec, error? }` |
-| POST | `/enhance` | `{ prompt, model_id, modality, mode }` → rewritten prompt |
-| GET | `/library?source=&type=` | Resolve / uploads / generated |
-| POST | `/library/import` | Multipart files or local `path` → uploads |
-| GET | `/library/file` · `/library/thumb` | Serve / thumbnail a library item |
-| POST | `/library/reveal` | Open the file in Explorer |
-| GET | `/outputs/...` | Generated files |
-| GET | `/resolve/status` | Inbox path + still/video counts |
-| POST | `/resolve/send` | `{ path, type: image\|video }` — V1-style Media Pool import |
-
-`POST /generate` body (CreateState-compatible):
-
-```json
-{
-  "mode": "image",
-  "modality": "t2i",
-  "model_id": "vision:flux 2 pro t2i",
-  "prompt": "a red chair in a sunlit loft",
-  "params": { "aspect": "16:9" }
-}
-```
-
-Audio: models list works; generate returns a Phase 7 no-op error.
-
-## Frontend
-
-```powershell
-cd C:\Users\Darcy\ai-media-studio-v2\frontend
-npm install
-npm run dev
-```
-
-Open <http://localhost:5173> — Vite proxies `/models`, `/generate`, `/estimate`, `/library`, `/resolve`, `/outputs` to the backend.
-
-Day canvas: light grey + dot grid. Middle-mouse pan, wheel zoom. Prompt node; **Add Source** / **First Frame** / **Last Frame** from the modality. Duration / aspect / **resolution** / audio only when the catalog model lists choices. **Enhance** rewrites the prompt via xAI (does not generate). Drag Library items onto Source / First / Last (green = ok, red = wrong type).
-
-| Modality | Inputs |
-|----------|--------|
-| T2I / T2V | Prompt only |
-| I2I / I2V | Source still |
-| V2V / Extend | Source video |
-| Bridge | First Frame + Last Frame |
-
-Smoke: I2V still → video Result. Bridge two stills at 3s → video Result. T2I / I2I still work.
-
-Follow-up (not this phase): Character / Scene nodes (Phase 6), Upscale node.
-
-## Resolve handoff
-
-**Receive (Resolve → V2 Library → From Resolve)** uses V1’s inbox folder. V2 only reads it.
-
-| Priority | Env / location |
-|----------|----------------|
-| 1 | `RESOLVE_INBOX` or `RESOLVE_HANDOFF` (folder of stills/clips + `latest.json`) |
-| 2 | `AI_MEDIA_STUDIO_ROOT` / `AI_MEDIA_STUDIO_V1_ROOT` → `<root>/data/resolve_handoff` |
-| 3 | Sibling `../ai-media-studio/data/resolve_handoff` |
-
-Typical inbox:
-
-```
-<V1>/data/resolve_handoff/
-  latest.json
-  handoff_*.json
-  handoff_*_still.png
-```
-
-The Resolve script that *writes* this folder is V1’s `resolve_scripts/Send_to_AI_Media_Studio.py` (Workspace → Scripts). V2 watches/refreshes the same folder — **Refresh From Resolve** in the Library, plus a 4s poll while that tab is open.
-
-**Send (V2 → Resolve)** is not a folder drop. Same as V1: Resolve scripting API (`POST /resolve/send`). Requires Resolve Studio open, a project loaded, **Preferences → System → General → External scripting = Local**. Imports into Media Pool bin `AI Media Studio / <date>`. If Resolve is closed, V2 reveals the file in Explorer and shows an error toast.
-
-There is no `RESOLVE_OUTBOX` in V1; send goes straight into the open project.
-
-## V1
-
-Production desktop (Flet) stays in the V1 sibling checkout. V2 does not modify it. Packaged V2 does not require V1 on disk.

@@ -51,6 +51,9 @@ type SpendBody = {
   months?: SpendMonth[];
 };
 
+const DONATE_URL =
+  "https://www.paypal.com/donate/?business=B8KD4347C4F9L&no_recurring=0&currency_code=CAD";
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -256,6 +259,16 @@ export default function SettingsPanel({
   function exportCsv() {
     const year = new Date().getFullYear();
     window.open(`/settings/spend/export.csv?year=${year}`, "_blank");
+  }
+
+  async function openDonate() {
+    try {
+      const res = await fetch("/settings/donate", { method: "POST" });
+      if (res.ok) return;
+    } catch {
+      /* fall through to system/browser open */
+    }
+    window.open(DONATE_URL, "_blank", "noopener,noreferrer");
   }
 
   if (!open) return null;
@@ -506,6 +519,17 @@ export default function SettingsPanel({
           value={paths?.resolve_outbox}
           onOpen={() => void openPath("resolve_outbox")}
         />
+      </section>
+
+      <section className="settings-sec">
+        <h3>Support</h3>
+        <p className="hint">
+          AI Media Studio is free. API usage is billed by fal / xAI / Runware on
+          your accounts. Donations are optional and support the developer.
+        </p>
+        <button type="button" className="ghost" onClick={() => void openDonate()}>
+          Donate (optional)
+        </button>
       </section>
     </aside>
   );

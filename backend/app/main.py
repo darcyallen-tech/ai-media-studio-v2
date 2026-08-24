@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import time
+import webbrowser
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -1161,6 +1162,21 @@ def settings_spend_csv(year: int = Query(...)) -> Response:
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+DONATE_URL = (
+    "https://www.paypal.com/donate/?business=B8KD4347C4F9L&no_recurring=0&currency_code=CAD"
+)
+
+
+@app.post("/settings/donate")
+def settings_donate() -> dict[str, Any]:
+    """Open the PayPal donate page in the system browser (not the app window)."""
+    try:
+        webbrowser.open(DONATE_URL)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "url": DONATE_URL}
 
 
 @app.post("/settings/open")
