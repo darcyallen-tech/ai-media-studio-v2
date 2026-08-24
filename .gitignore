@@ -67,3 +67,7 @@ desktop.ini
 *.log
 *.tmp
 *.partial
+
+*.zip
+AIMediaStudioV2*.zip
+dist/

@@ -4,7 +4,7 @@ A free Windows desktop app for stills, video, audio, and a clip Frame Editor. Yo
 
 Version **2.0.0-rc1**.
 
-**Docs:** [FEATURES.md](FEATURES.md) (what is in the catalog) · [HOW_TO.md](HOW_TO.md) (first-run walkthrough)
+**Docs:** [FEATURES.md](FEATURES.md) (what is in the catalog) Â· [HOW_TO.md](HOW_TO.md) (first-run walkthrough)
 
 ---
 
@@ -70,9 +70,6 @@ ai-media-studio-v2/
 
 ## License
 
-Free to use. No warranty. You are responsible for API bills, keys, and what you generate.
-
-Optional support: [Donate via PayPal](https://www.paypal.com/donate/?business=B8KD4347C4F9L&no_recurring=0&currency_code=CAD)
+[MIT](LICENSE). Free to use. No warranty. You are responsible for API bills, keys, and what you generate.
 
 Built with [Grok](https://grok.com).
-
