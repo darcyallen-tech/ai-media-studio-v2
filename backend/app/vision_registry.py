@@ -990,6 +990,38 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=False,
         extra_defaults={"generate_audio": True},
     ),
+    "wan 3.0 t2v": VisionModelSpec(
+        key="wan 3.0 t2v",
+        label="Wan 3.0 · Text→Video",
+        mode="text_to_video",
+        endpoint="alibaba/wan-3.0/text-to-video",
+        cost_estimate_usd=1.00,  # 5s × $0.20 @1080p
+        cost_per_second=0.20,
+        cost_per_second_by_resolution={"480p": 0.05, "720p": 0.10, "1080p": 0.20},
+        notes=(
+            "Alibaba Wan 3.0 T2V — up to 30s @ 1080p with native audio. "
+            "Duration 2–30s or auto · 480p/720p/1080p (default 1080p) · "
+            "aspect adaptive|16:9|4:3|1:1|3:4|9:16. "
+            "Est. $0.05/s @480p · $0.10/s @720p · $0.20/s @1080p. Commercial OK on fal."
+        ),
+        duration_choices=("auto",) + tuple(str(i) for i in range(2, 31)),
+        default_duration="5",
+        aspect_choices=(
+            "adaptive",
+            "16:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16",
+        ),
+        default_aspect="adaptive",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        duration_as_int=True,
+        extra_defaults={"audio": True, "enable_prompt_expansion": True},
+    ),
     "ltx 2.5 pro t2v": VisionModelSpec(
         key="ltx 2.5 pro t2v",
         label="LTX 2.5 Pro · Text→Video",
@@ -1407,6 +1439,39 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
         image_field="image_url",
         extra_defaults={"generate_audio": True, "safety_tolerance": 2},
     ),
+    "wan 3.0 i2v": VisionModelSpec(
+        key="wan 3.0 i2v",
+        label="Wan 3.0 · Image→Video",
+        mode="image_to_video",
+        endpoint="alibaba/wan-3.0/image-to-video",
+        cost_estimate_usd=1.00,
+        cost_per_second=0.20,
+        cost_per_second_by_resolution={"480p": 0.05, "720p": 0.10, "1080p": 0.20},
+        notes=(
+            "Wan 3.0 I2V — start still required; optional last frame. "
+            "2–30s or auto · 1080p default · native audio. "
+            "Est. $0.05/s @480p · $0.10/s @720p · $0.20/s @1080p."
+        ),
+        duration_choices=("auto",) + tuple(str(i) for i in range(2, 31)),
+        default_duration="5",
+        aspect_choices=(
+            "adaptive",
+            "16:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16",
+        ),
+        default_aspect="adaptive",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        supports_end_frame=True,
+        duration_as_int=True,
+        image_field="start_image_url",
+        extra_defaults={"audio": True, "enable_prompt_expansion": True},
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -1692,6 +1757,45 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         image_field="image_urls",
         prompt_citation_style="plain",
         extra_defaults={"generate_audio": True},
+    ),
+    "wan 3.0 reference": VisionModelSpec(
+        key="wan 3.0 reference",
+        label="Wan 3.0 · Reference→Video",
+        mode="reference_to_video",
+        endpoint="alibaba/wan-3.0/reference-to-video",
+        cost_estimate_usd=1.00,
+        cost_per_second=0.20,
+        cost_per_second_by_resolution={"480p": 0.05, "720p": 0.10, "1080p": 0.20},
+        notes=(
+            "Wan 3.0 R2V — up to 10 images + 5 videos (~15s) + 5 audio (~15s). "
+            "Cite Image 1 / Image 2 (character vs scene), Video 1, Audio 1 in the prompt. "
+            "2–30s or auto · 1080p default · native audio. "
+            "Est. $0.05/s @480p · $0.10/s @720p · $0.20/s @1080p. Also Studio Video → R2V."
+        ),
+        duration_choices=("auto",) + tuple(str(i) for i in range(2, 31)),
+        default_duration="5",
+        aspect_choices=(
+            "adaptive",
+            "16:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16",
+        ),
+        default_aspect="adaptive",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="1080p",
+        supports_audio=True,
+        supports_negative=False,
+        max_refs=10,
+        max_ref_videos=5,
+        max_ref_audios=5,
+        omni_reference=True,
+        duration_as_int=True,
+        native_stereo_audio=False,
+        prompt_citation_style="plain",
+        image_field="reference_image_urls",
+        extra_defaults={"audio": True, "enable_prompt_expansion": True},
     ),
     # FLUX 3 listed under R2V as identity-ref emphasis (still single-image API)
     "flux 3 r2v": VisionModelSpec(
@@ -2565,6 +2669,7 @@ def build_vision_arguments(
             or "grok-imagine-video" in ep
             or "ltx-2.5" in ep
             or "lightricks/ltx" in ep
+            or "wan-3.0" in ep
             or getattr(spec, "duration_as_int", False)
         ):
             dur = dur.replace("s", "").strip()
@@ -2918,4 +3023,7 @@ def build_vision_arguments(
     from app.aspect_omit import sanitize_seedance_r2v_arguments
 
     args = sanitize_seedance_r2v_arguments(args, endpoint=spec.endpoint)
+    from app.fal.models import apply_wan30_payload
+
+    args = apply_wan30_payload(args, endpoint=spec.endpoint)
     return args

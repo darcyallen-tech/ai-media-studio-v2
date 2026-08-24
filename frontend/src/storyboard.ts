@@ -169,7 +169,9 @@ export function parseSeconds(tok: string): number {
 }
 
 export function storyboardDurationChoices(model?: ModelRow | null): string[] {
-  const fromModel = durationOptions(model);
+  const fromModel = durationOptions(model).filter(
+    (t) => t.toLowerCase() !== "auto",
+  );
   if (fromModel.length) return fromModel;
   const lo = Number(model?.duration_min) || 5;
   const hi = Number(model?.duration_max) || 30;

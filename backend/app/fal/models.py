@@ -533,6 +533,43 @@ class VideoModelSpec:
         return total
 
 
+# Alibaba Wan 3.0 (fal) — T2V / I2V / R2V share duration, res, aspect, audio, $/s
+WAN30_DURATIONS: tuple[str, ...] = ("auto",) + tuple(str(i) for i in range(2, 31))
+WAN30_ASPECTS: tuple[str, ...] = (
+    "adaptive",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16",
+)
+WAN30_RESOLUTIONS: tuple[str, ...] = ("480p", "720p", "1080p")
+WAN30_COST_PER_S: dict[str, float] = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
+
+
+def is_wan30_endpoint(endpoint: str | None) -> bool:
+    ep = (endpoint or "").lower().replace("_", "-")
+    return "wan-3.0" in ep or "alibaba/wan-3.0" in ep
+
+
+def apply_wan30_payload(
+    args: dict[str, Any],
+    *,
+    endpoint: str | None = None,
+) -> dict[str, Any]:
+    """Map UI fields onto Wan 3.0: audio (not generate_audio); omit duration for auto."""
+    if not is_wan30_endpoint(endpoint):
+        return args
+    out = dict(args)
+    if "generate_audio" in out:
+        out["audio"] = bool(out.pop("generate_audio"))
+    dur = out.get("duration")
+    if dur is None or str(dur).strip().lower() in ("auto", "smart", "-1", ""):
+        out.pop("duration", None)
+    out.pop("negative_prompt", None)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -1669,6 +1706,83 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Est. ~$0.26/s @2K (+ ref image/video surcharges per fal)."
         ),
     ),
+    # --- Alibaba Wan 3.0 (fal) — 2–30s, 1080p, native audio ---
+    "wan 3.0 i2v": VideoModelSpec(
+        key="wan 3.0 i2v",
+        label="Video · Wan 3.0 – Image-to-Video",
+        endpoint="alibaba/wan-3.0/image-to-video",
+        task="image_to_video",
+        image_field=None,
+        i2v_image_field="start_image_url",
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        generate_audio_param="audio",
+        default_generate_audio=True,
+        supports_end_frame=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="5",
+        min_duration_seconds=2.0,
+        max_duration_seconds=30.0,
+        allowed_durations=WAN30_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=WAN30_RESOLUTIONS,
+        default_resolution="1080p",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=WAN30_ASPECTS,
+        default_aspect_ratio="adaptive",
+        cost_per_second=0.20,
+        cost_per_second_by_resolution=dict(WAN30_COST_PER_S),
+        extra_defaults={"enable_prompt_expansion": True},
+        notes=(
+            "Wan 3.0 I2V — start still required; optional last frame (end_image_url). "
+            "2–30s or auto · 480p/720p/1080p (default 1080p) · aspect adaptive|ratios. "
+            "Native audio (toggle). Est. $0.05/s @480p · $0.10/s @720p · $0.20/s @1080p. "
+            "Commercial use OK on fal."
+        ),
+    ),
+    "wan 3.0 reference": VideoModelSpec(
+        key="wan 3.0 reference",
+        label="Video · Wan 3.0 – Reference-to-Video",
+        endpoint="alibaba/wan-3.0/reference-to-video",
+        task="image_to_video",
+        image_field="reference_image_urls",
+        i2v_image_field="reference_image_urls",
+        multi_image=True,
+        max_ref_images=10,
+        max_ref_videos=5,
+        max_ref_audios=5,
+        ref_image_field="reference_image_urls",
+        ref_video_field="reference_video_urls",
+        ref_audio_field="reference_audio_urls",
+        prompt_citation_style="plain",
+        keep_audio_param=None,
+        generate_audio_param="audio",
+        default_generate_audio=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="5",
+        min_duration_seconds=2.0,
+        max_duration_seconds=30.0,
+        allowed_durations=WAN30_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=WAN30_RESOLUTIONS,
+        default_resolution="1080p",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=WAN30_ASPECTS,
+        default_aspect_ratio="adaptive",
+        auto_image_refs_in_prompt=True,
+        cost_per_second=0.20,
+        cost_per_second_by_resolution=dict(WAN30_COST_PER_S),
+        extra_defaults={"enable_prompt_expansion": True},
+        notes=(
+            "Wan 3.0 R2V — up to 10 images + 5 videos (~15s total) + 5 audio (~15s). "
+            "Address refs in the prompt as Image 1 / Image 2 (character vs scene), "
+            "Video 1, Audio 1. 2–30s or auto · 1080p default · native audio. "
+            "Est. $0.05/s @480p · $0.10/s @720p · $0.20/s @1080p."
+        ),
+    ),
 }
 
 # Back-compat name used by older code
@@ -1867,6 +1981,19 @@ _ALIASES: dict[str, str] = {
     "video · minimax h3 – omni reference": "minimax h3 reference",
     "minimax/h3/reference-to-video": "minimax h3 reference",
     "fal-ai/minimax/hailuo-03/reference-to-video": "minimax h3 reference",
+    # Alibaba Wan 3.0
+    "wan 3.0": "wan 3.0 i2v",
+    "wan 3.0 i2v": "wan 3.0 i2v",
+    "wan 3.0 image-to-video": "wan 3.0 i2v",
+    "video · wan 3.0 – image-to-video": "wan 3.0 i2v",
+    "alibaba/wan-3.0/image-to-video": "wan 3.0 i2v",
+    "wan 3.0 t2v": "wan 3.0 i2v",
+    "alibaba/wan-3.0/text-to-video": "wan 3.0 i2v",
+    "wan 3.0 reference": "wan 3.0 reference",
+    "wan 3.0 r2v": "wan 3.0 reference",
+    "wan 3.0 reference-to-video": "wan 3.0 reference",
+    "video · wan 3.0 – reference-to-video": "wan 3.0 reference",
+    "alibaba/wan-3.0/reference-to-video": "wan 3.0 reference",
     # FLUX 3 Video (BFL on fal)
     "flux 3": "flux 3 i2v",
     "flux 3 i2v": "flux 3 i2v",
@@ -1937,6 +2064,8 @@ def model_dropdown_choices() -> list[str]:
         "flux 3 first last",
         "minimax h3 i2v",
         "minimax h3 reference",
+        "wan 3.0 i2v",
+        "wan 3.0 reference",
     ):
         spec = VIDEO_MODELS.get(key)
         if spec and not spec.hidden:
@@ -2769,7 +2898,7 @@ def build_i2v_arguments(
         neg = other.get("negative_prompt")
     neg_s = str(neg or "").strip()
     ep = (spec.endpoint or "").lower()
-    if neg_s and "seedance" not in ep:
+    if neg_s and "seedance" not in ep and not is_wan30_endpoint(ep):
         args["negative_prompt"] = neg_s
 
     from app.aspect_omit import sanitize_seedance_r2v_arguments
@@ -2778,6 +2907,7 @@ def build_i2v_arguments(
     args = sanitize_seedance_r2v_arguments(args, endpoint=spec.endpoint)
     args, kling_notes = apply_kling_extras(args, params, spec=spec)
     notes.extend(kling_notes)
+    args = apply_wan30_payload(args, endpoint=spec.endpoint)
     return args, notes
 
 

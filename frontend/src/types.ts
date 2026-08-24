@@ -666,7 +666,7 @@ export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
 
 export function durationOptions(model?: ModelRow | null): string[] {
   const raw = model?.duration_enum ?? [];
-  return raw.map(String).filter((t) => t.trim() && t.toLowerCase() !== "auto");
+  return raw.map(String).filter((t) => t.trim());
 }
 
 export function resolutionOptions(model?: ModelRow | null): string[] {
@@ -681,6 +681,7 @@ export function resolutionOptions(model?: ModelRow | null): string[] {
 export function formatDurationToken(tok: string): string {
   const t = tok.trim();
   if (!t) return t;
-  if (/s$/i.test(t) || t.toLowerCase() === "auto") return t;
+  if (t.toLowerCase() === "auto") return "Auto (smart)";
+  if (/s$/i.test(t)) return t;
   return `${t}s`;
 }

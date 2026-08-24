@@ -47,18 +47,19 @@ Default image model: Flux 2 Pro (edit).
 
 | Path | What it does | Models in catalog |
 |------|----------------|-------------------|
-| **T2V** | Text to a clip | Veo 3.1 / Fast, Luma Ray 2, MiniMax H3, Grok Imagine 1.5, FLUX 3 (draft available), Seedance 2.5, LTX 2.5 Pro / Fast, Kling 3.0 Pro / Standard (native multi-shot), Kling O3 Pro / Standard, Mirage Avatar X |
-| **I2V** | Animate a start still (optional last frame on flagged models) | Grok Imagine 1.5, Kling O3 Standard / Pro, Kling 3.0 Standard / Pro (elements + multi-shot + last frame), Kling 2.6 Pro, Kling 2.5 Turbo Pro, Seedance 2.5 (last frame), FLUX 3 I2V (draft), FLUX 3 First→Last, MiniMax H3, Veo 3.1 Fast / 3.1, LTX 2.5 Pro / Fast |
-| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), Seedance 2.5, Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X |
+| **T2V** | Text to a clip | Veo 3.1 / Fast, Luma Ray 2, MiniMax H3, Grok Imagine 1.5, FLUX 3 (draft available), Seedance 2.5, **Wan 3.0** (up to 30s @ 1080p, native audio), LTX 2.5 Pro / Fast, Kling 3.0 Pro / Standard (native multi-shot), Kling O3 Pro / Standard, Mirage Avatar X |
+| **I2V** | Animate a start still (optional last frame on flagged models) | Grok Imagine 1.5, Kling O3 Standard / Pro, Kling 3.0 Standard / Pro (elements + multi-shot + last frame), Kling 2.6 Pro, Kling 2.5 Turbo Pro, Seedance 2.5 (last frame), **Wan 3.0** (last frame, 30s @ 1080p), FLUX 3 I2V (draft), FLUX 3 First→Last, MiniMax H3, Veo 3.1 Fast / 3.1, LTX 2.5 Pro / Fast |
+| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), Seedance 2.5, **Wan 3.0** (10 image refs + video/audio, cite Image 1 / Image 2), Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X |
 | **V2V** | Edit or retake an existing clip | Kling O3 Standard / Pro edit (elements), LTX 2.3 Retake, Grok Imagine Edit Video, FLUX 3 Extend (draft), sync-3 lipsync (needs dialogue audio; prompt unused) |
-| **Bridge** | First still → last still | Veo 3.1 Fast / 3.1, Kling O3 Pro / Standard, FLUX 3, Seedance 2.5, MiniMax H3 |
+| **Bridge** | First still → last still | Veo 3.1 Fast / 3.1, Kling O3 Pro / Standard, FLUX 3, Seedance 2.5, MiniMax H3, Wan 3.0 (I2V last frame) |
 | **Extend** | Continue a clip | FLUX 3 Extend |
 
 Default video model: Kling O3 Standard V2V edit.
 
 **Listing-oriented notes (not a ranking):**
 
-- Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3, LTX 2.5, and the dedicated Bridge / First→Last rows.
+- Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3, LTX 2.5, Wan 3.0, and the dedicated Bridge / First→Last rows.
+- **Wan 3.0** (T2V / I2V / R2V): up to 30s @ 1080p, native audio, cost scales with seconds × resolution. R2V locks character/scene from up to 10 stills (cite Image 1 / Image 2 in the prompt).
 - Kling 3.0 I2V can lock characters with **Elements** (`@Element1` …) and cut a board with **native multi-shot**.
 - FLUX 3 can run a cheap **draft**, then Enhance to full quality on the same motion.
 - Seedance 2.5 can refuse some photoreal faces. Prefer I2V (start / last frame) over R2V for synthetic people. There is no safety-off switch.

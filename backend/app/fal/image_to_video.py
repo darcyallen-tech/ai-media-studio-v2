@@ -87,7 +87,7 @@ def run_image_to_video(
             status=(
                 "Generate (image-to-video): upload a still as the start frame."
                 if not is_omni
-                else "MiniMax H3 omni needs at least one reference still or motion clip."
+                else "Reference-to-video needs at least one still or motion clip."
             ),
         )
 

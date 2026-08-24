@@ -1178,6 +1178,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </p>
         ) : null}
 
+        {modality === "r2v" &&
+        (selectedModel?.endpoint || "").includes("wan-3.0") ? (
+          <p className="hint">
+            Address refs in the prompt as Image 1, Image 2 (character vs scene).
+            Video 1 / Audio 1 if you attached motion or audio. Max 10 stills;
+            ref video/audio total ~15s.
+          </p>
+        ) : null}
+
         {showElements ? (
           <ElementTray
             rows={elements}

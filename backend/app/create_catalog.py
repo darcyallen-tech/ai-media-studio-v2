@@ -98,7 +98,7 @@ def _needs_still_proxy(endpoint: str | None) -> bool:
     ep = (endpoint or "").lower()
     return any(
         n in ep
-        for n in ("kling-video", "kling", "seedance", "minimax/h3", "hailuo")
+        for n in ("kling-video", "kling", "seedance", "minimax/h3", "hailuo", "wan-3.0")
     )
 
 
@@ -274,6 +274,8 @@ def _studio_video_modalities(spec: Any) -> tuple[str, ...]:
         else:
             mods.append("i2v")
         if getattr(spec, "requires_end_frame", False) or "first-last" in ep:
+            mods.append("bridge")
+        elif getattr(spec, "supports_end_frame", False) and "wan-3.0" in ep:
             mods.append("bridge")
     return tuple(mods)
 

@@ -799,6 +799,27 @@
           ]
         },
         {
+          "id": "vision:wan 3.0 t2v",
+          "label": "Wan 3.0",
+          "modalities": [
+            "t2v"
+          ],
+          "tagline": "Best 30s @ 1080p T2V with native audio",
+          "strengths": [
+            "Up to 30s @ 1080p, native audio.",
+            "Cost scales with seconds × resolution ($0.05/s 480p, $0.10/s 720p, $0.20/s 1080p).",
+            "Commercial use OK on fal."
+          ],
+          "weaknesses": [
+            "Longer clips get expensive at 1080p.",
+            "No Prime SKU in this wiring."
+          ],
+          "use_cases": [
+            "Longer single takes",
+            "1080p prompt-to-clip with audio"
+          ]
+        },
+        {
           "id": "vision:minimax h3 t2v",
           "label": "MiniMax H3",
           "modalities": [
@@ -1077,6 +1098,27 @@
           ]
         },
         {
+          "id": "studio:vid:wan 3.0 i2v",
+          "label": "Wan 3.0 I2V",
+          "modalities": [
+            "i2v"
+          ],
+          "tagline": "Best 30s @ 1080p still→video with last frame",
+          "strengths": [
+            "Start still required; optional last frame.",
+            "Up to 30s @ 1080p, native audio.",
+            "Cost scales with seconds × resolution."
+          ],
+          "weaknesses": [
+            "1080p 30s is $6.00 — check Est. cost.",
+            "Not an identity pack (use R2V for multi-ref)."
+          ],
+          "use_cases": [
+            "Long still→clip",
+            "First→last without a dedicated bridge SKU"
+          ]
+        },
+        {
           "id": "studio:vid:minimax h3 i2v",
           "label": "MiniMax H3 I2V",
           "modalities": [
@@ -1339,6 +1381,28 @@
             "Synthetic characters",
             "Multi-angle identity",
             "Storyboard shots"
+          ]
+        },
+        {
+          "id": "studio:vid:wan 3.0 reference",
+          "label": "Wan 3.0 R2V",
+          "modalities": [
+            "r2v"
+          ],
+          "tagline": "Best multi-ref lock at 30s / 1080p",
+          "strengths": [
+            "Up to 10 images + 5 videos + 5 audio.",
+            "Cite Image 1 / Image 2 (character vs scene) in the prompt.",
+            "Up to 30s @ 1080p, native audio."
+          ],
+          "weaknesses": [
+            "Ref video/audio total ~15s.",
+            "1080p gets expensive on long takes."
+          ],
+          "use_cases": [
+            "Character + scene lock",
+            "Longer R2V single takes",
+            "Storyboard ref path"
           ]
         },
         {

@@ -123,6 +123,8 @@ MODEL_OPTIONS: list[str] = [""] + [
     "flux 3 first last",
     "minimax h3 i2v",
     "minimax h3 reference",
+    "wan 3.0 i2v",
+    "wan 3.0 reference",
 ]
 
 MODEL_CATALOG: dict[str, dict] = catalog_for_enhance()

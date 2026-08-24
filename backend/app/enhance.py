@@ -109,6 +109,13 @@ def enhance_prompt_text(
     entry = resolve_model(model_id, mode=mode or None, modality=modality or None)
     label = (entry.label if entry else "") or model_id or "default model"
     extra = _refs_block(refs)
+    wan_note = ""
+    ep = ((entry.endpoint if entry else "") or "").lower()
+    if "wan-3.0" in ep and "reference" in ep:
+        wan_note = (
+            "Wan 3.0 prefers clear positional refs in the rewritten prompt "
+            "(Image 1 = character, Image 2 = scene, Video 1 = motion).\n\n"
+        )
     images = [p for p in (image_urls or []) if str(p).strip()]
     readable = [p for p in images if still_data_url(p)]
     vision_note = (
@@ -122,6 +129,7 @@ def enhance_prompt_text(
         f"Modality: {modality or 't2i'}\n"
         f"Model: {label}\n\n"
         + vision_note
+        + wan_note
         + (f"{extra}\n\n" if extra else "")
         + f"User prompt:\n{original}"
     )

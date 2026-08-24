@@ -8,6 +8,8 @@ Version **2.0.0-rc1**.
 
 **Docs:** [FEATURES.md](FEATURES.md) (what is in the catalog) · [HOW_TO.md](HOW_TO.md) (first-run walkthrough)
 
+Video catalog includes **Alibaba Wan 3.0** on fal (T2V / I2V / R2V): up to 30s at 1080p, native audio, up to 10 reference stills on R2V.
+
 ---
 
 ## Windows (Release zip)
