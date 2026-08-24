@@ -4,6 +4,8 @@
 
 Windows zip: `AIMediaStudioV2-2.0.0-rc2-windows.zip`. Double-click `AIMediaStudioV2.exe` (keep `_internal` next to it). Keys stay in Settings / `%LOCALAPPDATA%\AI Media Studio V2`.
 
+Mac/Linux have no exe — run from source (see README).
+
 **Catalog**
 - **Wan 3.0** (fal) — T2V, I2V (optional last frame), R2V. Up to 30s @ 1080p, native audio. R2V: up to 10 stills + video/audio refs; cite Image 1 / Image 2 in the prompt. Est. $0.05/s @480p, $0.10/s @720p, $0.20/s @1080p.
 - **Fibo Gen 1.5** (Bria, fal) — T2I, high-fidelity / typography / licensed data. ~$0.04 per image. Commercial OK.
