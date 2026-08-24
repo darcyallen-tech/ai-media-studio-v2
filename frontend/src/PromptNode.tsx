@@ -163,6 +163,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const setPins = data.onPinsChange ?? setLocalPins;
   const [clipDuration, setClipDuration] = useState(0);
   const [hasRunwareKey, setHasRunwareKey] = useState(true);
+  const [maskItem, setMaskItem] = useState<LibraryItem | null>(null);
   const isLocked = Boolean(lock);
 
   const modalityOptions = modesFor(mode);
@@ -419,6 +420,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       Number(selectedModel.size_limits?.max_num_images) || 1,
     );
     setNumImages((cur) => Math.min(Math.max(1, cur), Math.min(4, maxN)));
+    if (!selectedModel?.optional_slots?.includes("mask")) setMaskItem(null);
   }, [selectedModel, isStoryboard]);
 
   useEffect(() => {
@@ -499,6 +501,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             characters,
             scenes,
             isFrame ? pins : undefined,
+            maskItem,
           );
       const sbDuration =
         duration || storyboardDurationChoices(selectedModel)[0] || "";
@@ -1151,7 +1154,48 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                   : "Needs a Source still"}
               </span>
             )}
+            {plan.mask ? (
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() => {
+                  data.onLibraryPick?.((item) => {
+                    if (itemMediaKind(item) === "video") {
+                      toast("Mask must be a still.", true);
+                      return false;
+                    }
+                    setMaskItem(item);
+                    return true;
+                  });
+                }}
+                onDragOver={(e: DragEvent) => {
+                  if (peekLibraryDrag()) e.preventDefault();
+                }}
+                onDrop={(e: DragEvent) => {
+                  const item = consumeLibraryDrag();
+                  if (!item) return;
+                  e.preventDefault();
+                  if (itemMediaKind(item) === "video") {
+                    toast("Mask must be a still.", true);
+                    return;
+                  }
+                  setMaskItem(item);
+                }}
+              >
+                {maskItem ? "Mask attached" : "Add Mask (optional)"}
+              </button>
+            ) : null}
+            {plan.mask && maskItem ? (
+              <span className="hint" title={maskItem.path}>
+                {maskItem.name}
+              </span>
+            ) : null}
           </div>
+        ) : null}
+        {plan.mask ? (
+          <p className="hint">
+            Prompt is the edit instruction. Mask is optional — unmasked areas stay.
+          </p>
         ) : null}
 
         {!isFrame && (plan.first || plan.last) ? (
@@ -1644,11 +1688,13 @@ function slotsFromGraph(
   characters: RefSlotState[],
   scenes: RefSlotState[],
   pins?: FramePin[],
+  mask?: LibraryItem | null,
 ) {
   const slots: {
     start_still?: string;
     end_still?: string;
     source_video?: string;
+    mask?: string;
     ref_images: string[];
     character_ids: string[];
     scene_ids: string[];
@@ -1666,6 +1712,7 @@ function slotsFromGraph(
   };
   if (first?.path) slots.start_still = first.path;
   if (last?.path) slots.end_still = last.path;
+  if (mask?.path) slots.mask = mask.path;
   if (source?.path) {
     if (
       modality === "v2v" ||

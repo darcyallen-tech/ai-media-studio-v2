@@ -116,12 +116,26 @@ def run_image_edit(
             status=friendly_error(exc, context="Image edit"),
         )
 
+    params = dict(parameters or {})
+    mask_path = params.get("mask_path") or params.get("mask")
+    if mask_path and Path(str(mask_path)).is_file() and not params.get("mask_url"):
+        try:
+            progress(f"Uploading mask: {Path(str(mask_path)).name}")
+            params["mask_url"] = upload_file(Path(str(mask_path)), on_progress=progress)
+        except (FalClientError, Exception) as exc:
+            return ImageEditResult(
+                ok=False,
+                model_key=spec.key,
+                endpoint=spec.endpoint,
+                status=friendly_error(exc, context="Image edit"),
+            )
+
     try:
         arguments, build_notes = build_edit_arguments(
             spec,
             prompt=prompt,
             image_urls=image_urls,
-            parameters=parameters,
+            parameters=params,
             # Local path used to derive aspect_ratio when UI says auto/default
             source_image_path=paths[0],
         )

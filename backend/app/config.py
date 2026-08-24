@@ -102,6 +102,7 @@ MODEL_OPTIONS: list[str] = [""] + [
     "grok imagine edit",
     "grok imagine quality edit",
     "grok imagine 2.0 edit",
+    "fibo edit",
     # video edit
     "kling o3 standard edit",
     "kling o3 pro edit",

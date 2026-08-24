@@ -10,6 +10,8 @@ Version **2.0.0-rc1**.
 
 Video catalog includes **Alibaba Wan 3.0** on fal (T2V / I2V / R2V): up to 30s at 1080p, native audio, up to 10 reference stills on R2V.
 
+Image catalog includes **Bria Fibo Gen 1.5** (T2I) and **Fibo Edit** (I2I, optional mask) — licensed data, commercial OK.
+
 ---
 
 ## Windows (Release zip)

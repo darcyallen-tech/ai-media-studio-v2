@@ -258,6 +258,28 @@
             "Grok-consistent stills",
             "Prompt play"
           ]
+        },
+        {
+          "id": "vision:fibo gen 1.5 t2i",
+          "label": "Fibo Gen 1.5",
+          "modalities": [
+            "t2i"
+          ],
+          "tagline": "Best licensed T2I for type and control",
+          "strengths": [
+            "High-fidelity T2I with accurate typography.",
+            "Structured/controllable prompts; licensed training data.",
+            "~$0.04/image. Commercial OK."
+          ],
+          "weaknesses": [
+            "No inspire-from-ref in this wiring (v1 is prompt T2I).",
+            "Single image per call."
+          ],
+          "use_cases": [
+            "Signage and type",
+            "Listing stills on licensed data",
+            "Controllable photoreal plates"
+          ]
         }
       ]
     },
@@ -287,6 +309,28 @@
             "Virtual staging",
             "Sky / lawn cleanup",
             "Product on a plate"
+          ]
+        },
+        {
+          "id": "studio:img:fibo edit",
+          "label": "Fibo Edit",
+          "modalities": [
+            "i2i"
+          ],
+          "tagline": "Best precise local edit with optional mask",
+          "strengths": [
+            "Targeted changes (furniture, sky, cleanup) without a full rewrite.",
+            "Optional mask. ~$0.04/image.",
+            "Licensed data, commercial OK."
+          ],
+          "weaknesses": [
+            "Not a multi-ref identity pack (use Flux Pro).",
+            "No region box — mask still or prompt only."
+          ],
+          "use_cases": [
+            "Swap a sofa",
+            "Sky / lawn cleanup",
+            "Local furniture edits"
           ]
         },
         {

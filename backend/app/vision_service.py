@@ -457,6 +457,12 @@ def run_vision(
                 params["image_size"] = "auto"
             if resolution and str(resolution).strip():
                 params["resolution"] = str(resolution).strip()
+            mask_path = (extra or {}).get("mask_path") or (extra or {}).get("mask")
+            if mask_path and Path(str(mask_path)).is_file():
+                progress(f"Uploading mask: {Path(str(mask_path)).name}")
+                params["mask_url"] = upload_file(
+                    Path(str(mask_path)), on_progress=progress
+                )
             if strength is not None and spec.supports_strength:
                 try:
                     params["strength"] = float(strength)

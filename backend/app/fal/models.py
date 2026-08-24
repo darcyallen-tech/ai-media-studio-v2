@@ -894,6 +894,28 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Est. $0.04 @1K · $0.075 @2K."
         ),
     ),
+    "fibo edit": ImageEditModelSpec(
+        key="fibo edit",
+        label="Image · Fibo Edit",
+        endpoint="bria/fibo-edit/edit",
+        image_field="image_url",
+        multi_image=False,
+        max_ref_images=1,
+        max_num_images=1,
+        aspect_ratio_param=None,
+        resolution_param=None,
+        image_size_param=None,
+        allowed_resolutions=(),
+        output_format_param=None,
+        default_output_format="png",
+        cost_per_image=0.04,
+        extra_defaults={"steps_num": 30},
+        notes=(
+            "Bria Fibo Edit — precise local edits, optional mask, targeted changes "
+            "(furniture, sky, cleanup) without a full scene rewrite. "
+            "~$0.04/image. Licensed training data, commercial OK."
+        ),
+    ),
 }
 
 VIDEO_MODELS: dict[str, VideoModelSpec] = {
@@ -1889,6 +1911,11 @@ _ALIASES: dict[str, str] = {
     "grok imagine image 2.0": "grok imagine 2.0 edit",
     "image · grok imagine 2.0 edit": "grok imagine 2.0 edit",
     "xai/grok-imagine-image/v2.0/edit": "grok imagine 2.0 edit",
+    "fibo edit": "fibo edit",
+    "fibo-edit": "fibo edit",
+    "bria fibo edit": "fibo edit",
+    "image · fibo edit": "fibo edit",
+    "bria/fibo-edit/edit": "fibo edit",
     "grok imagine edit video": "grok imagine edit video",
     "grok imagine video edit": "grok imagine edit video",
     "grok edit video": "grok imagine edit video",
@@ -2033,6 +2060,7 @@ def model_dropdown_choices() -> list[str]:
         "grok imagine edit",
         "grok imagine quality edit",
         "grok imagine 2.0 edit",
+        "fibo edit",
     ):
         spec = IMAGE_EDIT_MODELS.get(key)
         if spec and not spec.hidden:
@@ -2395,6 +2423,26 @@ def build_edit_arguments(
             args["strength"] = float(strength)
         except (TypeError, ValueError):
             notes.append(f"Ignoring non-numeric strength={strength!r}.")
+
+    ep = (spec.endpoint or "").lower()
+    if "fibo-edit" in ep:
+        instr = (prompt or "").strip()
+        args.pop("prompt", None)
+        if instr:
+            args["instruction"] = instr
+        args.pop("num_images", None)
+        args.pop("output_format", None)
+        args.pop("image_size", None)
+        args.pop("strength", None)
+        mask_url = (
+            params.get("mask_url")
+            or other.get("mask_url")
+            or params.get("mask")
+            or other.get("mask")
+        )
+        if mask_url:
+            args["mask_url"] = str(mask_url)
+            notes.append("Fibo Edit: optional mask attached.")
 
     return args, notes
 

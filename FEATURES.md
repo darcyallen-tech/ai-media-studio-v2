@@ -36,8 +36,8 @@ Cost is estimated before you generate.
 
 | Path | What it does | Models in catalog |
 |------|----------------|-------------------|
-| **T2I** | Text to a still | Flux 2 Pro, Flux 2 (cheaper), Flux 2 Flex, Flux 1.1 Pro Ultra, Recraft V4, Qwen Image 3, Nano Banana 2 (fast), Nano Banana Pro, Seedream 4.5, Seedream 5.0 Lite, Seedream 5.0 Pro, Grok Imagine Image 2.0 |
-| **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine Edit / Quality Edit / 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro |
+| **T2I** | Text to a still | Flux 2 Pro, Flux 2 (cheaper), Flux 2 Flex, Flux 1.1 Pro Ultra, Recraft V4, Qwen Image 3, Nano Banana 2 (fast), Nano Banana Pro, Seedream 4.5, Seedream 5.0 Lite, Seedream 5.0 Pro, Grok Imagine Image 2.0, **Fibo Gen 1.5** |
+| **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine Edit / Quality Edit / 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro, **Fibo Edit** (optional mask) |
 | **R2I** | Edit from extra reference stills | Flux 2 Pro / Max / Flex, Nano Banana Pro / 2, Grok Imagine Edit / Quality / 2.0, Qwen Image 3, Seedream 5 Pro R2I |
 | **Region** | Grounded region edit (box on the still) | Seedream 5 Pro (edit) |
 

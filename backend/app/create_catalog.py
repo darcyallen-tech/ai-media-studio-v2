@@ -293,6 +293,9 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         max_ref_videos=int(getattr(spec, "max_ref_videos", 0) or 0),
         max_ref_audios=int(getattr(spec, "max_ref_audios", 0) or 0),
     )
+    endpoint_pre = str(getattr(spec, "endpoint", "") or "")
+    if "fibo-edit" in endpoint_pre.lower() and "mask" not in opt:
+        opt = tuple(list(opt) + ["mask"])
     dmin, dmax, denum = _duration_from_choices(getattr(spec, "duration_choices", ()) or ())
     key = str(getattr(spec, "key", "") or "")
     label = str(getattr(spec, "label", "") or key)
@@ -383,6 +386,8 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
     label = str(getattr(spec, "label", "") or key)
     endpoint = str(getattr(spec, "endpoint", "") or "")
     notes = str(getattr(spec, "notes", "") or "")
+    if "fibo-edit" in endpoint.lower() and "mask" not in opt:
+        opt = tuple(list(opt) + ["mask"])
     suffix = "region" if primary == "region" else "img"
     cid = f"studio:{suffix}:{key}"
     return ModelEntry(

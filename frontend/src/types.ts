@@ -92,6 +92,8 @@ export type GraphInputs = {
   first?: boolean;
   last?: boolean;
   lastOptional?: boolean;
+  mask?: boolean;
+  maskOptional?: boolean;
   characters?: boolean;
   scenes?: boolean;
 };
@@ -617,7 +619,11 @@ export function inputPlan(
     );
     return { source: "image", last, lastOptional: last };
   }
-  if (modality === "i2i" || modality === "region") {
+  if (modality === "i2i") {
+    const mask = Boolean(model?.optional_slots?.includes("mask"));
+    return { source: "image", mask, maskOptional: mask };
+  }
+  if (modality === "region") {
     return { source: "image" };
   }
   if (modality === "r2i" || modality === "r2v") {

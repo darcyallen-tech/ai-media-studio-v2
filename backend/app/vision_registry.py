@@ -600,6 +600,37 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
             "quality": "medium",
         },
     ),
+    "fibo gen 1.5 t2i": VisionModelSpec(
+        key="fibo gen 1.5 t2i",
+        label="Fibo Gen 1.5 (T2I)",
+        mode="text_to_image",
+        endpoint="bria/fibo-gen-1.5/text-to-image",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Bria Fibo Gen 1.5 — high-fidelity T2I, typography, structured/"
+            "controllable prompts, licensed data. ~$0.04/image. Commercial OK."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "4:5",
+            "5:4",
+        ),
+        default_aspect="1:1",
+        resolution_choices=("1MP", "4MP"),
+        default_resolution="1MP",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=1,
+        extra_defaults={"style_preset": "No Style"},
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -834,6 +865,31 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="seedream 5 pro",
         supports_strength=False,
         extra_defaults={"num_images": 1, "enable_safety_checker": True},
+    ),
+    "fibo edit i2i": VisionModelSpec(
+        key="fibo edit i2i",
+        label="Fibo Edit",
+        mode="image_to_image",
+        endpoint="bria/fibo-edit/edit",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Bria Fibo Edit — precise local edits, optional mask, targeted changes "
+            "(furniture, sky, cleanup) without a full scene rewrite. "
+            "~$0.04/image. Licensed data, commercial OK."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=("Match source",),
+        default_aspect="Match source",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=True,
+        max_refs=0,
+        image_field="image_url",
+        edit_model_key="fibo edit",
+        supports_strength=False,
+        extra_defaults={"steps_num": 30},
     ),
 }
 
@@ -2632,6 +2688,19 @@ def build_vision_arguments(
             args["aspect_ratio"] = colon_ar
         elif "flux-pro/v1.1-ultra" in ep or "flux-pro/v1.1" in ep:
             args["aspect_ratio"] = colon_ar
+        elif "fibo-gen-1.5" in ep or "fibo/generate" in ep:
+            ar = colon_ar if colon_ar and colon_ar not in ("auto",) else "1:1"
+            if ar not in (spec.aspect_choices or ()):
+                ar = spec.default_aspect or "1:1"
+            args["aspect_ratio"] = ar
+            picked = None
+            for a in spec.resolution_choices or ():
+                if str(a).lower() == res.lower():
+                    picked = str(a)
+                    break
+            args["resolution"] = picked or (spec.default_resolution or "1MP")
+            args.pop("num_images", None)
+            args.pop("image_size", None)
         else:
             # Flux 2 family: image_size enum
             args["image_size"] = size

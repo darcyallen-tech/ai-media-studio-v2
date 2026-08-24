@@ -378,6 +378,8 @@ def _studio_parameters_json(state: CreateState) -> str:
         extra["draft_first"] = True
     if state.slots.end_still and _file_ok(state.slots.end_still):
         extra.setdefault("end_image_path", state.slots.end_still)
+    if state.slots.mask and _file_ok(state.slots.mask):
+        extra.setdefault("mask_path", state.slots.mask)
     return json.dumps(extra)
 
 
@@ -478,6 +480,10 @@ def _dispatch_vision(
         "t2i",
     ) or entry.omni
 
+    extra = dict(p.extra or {})
+    if slots.mask and _file_ok(slots.mask):
+        extra.setdefault("mask_path", slots.mask)
+
     result = run_vision(
         mode=vmode,  # type: ignore[arg-type]
         prompt=state.prompt,
@@ -498,7 +504,7 @@ def _dispatch_vision(
         num_images=p.num_images if still else None,
         seed=p.seed,
         draft=bool(p.draft) and not still,
-        extra=dict(p.extra or {}),
+        extra=extra,
         output_dir=state.output_dir or Path("."),
         on_progress=on_progress,
     )
