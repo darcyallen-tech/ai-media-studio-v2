@@ -18,6 +18,7 @@ import {
   MUSIC_VOCALS,
   composeMusicPrompt,
   regionalFor,
+  regionalTip,
   subgenresFor,
 } from "./musicUi";
 import type { Mode, PromptBuilderNodeData } from "./types";
@@ -316,10 +317,12 @@ function ChipMulti({
   options,
   selected,
   onToggle,
+  titleFor,
 }: {
   options: readonly string[];
   selected: string[];
   onToggle: (v: string) => void;
+  titleFor?: (v: string) => string;
 }) {
   return (
     <div className="chip-row">
@@ -328,6 +331,7 @@ function ChipMulti({
           key={opt}
           type="button"
           className={selected.includes(opt) ? "pill modality on" : "pill modality"}
+          title={titleFor?.(opt) || undefined}
           onClick={() => onToggle(opt)}
         >
           {opt}
@@ -550,6 +554,7 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
               options={regionalOpts}
               selected={regional}
               onToggle={(v) => toggle(regional, v, setRegional)}
+              titleFor={regionalTip}
             />
           </>
         ) : null}
