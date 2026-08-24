@@ -1,4 +1,4 @@
-# Virtual environments
+﻿# Virtual environments
 .venv/
 venv/
 env/
@@ -21,15 +21,15 @@ frontend/dist/
 frontend/.vite/
 *.tsbuildinfo
 
-# Generated media & job receipts
+# Generated media (keep the folder)
 outputs/*
 !outputs/.gitkeep
 
-# Library uploads / thumbs / generated index
+# User library / uploads / assets (keep empty folders)
 data/uploads/*
 !data/uploads/.gitkeep
-data/library/thumbs/
-data/library/generated.json
+data/library/*
+!data/library/.gitkeep
 data/assets/*
 !data/assets/.gitkeep
 
@@ -37,6 +37,23 @@ data/assets/*
 .env
 .env.*
 !.env.example
+secrets.json
+**/secrets.json
+
+# Dev-checkout local state (packaged app uses LOCALAPPDATA)
+spend.jsonl
+preferences.json
+
+# Duplicate Model Guide export (canonical: frontend/public/)
+docs/model-guide/
+
+# Local audit / working reports
+Audit Reports/
+**/AUDIT*.md
+**/AUDIT*.txt
+**/catalog-cost-audit*
+**/packaging-*-pass*
+**/unused-catalog-features.md
 
 # OS / editor
 .DS_Store
