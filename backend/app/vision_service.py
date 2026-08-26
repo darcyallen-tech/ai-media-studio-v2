@@ -463,6 +463,8 @@ def run_vision(
                 params["mask_url"] = upload_file(
                     Path(str(mask_path)), on_progress=progress
                 )
+                progress(f"mask_url={params['mask_url']}")
+                print(f"[generate] mask_url={params['mask_url']}", flush=True)
             if strength is not None and spec.supports_strength:
                 try:
                     params["strength"] = float(strength)

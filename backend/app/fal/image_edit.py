@@ -122,6 +122,8 @@ def run_image_edit(
         try:
             progress(f"Uploading mask: {Path(str(mask_path)).name}")
             params["mask_url"] = upload_file(Path(str(mask_path)), on_progress=progress)
+            progress(f"mask_url={params['mask_url']}")
+            print(f"[generate] mask_url={params['mask_url']}", flush=True)
         except (FalClientError, Exception) as exc:
             return ImageEditResult(
                 ok=False,

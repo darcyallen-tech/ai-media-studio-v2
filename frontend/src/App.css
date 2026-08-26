@@ -403,8 +403,7 @@
   pointer-events: none;
 }
 
-.mask-stage.mode-brush .mask-brush {
-  pointer-events: auto;
+.mask-stage.mode-brush {
   cursor: crosshair;
 }
 

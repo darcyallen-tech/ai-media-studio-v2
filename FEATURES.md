@@ -34,7 +34,7 @@ Cost is estimated before you generate.
 
 Compare Source overlay on Result.
 
-Mask node — boxes + brush; Fibo 1.5 single-source; white=edit.
+Mask node — boxes + brush on the source still; Fibo 1.5 single-source; white=edit. Region reuses the same MASK node.
 
 ### Image
 

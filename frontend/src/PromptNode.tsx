@@ -191,12 +191,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const filledRefs = countFilledRefs(data.source, characters, scenes);
   const onDuration = useCallback((s: number) => setClipDuration(s), []);
   const supportsMask = modelSupportsMask(selectedModel);
-  const maskBlocked = supportsMask && filledRefs > 1;
-  const maskEnabled = supportsMask && !maskBlocked;
-  const maskNote = maskBlocked ? "Mask is single-ref only on this model" : "";
+  const maskBlocked =
+    supportsMask && filledRefs > 1 && modality !== "region";
   const showMaskUi =
-    supportsMask &&
-    (modality === "i2i" || (modality === "r2i" && filledRefs >= 1));
+    modality === "region" ||
+    (supportsMask && modality === "i2i") ||
+    (supportsMask && modality === "r2i" && filledRefs === 1);
+  const maskEnabled = showMaskUi && !maskBlocked;
+  const maskNote = maskBlocked ? "Mask is single-ref only on this model" : "";
 
   const missing: string[] = [];
   if (plan.first && !data.first?.path) missing.push("First Frame");
@@ -522,6 +524,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           toast(msg, true);
           sendMask = null;
         }
+      }
+      if (sendMask?.path) {
+        console.info("[generate] mask", sendMask.path);
+      } else {
+        console.info("[generate] mask none");
       }
       const slots = isStoryboard
         ? slotsFromStoryboard(
@@ -1147,6 +1154,28 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           >
             {enhancing ? "Enhancing…" : "Enhance"}
           </button>
+          {showMaskUi ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              disabled={!maskEnabled}
+              title={
+                maskEnabled
+                  ? "Opens MASK node — draw boxes or paint on the source still."
+                  : maskNote
+              }
+              onClick={() => {
+                if (!maskEnabled) return;
+                if (!data.onAddMask) {
+                  toast("Add Mask is not wired.", true);
+                  return;
+                }
+                data.onAddMask();
+              }}
+            >
+              {data.hasMaskNode ? "Mask" : "Add Mask"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="generate nodrag"
@@ -1244,7 +1273,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               }
               onClick={() => {
                 if (!maskEnabled) return;
-                data.onAddMask?.();
+                if (!data.onAddMask) {
+                  toast("Add Mask is not wired.", true);
+                  return;
+                }
+                data.onAddMask();
               }}
             >
               {data.hasMaskNode ? "Mask" : "Add Mask"}

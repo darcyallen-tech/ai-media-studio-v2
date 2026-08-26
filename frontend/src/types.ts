@@ -674,7 +674,7 @@ export function inputPlan(
     };
   }
   if (modality === "region") {
-    return { source: "image" };
+    return { source: "image", mask: true, maskOptional: true };
   }
   if (modality === "r2i" || modality === "r2v") {
     const mask = modality === "r2i" && modelSupportsMask(model);
@@ -694,7 +694,11 @@ export function inputPlan(
 }
 
 export function modelSupportsMask(model?: ModelRow | null): boolean {
-  return Boolean(model?.supports_mask);
+  if (!model) return false;
+  if (model.supports_mask === true) return true;
+  const ep = (model.endpoint || "").toLowerCase();
+  const key = (model.id || "").toLowerCase();
+  return ep.includes("fibo-edit") || key.includes("fibo edit");
 }
 
 export function maxRefImages(

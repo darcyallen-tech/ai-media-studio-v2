@@ -385,6 +385,7 @@ def _studio_parameters_json(state: CreateState, entry: ModelEntry | None = None)
         and _file_ok(state.slots.mask)
     ):
         extra.setdefault("mask_path", state.slots.mask)
+        print(f"[generate] mask_path={state.slots.mask}", flush=True)
     return json.dumps(extra)
 
 
@@ -488,6 +489,7 @@ def _dispatch_vision(
     extra = dict(p.extra or {})
     if entry.supports_mask and slots.mask and _file_ok(slots.mask):
         extra.setdefault("mask_path", slots.mask)
+        print(f"[generate] mask_path={slots.mask}", flush=True)
 
     result = run_vision(
         mode=vmode,  # type: ignore[arg-type]

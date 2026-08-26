@@ -2531,6 +2531,7 @@ def build_edit_arguments(
         if mask_url and n_imgs <= 1:
             args["mask_url"] = str(mask_url)
             notes.append("Fibo Edit 1.5: optional mask attached (single-ref only).")
+            print(f"[generate] mask_url={args['mask_url']}", flush=True)
         elif mask_url and n_imgs > 1:
             notes.append("Fibo Edit 1.5: mask ignored when more than one reference is sent.")
     elif "fibo-edit" in ep:
@@ -2551,6 +2552,7 @@ def build_edit_arguments(
         if mask_url:
             args["mask_url"] = str(mask_url)
             notes.append("Fibo Edit: optional mask attached.")
+            print(f"[generate] mask_url={args['mask_url']}", flush=True)
 
     return args, notes
 

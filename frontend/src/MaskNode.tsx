@@ -288,6 +288,7 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
   }
 
   function onStagePointerDown(event: PE<HTMLDivElement>) {
+    event.stopPropagation();
     if (data.disabled) return;
     if (event.button !== 0) return;
     const stage = stageRef.current;
@@ -441,7 +442,7 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
         ) : (
           <div
             ref={stageRef}
-            className={`mask-stage mode-${mode} view-${view}${disabled ? " is-disabled" : ""}`}
+            className={`mask-stage nodrag nopan nowheel mode-${mode} view-${view}${disabled ? " is-disabled" : ""}`}
             style={{ ["--still-ar" as string]: String(ar) }}
             onPointerDown={onStagePointerDown}
             onPointerMove={onStagePointerMove}
