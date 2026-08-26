@@ -646,11 +646,14 @@ export function inputPlan(
     return { source: "image" };
   }
   if (modality === "r2i" || modality === "r2v") {
+    const mask = modality === "r2i" && modelSupportsMask(model);
     return {
       source: "image",
       sourceOptional: true,
       characters: true,
       scenes: true,
+      mask,
+      maskOptional: mask,
     };
   }
   if (modality === "v2v" || modality === "extend") {
@@ -660,10 +663,7 @@ export function inputPlan(
 }
 
 export function modelSupportsMask(model?: ModelRow | null): boolean {
-  if (!model) return false;
-  if (model.supports_mask === true) return true;
-  if (model.supports_mask === false) return false;
-  return Boolean(model.optional_slots?.includes("mask"));
+  return Boolean(model?.supports_mask);
 }
 
 export function maxRefImages(

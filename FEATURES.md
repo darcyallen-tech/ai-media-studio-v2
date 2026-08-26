@@ -32,7 +32,9 @@ Each mode is a Prompt node plus slots (source still, last frame, refs, elements)
 
 Cost is estimated before you generate.
 
-Compare Source overlay on Result; mask only when model supports it.
+Compare Source overlay on Result.
+
+Mask hidden unless model supports it; Fibo 1.5 mask is single-source only.
 
 ### Image
 
