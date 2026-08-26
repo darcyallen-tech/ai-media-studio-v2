@@ -200,6 +200,37 @@ export type PromptNodeData = {
   characters: RefSlotState[];
   scenes: RefSlotState[];
   maxRefs: number;
+  onAddMask?: () => void;
+  hasMaskNode?: boolean;
+  rasterizeMask?: () => Promise<MaskRasterResult>;
+  getMaskSuffix?: () => string;
+};
+
+export type MaskRasterResult = {
+  item: LibraryItem | null;
+  suffix: string;
+};
+
+export type MaskApi = {
+  rasterize: () => Promise<MaskRasterResult>;
+  suffix: () => string;
+};
+
+export type MaskBox = {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+};
+
+export type MaskNodeData = {
+  source: LibraryItem | null;
+  disabled?: boolean;
+  disabledNote?: string;
+  onClose?: () => void;
+  onRegister?: (api: MaskApi | null) => void;
 };
 
 export type PromptBuilderNodeData = {

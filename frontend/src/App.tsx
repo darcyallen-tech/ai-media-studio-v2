@@ -30,6 +30,7 @@ import ShotNode from "./ShotNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
 import CompareNode from "./CompareNode";
+import MaskNode from "./MaskNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
 import ToolNode from "./ToolNode";
@@ -84,6 +85,8 @@ import {
   type GenerateResponse,
   type GraphInputs,
   type LibraryItem,
+  type MaskApi,
+  type MaskNodeData,
   type Mode,
   type ModelRow,
   directorAllowed,
@@ -119,6 +122,7 @@ type StudioNode =
   | Node<DirectorNodeData, "director">
   | Node<ResultNodeData, "result">
   | Node<CompareNodeData, "compare">
+  | Node<MaskNodeData, "mask">
   | Node<SourceNodeData, "source">
   | Node<SourceNodeData, "first">
   | Node<SourceNodeData, "last">
@@ -144,6 +148,7 @@ const nodeTypes: NodeTypes = {
   director: DirectorNode,
   result: ResultNode,
   compare: CompareNode,
+  mask: MaskNode,
   source: SourceNode,
   first: SourceNode,
   last: SourceNode,
@@ -206,6 +211,7 @@ const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
+const MASK_ID = "mask";
 function compareIdFor(resultId: string) {
   return `compare-${resultId}`;
 }
@@ -214,6 +220,20 @@ function stillItem(item: LibraryItem | null | undefined): LibraryItem | null {
   if (!item) return null;
   if (itemMediaKind(item) !== "image") return null;
   return item;
+}
+
+function editPrimaryStill(
+  source: LibraryItem | null,
+  characters: RefSlotState[],
+  scenes: RefSlotState[],
+): LibraryItem | null {
+  const fromSource = stillItem(source);
+  if (fromSource) return fromSource;
+  for (const row of [...characters, ...scenes]) {
+    const hit = stillItem(row.item);
+    if (hit) return hit;
+  }
+  return null;
 }
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
@@ -465,6 +485,10 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const maskApiRef = useRef<MaskApi | null>(null);
+  const registerMaskApi = useCallback((api: MaskApi | null) => {
+    maskApiRef.current = api;
+  }, []);
 
   useEffect(() => {
     setEdges((current) =>
@@ -515,6 +539,7 @@ function StudioCanvas() {
         return;
       }
       if (id === SOURCE_ID) setSourceItem(null);
+      if (id === MASK_ID) maskApiRef.current = null;
       if (id === FIRST_ID) setFirstItem(null);
       if (id === LAST_ID) setLastItem(null);
       if (id.startsWith("char-")) {
@@ -1053,17 +1078,39 @@ function StudioCanvas() {
       });
       const edgeId = `e-${id}-prompt`;
       setEdges((current) => {
-        if (current.some((e) => e.id === edgeId)) return current;
-        return addEdge(
-          {
-            id: edgeId,
-            source: id,
-            target: "prompt",
-            style: { stroke: "#8aa4c2", strokeWidth: 2 },
-          },
-          current,
-        );
+        let next = current;
+        if (!next.some((e) => e.id === edgeId)) {
+          next = addEdge(
+            {
+              id: edgeId,
+              source: id,
+              target: "prompt",
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            next,
+          );
+        }
+        return next;
       });
+      if (id === SOURCE_ID) {
+        setEdges((current) => {
+          if (
+            !current.some((e) => e.target === MASK_ID || e.source === MASK_ID)
+          ) {
+            return current;
+          }
+          if (current.some((e) => e.id === "e-source-mask")) return current;
+          return addEdge(
+            {
+              id: "e-source-mask",
+              source: SOURCE_ID,
+              target: MASK_ID,
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            current,
+          );
+        });
+      }
     },
     [closeNode, setEdges, setNodes],
   );
@@ -1073,6 +1120,103 @@ function StudioCanvas() {
     const title = accept === "video" ? "Source Video" : "Source";
     ensureSlot(SOURCE_ID, title, accept, 36);
   }, [ensureSlot, sourceAccept]);
+
+  const addMaskNode = useCallback(() => {
+    const still = editPrimaryStill(sourceItem, characters, scenes);
+    if (!still) {
+      toast("Attach a source still first.", true);
+      return;
+    }
+    const existing = getNodes().find((n) => n.id === MASK_ID);
+    if (existing) {
+      setNodes((current) =>
+        current.map((n) => ({
+          ...n,
+          selected: n.id === MASK_ID,
+        })),
+      );
+      window.setTimeout(() => {
+        setCenter(existing.position.x + 220, existing.position.y + 180, {
+          duration: 180,
+          zoom: 1,
+        });
+      }, 40);
+      return;
+    }
+    setNodes((current) => {
+      if (current.some((n) => n.id === MASK_ID)) return current;
+      const prompt = current.find((n) => n.id === "prompt");
+      const source = current.find((n) => n.id === SOURCE_ID);
+      const node: StudioNode = {
+        id: MASK_ID,
+        type: "mask",
+        position: {
+          x: Math.max(
+            -200,
+            (source?.position.x ?? (prompt?.position.x ?? PROMPT_POS.x) - 300),
+          ),
+          y:
+            (source?.position.y ?? prompt?.position.y ?? PROMPT_POS.y) + 220,
+        },
+        dragHandle: ".node-header",
+        data: {
+          source: still,
+          onClose: () => closeNode(MASK_ID),
+          onRegister: registerMaskApi,
+        },
+      };
+      return [...current, node];
+    });
+    setEdges((current) => {
+      let next = current;
+      if (!next.some((e) => e.id === "e-mask-prompt")) {
+        next = addEdge(
+          {
+            id: "e-mask-prompt",
+            source: MASK_ID,
+            target: "prompt",
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          next,
+        );
+      }
+      if (
+        next.some((e) => e.source === SOURCE_ID || e.target === SOURCE_ID) ||
+        getNodes().some((n) => n.id === SOURCE_ID)
+      ) {
+        if (!next.some((e) => e.id === "e-source-mask")) {
+          next = addEdge(
+            {
+              id: "e-source-mask",
+              source: SOURCE_ID,
+              target: MASK_ID,
+              style: { stroke: "#8aa4c2", strokeWidth: 2 },
+            },
+            next,
+          );
+        }
+      }
+      return next;
+    });
+    window.setTimeout(() => {
+      const n = getNodes().find((row) => row.id === MASK_ID);
+      if (!n) return;
+      setCenter(n.position.x + 220, n.position.y + 180, {
+        duration: 180,
+        zoom: 1,
+      });
+    }, 40);
+  }, [
+    characters,
+    closeNode,
+    getNodes,
+    registerMaskApi,
+    scenes,
+    setCenter,
+    setEdges,
+    setNodes,
+    sourceItem,
+  ]);
 
   const addFirstNode = useCallback(() => {
     ensureSlot(FIRST_ID, "First Frame", "image", -10);
@@ -2502,6 +2646,13 @@ function StudioCanvas() {
             data: {
               onGenerated: spawnResult,
               onAddSource: addSourceNode,
+              onAddMask: addMaskNode,
+              hasMaskNode: current.some((row) => row.id === MASK_ID),
+              rasterizeMask: async () => {
+                if (!maskApiRef.current) return { item: null, suffix: "" };
+                return maskApiRef.current.rasterize();
+              },
+              getMaskSuffix: () => maskApiRef.current?.suffix() || "",
               onAddFirst: addFirstNode,
               onAddLast: addLastNode,
               onAddCharacter: addCharacterNode,
@@ -2665,6 +2816,19 @@ function StudioCanvas() {
               characters: [],
               scenes: [],
               maxRefs: 0,
+            },
+          };
+        }
+        if (n.id === MASK_ID || n.type === "mask") {
+          return {
+            ...n,
+            type: "mask",
+            data: {
+              source: editPrimaryStill(sourceItem, characters, scenes),
+              disabled: countFilledRefs(sourceItem, characters, scenes) > 1,
+              disabledNote: "Mask is single-ref only on this model",
+              onClose: () => closeNode(MASK_ID),
+              onRegister: registerMaskApi,
             },
           };
         }
@@ -3217,6 +3381,8 @@ function StudioCanvas() {
     addLastNode,
     addSceneNode,
     addSourceNode,
+    addMaskNode,
+    registerMaskApi,
     applyPinStill,
     applyStillToPin,
     applyCreatedAsset,

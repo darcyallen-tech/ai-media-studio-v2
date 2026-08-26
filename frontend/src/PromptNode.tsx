@@ -35,11 +35,6 @@ import {
 import { readJson } from "./http";
 import { toast } from "./toast";
 import {
-  filesFromDataTransfer,
-  importOsFiles,
-  isOsFileDrag,
-} from "./osImport";
-import {
   durationOptions,
   formatDurationToken,
   hasLibraryPayload,
@@ -169,8 +164,6 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const setPins = data.onPinsChange ?? setLocalPins;
   const [clipDuration, setClipDuration] = useState(0);
   const [hasRunwareKey, setHasRunwareKey] = useState(true);
-  const [maskItem, setMaskItem] = useState<LibraryItem | null>(null);
-  const [maskSizeWarn, setMaskSizeWarn] = useState<string | null>(null);
   const isLocked = Boolean(lock);
 
   const modalityOptions = modesFor(mode);
@@ -434,32 +427,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       Number(selectedModel.size_limits?.max_num_images) || 1,
     );
     setNumImages((cur) => Math.min(Math.max(1, cur), Math.min(4, maxN)));
-    if (!modelSupportsMask(selectedModel)) setMaskItem(null);
   }, [selectedModel, isStoryboard]);
-
-  useEffect(() => {
-    if (!maskEnabled || !maskItem) {
-      setMaskSizeWarn(null);
-      return;
-    }
-    const primary = maskPrimaryStill(data.source, characters, scenes);
-    let cancelled = false;
-    void Promise.all([stillPixelSize(primary), stillPixelSize(maskItem)]).then(
-      ([src, mask]) => {
-        if (cancelled) return;
-        if (src && mask && (src.w !== mask.w || src.h !== mask.h)) {
-          setMaskSizeWarn(
-            `Mask is ${mask.w}×${mask.h}; source is ${src.w}×${src.h}. Sizes must match.`,
-          );
-        } else {
-          setMaskSizeWarn(null);
-        }
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [maskEnabled, maskItem, data.source, characters, scenes]);
 
   useEffect(() => {
     if (!modelId) {
@@ -525,7 +493,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     try {
       const klingMp = Boolean(selectedModel?.supports_multi_prompt);
       const sbMod = isStoryboard ? storyboardKlingModality(selectedModel) : modality;
-      let sendMask: LibraryItem | null = maskEnabled ? maskItem : null;
+      let sendMask: LibraryItem | null = null;
+      let maskSuffix = "";
+      if (maskEnabled && data.rasterizeMask) {
+        try {
+          const out = await data.rasterizeMask();
+          sendMask = out.item;
+          maskSuffix = out.suffix || "";
+        } catch (err: unknown) {
+          toast(
+            err instanceof Error ? err.message : "Could not rasterize mask.",
+            true,
+          );
+        }
+      }
       if (sendMask) {
         const primary = maskPrimaryStill(data.source, characters, scenes);
         const [srcSize, maskSize] = await Promise.all([
@@ -538,7 +519,6 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           (srcSize.w !== maskSize.w || srcSize.h !== maskSize.h)
         ) {
           const msg = `Mask is ${maskSize.w}×${maskSize.h}; source is ${srcSize.w}×${srcSize.h}. Mask not sent — sizes must match.`;
-          setMaskSizeWarn(msg);
           toast(msg, true);
           sendMask = null;
         }
@@ -564,7 +544,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       const holds = isStoryboard
         ? distributeShotSeconds(storyShots, sbDuration)
         : undefined;
-      const composed = isStoryboard
+      let composed = isStoryboard
         ? klingMp
           ? ""
           : composeStoryboardPrompt(
@@ -577,6 +557,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         : (selectedModel?.endpoint || "").includes("fibo-edit-1.5")
           ? composeFibo15Prompt(prompt.trim(), data.source, characters, scenes)
           : composePrompt(prompt.trim(), characters, scenes);
+      if (maskSuffix && composed && !composed.includes(maskSuffix)) {
+        composed = `${composed.trim()}\n\n${maskSuffix}`;
+      }
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
@@ -718,7 +701,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: isStoryboard ? boardBrief : prompt.trim(),
+          prompt: (() => {
+            const base = isStoryboard ? boardBrief : prompt.trim();
+            const extraMask = maskEnabled ? data.getMaskSuffix?.() || "" : "";
+            if (extraMask && base && !base.includes(extraMask)) {
+              return `${base}\n\n${extraMask}`;
+            }
+            return base;
+          })(),
           model_id: modelId,
           modality: isStoryboard ? "r2v" : modality,
           mode: isStoryboard ? "storyboard" : mode,
@@ -1242,24 +1232,25 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </div>
         ) : null}
         {showMaskUi ? (
-          <MaskSlot
-            enabled={maskEnabled}
-            note={maskNote}
-            sizeWarn={maskSizeWarn}
-            item={maskItem}
-            onPick={() => {
-              data.onLibraryPick?.((item) => {
-                if (itemMediaKind(item) !== "image") {
-                  toast("Mask must be a still.", true);
-                  return false;
-                }
-                setMaskItem(item);
-                return true;
-              });
-            }}
-            onAttach={setMaskItem}
-            onClear={() => setMaskItem(null)}
-          />
+          <div className="source-row">
+            <button
+              type="button"
+              className="ghost nodrag"
+              disabled={!maskEnabled}
+              title={
+                maskEnabled
+                  ? "Draw boxes or paint a mask. White = edit, black = keep."
+                  : maskNote
+              }
+              onClick={() => {
+                if (!maskEnabled) return;
+                data.onAddMask?.();
+              }}
+            >
+              {data.hasMaskNode ? "Mask" : "Add Mask"}
+            </button>
+            {maskNote ? <p className="hint">{maskNote}</p> : null}
+          </div>
         ) : null}
 
         {!isFrame && (plan.first || plan.last) ? (
@@ -1320,9 +1311,6 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   );
 }
 
-const MASK_HINT =
-  "White = edit, black = keep. Mask must be the same pixel size as the source still.";
-
 function maskPrimaryStill(
   source: LibraryItem | null,
   characters: RefSlotState[],
@@ -1350,183 +1338,6 @@ function stillPixelSize(
     img.onerror = () => resolve(null);
     img.src = src;
   });
-}
-
-function MaskSlot({
-  enabled,
-  note,
-  sizeWarn,
-  item,
-  onPick,
-  onAttach,
-  onClear,
-}: {
-  enabled: boolean;
-  note: string;
-  sizeWarn?: string | null;
-  item: LibraryItem | null;
-  onPick: () => void;
-  onAttach: (item: LibraryItem) => void;
-  onClear: () => void;
-}) {
-  const [hover, setHover] = useState<"ok" | "bad" | null>(null);
-  const accept = "image" as const;
-
-  function allowDrop(event: DragEvent) {
-    if (!enabled) return false;
-    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = "copy";
-      return true;
-    }
-    const incoming = peekLibraryDrag() || hasLibraryPayload(event.dataTransfer);
-    if (!incoming) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    const itemNow = peekLibraryDrag();
-    const ok = itemNow ? slotAccepts(accept, itemNow) : true;
-    event.dataTransfer.dropEffect = ok ? "copy" : "none";
-    return true;
-  }
-
-  function onDragEnter(event: DragEvent) {
-    if (!allowDrop(event)) return;
-    const next = peekLibraryDrag();
-    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
-  }
-
-  function onDragOver(event: DragEvent) {
-    if (!allowDrop(event)) return;
-    const next = peekLibraryDrag();
-    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
-  }
-
-  function onDragLeave(event: DragEvent) {
-    const next = event.relatedTarget as globalThis.Node | null;
-    if (next && event.currentTarget.contains(next)) return;
-    setHover(null);
-  }
-
-  function onDrop(event: DragEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    setHover(null);
-    if (!enabled) return;
-    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
-      const files = filesFromDataTransfer(event.dataTransfer);
-      if (!files.length) return;
-      void importOsFiles(files)
-        .then((items) => {
-          const still = items.find((row) => itemMediaKind(row) === "image");
-          if (!still) {
-            toast("Mask must be a still.", true);
-            return;
-          }
-          onAttach(still);
-        })
-        .catch((err: unknown) => {
-          toast(err instanceof Error ? err.message : "Import failed.", true);
-        });
-      return;
-    }
-    const dragged =
-      consumeLibraryDrag() || parseLibraryPayload(event.dataTransfer);
-    if (!dragged) return;
-    if (!slotAccepts(accept, dragged)) {
-      toast(slotNeedLabel(accept), true);
-      return;
-    }
-    onAttach(dragged);
-  }
-
-  if (!enabled) {
-    return (
-      <div className="source-row mask-slot">
-        <button
-          type="button"
-          className="ghost nodrag"
-          disabled
-          title={note || MASK_HINT}
-        >
-          Add Mask (optional)
-        </button>
-        <p className="hint">{note}</p>
-      </div>
-    );
-  }
-
-  const cls =
-    hover === "ok"
-      ? "mask-slot drop-hot"
-      : hover === "bad"
-        ? "mask-slot drop-bad"
-        : "mask-slot";
-
-  return (
-    <div
-      className={cls}
-      data-drop-accept={accept}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      {item ? (
-        <>
-          <div className="mask-slot-preview nodrag">
-            <img
-              src={item.thumb_url || item.url}
-              alt={item.name}
-              draggable={false}
-            />
-          </div>
-          <p className="hint" title={item.path}>
-            Mask: {item.name}
-          </p>
-          <div className="source-row">
-            <button
-              type="button"
-              className="ghost nodrag"
-              title={MASK_HINT}
-              onClick={onPick}
-            >
-              Mask attached
-            </button>
-            <button type="button" className="ghost nodrag" onClick={onClear}>
-              Clear
-            </button>
-          </div>
-          {sizeWarn ? (
-            <p className="hint warn" role="alert">
-              {sizeWarn}
-            </p>
-          ) : null}
-          <p className="hint" title={MASK_HINT}>
-            {MASK_HINT}
-          </p>
-        </>
-      ) : (
-        <>
-          <div
-            className="source-empty nodrag mask-empty"
-            role="button"
-            tabIndex={0}
-            title={MASK_HINT}
-            onClick={onPick}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") onPick();
-            }}
-          >
-            Add Mask (optional) — drop a still
-          </div>
-          <p className="hint" title={MASK_HINT}>
-            {MASK_HINT}
-          </p>
-        </>
-      )}
-    </div>
-  );
 }
 
 function StoryboardPrompt({

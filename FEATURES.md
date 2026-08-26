@@ -34,7 +34,7 @@ Cost is estimated before you generate.
 
 Compare Source overlay on Result.
 
-Mask hidden unless model supports it; Fibo 1.5 mask is single-source only.
+Mask node — boxes + brush; Fibo 1.5 single-source; white=edit.
 
 ### Image
 
