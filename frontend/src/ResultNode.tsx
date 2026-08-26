@@ -353,6 +353,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   return (
     <div className="studio-node result-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
+      <Handle type="source" position={Position.Right} className="node-handle" />
       <div className="node-header">
         <span>{title}</span>
         <NodeClose onClose={data.onClose} />
@@ -599,6 +600,21 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           </div>
         ) : null}
         <div className="result-actions" hidden={isAngle && !hasStill}>
+          {!isAngle ? (
+            <button
+              type="button"
+              className="ghost nodrag"
+              disabled={!data.compareSource || isVid || isAud || !hasStill}
+              title={
+                data.compareSource
+                  ? "Overlay this result on the job's source still"
+                  : "No source image on this job"
+              }
+              onClick={() => data.onCompareSource?.()}
+            >
+              Compare Source
+            </button>
+          ) : null}
           {data.onApplyToPin && !isVid && !isAud ? (
             <button
               type="button"

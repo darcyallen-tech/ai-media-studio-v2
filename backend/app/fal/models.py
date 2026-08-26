@@ -256,6 +256,8 @@ class ImageEditModelSpec:
     extra_defaults: dict[str, Any] = field(default_factory=dict)
     notes: str = ""
     hidden: bool = False
+    # Optional mask_url / mask on the fal edit schema (single-ref unless noted).
+    supports_mask: bool = False
 
     def clamp_num_images(self, n: int | None) -> int:
         if n is None or n < 1:
@@ -946,6 +948,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         default_output_format="png",
         cost_per_image=0.04,
         extra_defaults={},
+        supports_mask=True,
         notes=(
             "Bria Fibo Edit 1.5 — multi-ref I2I/R2I (1–4 images). "
             "Image 1 is the source to edit; 2–4 are optional refs "
@@ -971,6 +974,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         default_output_format="png",
         cost_per_image=0.04,
         extra_defaults={"steps_num": 30},
+        supports_mask=True,
         notes=(
             "Bria Fibo Edit v1 — single-image local edits, optional mask. "
             "~$0.04/image. Prefer Fibo Edit 1.5 for multi-ref. "

@@ -345,7 +345,7 @@ def validate(state: CreateState) -> list[str]:
     return errors
 
 
-def _studio_parameters_json(state: CreateState) -> str:
+def _studio_parameters_json(state: CreateState, entry: ModelEntry | None = None) -> str:
     extra: dict[str, Any] = {}
     raw = (state.params.parameters_json or "").strip()
     if raw:
@@ -378,7 +378,12 @@ def _studio_parameters_json(state: CreateState) -> str:
         extra["draft_first"] = True
     if state.slots.end_still and _file_ok(state.slots.end_still):
         extra.setdefault("end_image_path", state.slots.end_still)
-    if state.slots.mask and _file_ok(state.slots.mask):
+    if (
+        entry is not None
+        and entry.supports_mask
+        and state.slots.mask
+        and _file_ok(state.slots.mask)
+    ):
         extra.setdefault("mask_path", state.slots.mask)
     return json.dumps(extra)
 
@@ -425,7 +430,7 @@ def _dispatch_studio(
         image_file=image_file,
         video_file=video_file,
         output_dir=state.output_dir,
-        parameters_json=_studio_parameters_json(state),
+        parameters_json=_studio_parameters_json(state, entry),
         on_progress=on_progress,
         scenario=state.scenario,
         extra_image_files=extras or None,
@@ -481,7 +486,7 @@ def _dispatch_vision(
     ) or entry.omni
 
     extra = dict(p.extra or {})
-    if slots.mask and _file_ok(slots.mask):
+    if entry.supports_mask and slots.mask and _file_ok(slots.mask):
         extra.setdefault("mask_path", slots.mask)
 
     result = run_vision(

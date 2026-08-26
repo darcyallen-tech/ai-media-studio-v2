@@ -65,6 +65,7 @@ class ModelEntry:
     element_allows_video: bool = False
     supports_multi_prompt: bool = False
     max_multi_prompt: int = 0
+    supports_mask: bool = False
 
 
 def _parse_duration_token(tok: str | None) -> int | None:
@@ -293,8 +294,8 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         max_ref_videos=int(getattr(spec, "max_ref_videos", 0) or 0),
         max_ref_audios=int(getattr(spec, "max_ref_audios", 0) or 0),
     )
-    endpoint_pre = str(getattr(spec, "endpoint", "") or "")
-    if "fibo-edit" in endpoint_pre.lower() and "mask" not in opt:
+    supports_mask = bool(getattr(spec, "supports_mask", False))
+    if supports_mask and "mask" not in opt:
         opt = tuple(list(opt) + ["mask"])
     dmin, dmax, denum = _duration_from_choices(getattr(spec, "duration_choices", ()) or ())
     key = str(getattr(spec, "key", "") or "")
@@ -361,6 +362,7 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         hidden=bool(getattr(spec, "hidden", False)),
         first_last=first_last,
         supports_draft=supports_draft,
+        supports_mask=supports_mask,
         **_kling_ui_flags(spec),
     )
 
@@ -386,7 +388,8 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
     label = str(getattr(spec, "label", "") or key)
     endpoint = str(getattr(spec, "endpoint", "") or "")
     notes = str(getattr(spec, "notes", "") or "")
-    if "fibo-edit" in endpoint.lower() and "mask" not in opt:
+    supports_mask = bool(getattr(spec, "supports_mask", False))
+    if supports_mask and "mask" not in opt:
         opt = tuple(list(opt) + ["mask"])
     suffix = "region" if primary == "region" else "img"
     cid = f"studio:{suffix}:{key}"
@@ -428,6 +431,7 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
         hidden=bool(getattr(spec, "hidden", False)),
         first_last=False,
         supports_draft=False,
+        supports_mask=supports_mask,
     )
 
 

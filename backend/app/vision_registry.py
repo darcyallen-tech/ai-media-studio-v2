@@ -106,6 +106,8 @@ class VisionModelSpec:
     element_allows_video: bool = False
     supports_multi_prompt: bool = False
     max_multi_prompt: int = 0
+    # Optional mask_url on the fal edit schema (typically single-ref only).
+    supports_mask: bool = False
 
 
 # UI sentinel when aspect follows the still (disabled control)
@@ -902,6 +904,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         image_field="image_urls",
         edit_model_key="fibo edit 1.5",
         supports_strength=False,
+        supports_mask=True,
         extra_defaults={},
     ),
     "fibo edit i2i": VisionModelSpec(
@@ -927,6 +930,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         image_field="image_url",
         edit_model_key="fibo edit",
         supports_strength=False,
+        supports_mask=True,
         extra_defaults={"steps_num": 30},
     ),
 }

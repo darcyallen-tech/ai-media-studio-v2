@@ -46,6 +46,7 @@ export type ModelRow = {
     max_num_images?: number;
   };
   requires_runware?: boolean;
+  supports_mask?: boolean;
 };
 
 export type GenerateResponse = {
@@ -150,7 +151,10 @@ export type PromptLock = {
 };
 
 export type PromptNodeData = {
-  onGenerated: (result: GenerateResponse) => void;
+  onGenerated: (
+    result: GenerateResponse,
+    job?: { source?: LibraryItem | null },
+  ) => void;
   onAddSource: () => void;
   onAddFirst: () => void;
   onAddLast: () => void;
@@ -293,6 +297,14 @@ export type ResultNodeData = {
   applyLabel?: string;
   dragItem?: LibraryItem | null;
   onDraftEnhance?: (result: GenerateResponse) => void;
+  compareSource?: LibraryItem | null;
+  onCompareSource?: () => void;
+};
+
+export type CompareNodeData = {
+  source: LibraryItem;
+  result: LibraryItem;
+  onClose?: () => void;
 };
 
 export type ToolModelRow = {
@@ -621,7 +633,7 @@ export function inputPlan(
     return { source: "image", last, lastOptional: last };
   }
   if (modality === "i2i") {
-    const mask = Boolean(model?.optional_slots?.includes("mask"));
+    const mask = modelSupportsMask(model);
     const extra = maxRefImages(model, "i2i") > 1;
     return {
       source: "image",
@@ -645,6 +657,13 @@ export function inputPlan(
     return { source: "video" };
   }
   return {};
+}
+
+export function modelSupportsMask(model?: ModelRow | null): boolean {
+  if (!model) return false;
+  if (model.supports_mask === true) return true;
+  if (model.supports_mask === false) return false;
+  return Boolean(model.optional_slots?.includes("mask"));
 }
 
 export function maxRefImages(

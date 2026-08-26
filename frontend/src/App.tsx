@@ -29,6 +29,7 @@ import ShotBuilderNode from "./ShotBuilderNode";
 import ShotNode from "./ShotNode";
 import PromptNode, { countFilledRefs, reservedRefNodes } from "./PromptNode";
 import RefNode from "./RefNode";
+import CompareNode from "./CompareNode";
 import ResultNode from "./ResultNode";
 import SourceNode from "./SourceNode";
 import ToolNode from "./ToolNode";
@@ -87,6 +88,7 @@ import {
   type ModelRow,
   directorAllowed,
   type AssetRole,
+  type CompareNodeData,
   type CreatorBuilderNodeData,
   type CreatorKind,
   type SheetAnglePatch,
@@ -116,6 +118,7 @@ type StudioNode =
   | Node<PromptBuilderNodeData, "builder">
   | Node<DirectorNodeData, "director">
   | Node<ResultNodeData, "result">
+  | Node<CompareNodeData, "compare">
   | Node<SourceNodeData, "source">
   | Node<SourceNodeData, "first">
   | Node<SourceNodeData, "last">
@@ -140,6 +143,7 @@ const nodeTypes: NodeTypes = {
   builder: PromptBuilderNode,
   director: DirectorNode,
   result: ResultNode,
+  compare: CompareNode,
   source: SourceNode,
   first: SourceNode,
   last: SourceNode,
@@ -202,6 +206,15 @@ const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
+function compareIdFor(resultId: string) {
+  return `compare-${resultId}`;
+}
+
+function stillItem(item: LibraryItem | null | undefined): LibraryItem | null {
+  if (!item) return null;
+  if (itemMediaKind(item) !== "image") return null;
+  return item;
+}
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
 const HUB_ID = "asset-hub";
@@ -554,16 +567,28 @@ function StudioCanvas() {
           return next;
         });
       }
-      setNodes((current) => current.filter((n) => n.id !== id));
+      const compareId = compareIdFor(id);
+      setNodes((current) =>
+        current.filter((n) => n.id !== id && n.id !== compareId),
+      );
       setEdges((current) =>
-        current.filter((e) => e.source !== id && e.target !== id),
+        current.filter(
+          (e) =>
+            e.source !== id &&
+            e.target !== id &&
+            e.source !== compareId &&
+            e.target !== compareId,
+        ),
       );
     },
     [closePinEdit, setEdges, setNodes],
   );
 
   const spawnResult = useCallback(
-    (result: GenerateResponse) => {
+    (result: GenerateResponse, job?: { source?: LibraryItem | null }) => {
+      const compareSource = stillItem(job?.source);
+      const mapped = itemFromResult(result);
+      const compareId = compareIdFor(RESULT_ID);
       setNodes((current) => {
         const prompt = current.find((n) => n.id === "prompt");
         const existing = current.find((n) => n.id === RESULT_ID);
@@ -578,14 +603,30 @@ function StudioCanvas() {
           dragHandle: ".node-header",
           data: {
             result,
+            compareSource,
             onClose: () => closeNode(RESULT_ID),
             onTool: () => undefined,
           },
         };
-        if (existing) {
-          return current.map((n) => (n.id === RESULT_ID ? next : n));
+        let nodes = existing
+          ? current.map((n) => (n.id === RESULT_ID ? next : n))
+          : [...current, next];
+        const openCompare = nodes.find((n) => n.id === compareId);
+        if (openCompare && openCompare.type === "compare" && mapped && compareSource) {
+          nodes = nodes.map((n) =>
+            n.id === compareId && n.type === "compare"
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    source: compareSource,
+                    result: mapped,
+                  },
+                }
+              : n,
+          );
         }
-        return [...current, next];
+        return nodes;
       });
       setEdges((current) => {
         if (current.some((e) => e.id === "e-prompt-result")) return current;
@@ -594,6 +635,54 @@ function StudioCanvas() {
             id: "e-prompt-result",
             source: "prompt",
             target: RESULT_ID,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [closeNode, setEdges, setNodes],
+  );
+
+  const addCompareFromResult = useCallback(
+    (resultId: string) => {
+      const compareId = compareIdFor(resultId);
+      setNodes((current) => {
+        const resultNode = current.find((n) => n.id === resultId);
+        if (!resultNode || resultNode.type !== "result") return current;
+        const source = stillItem(resultNode.data.compareSource);
+        const mapped = itemFromResult(resultNode.data.result);
+        if (!source || !mapped || mapped.kind !== "image") return current;
+        const existing = current.find((n) => n.id === compareId);
+        const position = existing?.position ?? {
+          x: resultNode.position.x + 440,
+          y: resultNode.position.y,
+        };
+        const next: StudioNode = {
+          id: compareId,
+          type: "compare",
+          position,
+          dragHandle: ".node-header",
+          data: {
+            source,
+            result: mapped,
+            onClose: () => closeNode(compareId),
+          },
+        };
+        if (existing) {
+          return current.map((n) => (n.id === compareId ? next : n));
+        }
+        return [...current, next];
+      });
+      setEdges((current) => {
+        if (current.some((e) => e.id === `e-${resultId}-${compareId}`)) {
+          return current;
+        }
+        return addEdge(
+          {
+            id: `e-${resultId}-${compareId}`,
+            source: resultId,
+            target: compareId,
             style: { stroke: "#8aa4c2", strokeWidth: 2 },
           },
           current,
@@ -2792,9 +2881,12 @@ function StudioCanvas() {
             ...n,
             type: "result",
             data: {
+              ...n.data,
               result,
+              compareSource: n.data.compareSource,
               onClose: () => closeNode(n.id),
               onTool: (kind) => spawnTool(n.id, kind, result),
+              onCompareSource: () => addCompareFromResult(n.id),
               onDraftEnhance: (next) => {
                 setNodes((cur) =>
                   cur.map((row) =>
@@ -2807,6 +2899,16 @@ function StudioCanvas() {
               onApplyToPin: pinApply,
               applyLabel: pinApply ? "Apply to pin" : undefined,
               dragItem,
+            },
+          };
+        }
+        if (n.type === "compare") {
+          return {
+            ...n,
+            type: "compare",
+            data: {
+              ...n.data,
+              onClose: () => closeNode(n.id),
             },
           };
         }
@@ -3145,6 +3247,7 @@ function StudioCanvas() {
     spawnPinResult,
     spawnResult,
     spawnResultNear,
+    addCompareFromResult,
     spawnTool,
     studioMode,
     studioModality,

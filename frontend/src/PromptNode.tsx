@@ -35,11 +35,17 @@ import {
 import { readJson } from "./http";
 import { toast } from "./toast";
 import {
+  filesFromDataTransfer,
+  importOsFiles,
+  isOsFileDrag,
+} from "./osImport";
+import {
   durationOptions,
   formatDurationToken,
   hasLibraryPayload,
   inputPlan,
   maxRefImages,
+  modelSupportsMask,
   parseLibraryPayload,
   resolutionOptions,
   type FramePin,
@@ -190,6 +196,21 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const scenes = data.scenes ?? [];
   const filledRefs = countFilledRefs(data.source, characters, scenes);
   const onDuration = useCallback((s: number) => setClipDuration(s), []);
+  const supportsMask = modelSupportsMask(selectedModel);
+  const extraRefAttached =
+    characters.some((row) => Boolean(row.item?.path)) ||
+    scenes.some((row) => Boolean(row.item?.path));
+  const maskSingleRefOnly = (selectedModel?.endpoint || "").includes(
+    "fibo-edit-1.5",
+  );
+  const maskBlocked = maskSingleRefOnly && extraRefAttached;
+  const maskEnabled = supportsMask && !maskBlocked;
+  const maskNote = !supportsMask
+    ? "This model does not accept a mask"
+    : maskBlocked
+      ? "Mask is single-ref only on this model"
+      : "";
+  const showMaskUi = modality === "i2i";
 
   const missing: string[] = [];
   if (plan.first && !data.first?.path) missing.push("First Frame");
@@ -420,7 +441,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       Number(selectedModel.size_limits?.max_num_images) || 1,
     );
     setNumImages((cur) => Math.min(Math.max(1, cur), Math.min(4, maxN)));
-    if (!selectedModel?.optional_slots?.includes("mask")) setMaskItem(null);
+    if (!modelSupportsMask(selectedModel)) setMaskItem(null);
   }, [selectedModel, isStoryboard]);
 
   useEffect(() => {
@@ -501,7 +522,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             characters,
             scenes,
             isFrame ? pins : undefined,
-            maskItem,
+            maskEnabled ? maskItem : null,
           );
       const sbDuration =
         duration || storyboardDurationChoices(selectedModel)[0] || "";
@@ -625,7 +646,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         setError(body.error || body.status || "Generate failed.");
         return;
       }
-      data.onGenerated(body);
+      data.onGenerated(body, {
+        source:
+          itemMediaKind(data.source) === "image"
+            ? data.source
+            : itemMediaKind(data.first) === "image"
+              ? data.first
+              : null,
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Generate request failed.");
     } finally {
@@ -1159,29 +1187,6 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 Needs a Character, Scene, or Source
               </span>
             ) : null}
-            {plan.mask ? (
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={() => {
-                  data.onLibraryPick?.((item) => {
-                    if (itemMediaKind(item) === "video") {
-                      toast("Mask must be a still.", true);
-                      return false;
-                    }
-                    setMaskItem(item);
-                    return true;
-                  });
-                }}
-              >
-                {maskItem ? "Mask attached" : "Add Mask (optional)"}
-              </button>
-            ) : null}
-            {plan.mask && maskItem ? (
-              <span className="hint" title={maskItem.path}>
-                {maskItem.name}
-              </span>
-            ) : null}
           </div>
         ) : !isLocked && !isFrame && plan.source ? (
           <div className="source-row">
@@ -1199,48 +1204,26 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                   : "Needs a Source still"}
               </span>
             )}
-            {plan.mask ? (
-              <button
-                type="button"
-                className="ghost nodrag"
-                onClick={() => {
-                  data.onLibraryPick?.((item) => {
-                    if (itemMediaKind(item) === "video") {
-                      toast("Mask must be a still.", true);
-                      return false;
-                    }
-                    setMaskItem(item);
-                    return true;
-                  });
-                }}
-                onDragOver={(e: DragEvent) => {
-                  if (peekLibraryDrag()) e.preventDefault();
-                }}
-                onDrop={(e: DragEvent) => {
-                  const item = consumeLibraryDrag();
-                  if (!item) return;
-                  e.preventDefault();
-                  if (itemMediaKind(item) === "video") {
-                    toast("Mask must be a still.", true);
-                    return;
-                  }
-                  setMaskItem(item);
-                }}
-              >
-                {maskItem ? "Mask attached" : "Add Mask (optional)"}
-              </button>
-            ) : null}
-            {plan.mask && maskItem ? (
-              <span className="hint" title={maskItem.path}>
-                {maskItem.name}
-              </span>
-            ) : null}
           </div>
         ) : null}
-        {plan.mask ? (
-          <p className="hint">
-            Prompt is the edit instruction. Mask is optional — unmasked areas stay.
-          </p>
+        {showMaskUi ? (
+          <MaskSlot
+            enabled={maskEnabled}
+            note={maskNote}
+            item={maskItem}
+            onPick={() => {
+              data.onLibraryPick?.((item) => {
+                if (itemMediaKind(item) !== "image") {
+                  toast("Mask must be a still.", true);
+                  return false;
+                }
+                setMaskItem(item);
+                return true;
+              });
+            }}
+            onAttach={setMaskItem}
+            onClear={() => setMaskItem(null)}
+          />
         ) : null}
 
         {!isFrame && (plan.first || plan.last) ? (
@@ -1297,6 +1280,170 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         ) : null}
       </div>
       <Handle type="source" position={Position.Right} className="node-handle" />
+    </div>
+  );
+}
+
+function MaskSlot({
+  enabled,
+  note,
+  item,
+  onPick,
+  onAttach,
+  onClear,
+}: {
+  enabled: boolean;
+  note: string;
+  item: LibraryItem | null;
+  onPick: () => void;
+  onAttach: (item: LibraryItem) => void;
+  onClear: () => void;
+}) {
+  const [hover, setHover] = useState<"ok" | "bad" | null>(null);
+  const accept = "image" as const;
+
+  function allowDrop(event: DragEvent) {
+    if (!enabled) return false;
+    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      return true;
+    }
+    const incoming = peekLibraryDrag() || hasLibraryPayload(event.dataTransfer);
+    if (!incoming) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    const itemNow = peekLibraryDrag();
+    const ok = itemNow ? slotAccepts(accept, itemNow) : true;
+    event.dataTransfer.dropEffect = ok ? "copy" : "none";
+    return true;
+  }
+
+  function onDragEnter(event: DragEvent) {
+    if (!allowDrop(event)) return;
+    const next = peekLibraryDrag();
+    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
+  }
+
+  function onDragOver(event: DragEvent) {
+    if (!allowDrop(event)) return;
+    const next = peekLibraryDrag();
+    setHover(next && !slotAccepts(accept, next) ? "bad" : "ok");
+  }
+
+  function onDragLeave(event: DragEvent) {
+    const next = event.relatedTarget as globalThis.Node | null;
+    if (next && event.currentTarget.contains(next)) return;
+    setHover(null);
+  }
+
+  function onDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setHover(null);
+    if (!enabled) return;
+    if (isOsFileDrag(event.dataTransfer) && !peekLibraryDrag()) {
+      const files = filesFromDataTransfer(event.dataTransfer);
+      if (!files.length) return;
+      void importOsFiles(files)
+        .then((items) => {
+          const still = items.find((row) => itemMediaKind(row) === "image");
+          if (!still) {
+            toast("Mask must be a still.", true);
+            return;
+          }
+          onAttach(still);
+        })
+        .catch((err: unknown) => {
+          toast(err instanceof Error ? err.message : "Import failed.", true);
+        });
+      return;
+    }
+    const dragged =
+      consumeLibraryDrag() || parseLibraryPayload(event.dataTransfer);
+    if (!dragged) return;
+    if (!slotAccepts(accept, dragged)) {
+      toast(slotNeedLabel(accept), true);
+      return;
+    }
+    onAttach(dragged);
+  }
+
+  if (!enabled) {
+    return (
+      <div className="source-row mask-slot">
+        <button
+          type="button"
+          className="ghost nodrag"
+          disabled
+          title={note || "This model does not accept a mask"}
+        >
+          Add Mask (optional)
+        </button>
+        <p className="hint">{note || "This model does not accept a mask"}</p>
+      </div>
+    );
+  }
+
+  const cls =
+    hover === "ok"
+      ? "mask-slot drop-hot"
+      : hover === "bad"
+        ? "mask-slot drop-bad"
+        : "mask-slot";
+
+  return (
+    <div
+      className={cls}
+      data-drop-accept={accept}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {item ? (
+        <>
+          <div className="mask-slot-preview nodrag">
+            <img
+              src={item.thumb_url || item.url}
+              alt={item.name}
+              draggable={false}
+            />
+          </div>
+          <p className="hint" title={item.path}>
+            Mask: {item.name}
+          </p>
+          <div className="source-row">
+            <button type="button" className="ghost nodrag" onClick={onPick}>
+              Mask attached
+            </button>
+            <button type="button" className="ghost nodrag" onClick={onClear}>
+              Clear
+            </button>
+          </div>
+          <p className="hint">
+            Prompt is the edit instruction. Mask is optional — unmasked areas stay.
+          </p>
+        </>
+      ) : (
+        <>
+          <div
+            className="source-empty nodrag mask-empty"
+            role="button"
+            tabIndex={0}
+            onClick={onPick}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") onPick();
+            }}
+          >
+            Add Mask (optional) — drop a still
+          </div>
+          <p className="hint">
+            Prompt is the edit instruction. Mask is optional — unmasked areas stay.
+          </p>
+        </>
+      )}
     </div>
   );
 }
