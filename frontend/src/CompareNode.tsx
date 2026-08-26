@@ -55,7 +55,7 @@ export default function CompareNode({ data }: NodeProps<CompareFlowNode>) {
     <div className="studio-node compare-node">
       <Handle type="target" position={Position.Left} className="node-handle" />
       <div className="node-header">
-        <span>Compare Source</span>
+        <span>COMPARE</span>
         <NodeClose onClose={data.onClose} />
       </div>
       <div className="node-body nodrag nopan">
@@ -94,16 +94,24 @@ export default function CompareNode({ data }: NodeProps<CompareFlowNode>) {
             type="range"
             min={0}
             max={100}
-            value={opacity}
-            disabled={!overlayOn}
-            onChange={(e) => setOpacity(Number(e.target.value))}
+            value={overlayOn ? opacity : 0}
+            onChange={(e) => {
+              setOpacity(Number(e.target.value));
+              setOverlayOn(true);
+            }}
           />
         </label>
         <div className="compare-actions">
           <button
             type="button"
             className="ghost nodrag"
-            onClick={() => setOverlayOn((v) => !v)}
+            onClick={() => {
+              setOverlayOn((on) => {
+                if (on) return false;
+                setOpacity(100);
+                return true;
+              });
+            }}
           >
             Overlay {overlayOn ? "on" : "off"}
           </button>
@@ -117,12 +125,12 @@ export default function CompareNode({ data }: NodeProps<CompareFlowNode>) {
         </div>
         <p className="hint">
           {overlayOn
-            ? swapped
-              ? "Source over result"
-              : "Result over source"
-            : swapped
-              ? "Overlay off — result only"
-              : "Overlay off — source only"}
+            ? opacity >= 100
+              ? "Overlay on — 100% result"
+              : swapped
+                ? "Source over result"
+                : "Result over source"
+            : "Overlay off — 100% source"}
         </p>
       </div>
     </div>

@@ -584,66 +584,6 @@ function StudioCanvas() {
     [closePinEdit, setEdges, setNodes],
   );
 
-  const spawnResult = useCallback(
-    (result: GenerateResponse, job?: { source?: LibraryItem | null }) => {
-      const compareSource = stillItem(job?.source);
-      const mapped = itemFromResult(result);
-      const compareId = compareIdFor(RESULT_ID);
-      setNodes((current) => {
-        const prompt = current.find((n) => n.id === "prompt");
-        const existing = current.find((n) => n.id === RESULT_ID);
-        const position = existing?.position ?? {
-          x: (prompt?.position.x ?? PROMPT_POS.x) + 500,
-          y: prompt?.position.y ?? PROMPT_POS.y,
-        };
-        const next: StudioNode = {
-          id: RESULT_ID,
-          type: "result",
-          position,
-          dragHandle: ".node-header",
-          data: {
-            result,
-            compareSource,
-            onClose: () => closeNode(RESULT_ID),
-            onTool: () => undefined,
-          },
-        };
-        let nodes = existing
-          ? current.map((n) => (n.id === RESULT_ID ? next : n))
-          : [...current, next];
-        const openCompare = nodes.find((n) => n.id === compareId);
-        if (openCompare && openCompare.type === "compare" && mapped && compareSource) {
-          nodes = nodes.map((n) =>
-            n.id === compareId && n.type === "compare"
-              ? {
-                  ...n,
-                  data: {
-                    ...n.data,
-                    source: compareSource,
-                    result: mapped,
-                  },
-                }
-              : n,
-          );
-        }
-        return nodes;
-      });
-      setEdges((current) => {
-        if (current.some((e) => e.id === "e-prompt-result")) return current;
-        return addEdge(
-          {
-            id: "e-prompt-result",
-            source: "prompt",
-            target: RESULT_ID,
-            style: { stroke: "#8aa4c2", strokeWidth: 2 },
-          },
-          current,
-        );
-      });
-    },
-    [closeNode, setEdges, setNodes],
-  );
-
   const addCompareFromResult = useCallback(
     (resultId: string) => {
       const compareId = compareIdFor(resultId);
@@ -690,6 +630,67 @@ function StudioCanvas() {
       });
     },
     [closeNode, setEdges, setNodes],
+  );
+
+  const spawnResult = useCallback(
+    (result: GenerateResponse, job?: { source?: LibraryItem | null }) => {
+      const compareSource = stillItem(job?.source);
+      const mapped = itemFromResult(result);
+      const compareId = compareIdFor(RESULT_ID);
+      setNodes((current) => {
+        const prompt = current.find((n) => n.id === "prompt");
+        const existing = current.find((n) => n.id === RESULT_ID);
+        const position = existing?.position ?? {
+          x: (prompt?.position.x ?? PROMPT_POS.x) + 500,
+          y: prompt?.position.y ?? PROMPT_POS.y,
+        };
+        const next: StudioNode = {
+          id: RESULT_ID,
+          type: "result",
+          position,
+          dragHandle: ".node-header",
+          data: {
+            result,
+            compareSource,
+            onClose: () => closeNode(RESULT_ID),
+            onTool: () => undefined,
+            onCompareSource: () => addCompareFromResult(RESULT_ID),
+          },
+        };
+        let nodes = existing
+          ? current.map((n) => (n.id === RESULT_ID ? next : n))
+          : [...current, next];
+        const openCompare = nodes.find((n) => n.id === compareId);
+        if (openCompare && openCompare.type === "compare" && mapped && compareSource) {
+          nodes = nodes.map((n) =>
+            n.id === compareId && n.type === "compare"
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    source: compareSource,
+                    result: mapped,
+                  },
+                }
+              : n,
+          );
+        }
+        return nodes;
+      });
+      setEdges((current) => {
+        if (current.some((e) => e.id === "e-prompt-result")) return current;
+        return addEdge(
+          {
+            id: "e-prompt-result",
+            source: "prompt",
+            target: RESULT_ID,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
+          current,
+        );
+      });
+    },
+    [addCompareFromResult, closeNode, setEdges, setNodes],
   );
 
   const applyStillToPinRef = useRef<
@@ -2790,6 +2791,8 @@ function StudioCanvas() {
                 refPreviews: n.data.refPreviews,
                 wardrobe: n.data.wardrobe || builderSessions[builderId]?.wardrobe,
                 name: n.data.name || builderSessions[builderId]?.name,
+                compareSource: n.data.compareSource,
+                onCompareSource: () => addCompareFromResult(n.id),
                 onPrompt: (prompt) =>
                   upsertSheetAngle(builderId, slot, { slot, prompt }),
                 onResolution: (resolution) =>

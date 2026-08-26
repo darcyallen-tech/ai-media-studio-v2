@@ -173,6 +173,14 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const title = (data.title || "").trim() || "Result";
   const isAngle = Boolean(data.slot || data.builderId);
   const hasStill = paths.length > 0;
+  const jobSource = data.compareSource;
+  const hasJobSource = Boolean(
+    jobSource &&
+      (jobSource.url || jobSource.thumb_url || jobSource.path) &&
+      jobSource.kind !== "video" &&
+      jobSource.kind !== "audio",
+  );
+  const canCompare = hasJobSource && hasStill && !isVid && !isAud;
 
   function enlarge() {
     const src = paths[0] || "";
@@ -585,36 +593,37 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             <span className="hint">FLUX 3 draft preview — Enhance to full quality</span>
           </div>
         ) : null}
-        {tools.length && data.onTool && !isAngle ? (
-          <div className="result-tools">
-            {tools.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className="ghost nodrag"
-                onClick={() => data.onTool?.(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <div className="result-tools">
+          <button
+            type="button"
+            className="ghost nodrag"
+            disabled={!canCompare}
+            title={
+              hasJobSource
+                ? "Overlay this result on the job's source still"
+                : "No source image on this job"
+            }
+            onClick={() => {
+              if (!canCompare) return;
+              data.onCompareSource?.();
+            }}
+          >
+            Compare Source
+          </button>
+          {data.onTool && !isAngle
+            ? tools.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="ghost nodrag"
+                  onClick={() => data.onTool?.(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))
+            : null}
+        </div>
         <div className="result-actions" hidden={isAngle && !hasStill}>
-          {!isAngle ? (
-            <button
-              type="button"
-              className="ghost nodrag"
-              disabled={!data.compareSource || isVid || isAud || !hasStill}
-              title={
-                data.compareSource
-                  ? "Overlay this result on the job's source still"
-                  : "No source image on this job"
-              }
-              onClick={() => data.onCompareSource?.()}
-            >
-              Compare Source
-            </button>
-          ) : null}
           {data.onApplyToPin && !isVid && !isAud ? (
             <button
               type="button"
