@@ -116,6 +116,12 @@ def enhance_prompt_text(
             "Wan 3.0 prefers clear positional refs in the rewritten prompt "
             "(Image 1 = character, Image 2 = scene, Video 1 = motion).\n\n"
         )
+    if "fibo-edit-1.5" in ep:
+        wan_note += (
+            "Fibo Edit 1.5: label attached stills as <image_1> (source to edit), "
+            "<image_2> <image_3> <image_4> for extra references (furniture, "
+            "costume, object, style). Keep those tags in the rewrite.\n\n"
+        )
     images = [p for p in (image_urls or []) if str(p).strip()]
     readable = [p for p in images if still_data_url(p)]
     vision_note = (

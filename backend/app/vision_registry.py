@@ -866,16 +866,54 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         supports_strength=False,
         extra_defaults={"num_images": 1, "enable_safety_checker": True},
     ),
+    "fibo edit 1.5 i2i": VisionModelSpec(
+        key="fibo edit 1.5 i2i",
+        label="Fibo Edit 1.5",
+        mode="image_to_image",
+        endpoint="bria/fibo-edit-1.5/edit",
+        cost_estimate_usd=0.04,
+        notes=(
+            "Bria Fibo Edit 1.5 — multi-ref (source + up to 3 refs). "
+            "Cite <image_1> (source) and <image_2>… in the instruction. "
+            "Try-on / object combo / bg swap; furniture pop-in is a test case. "
+            "~$0.04/image. Licensed, commercial OK. Flux 2 Pro / Nano Banana Pro "
+            "stay primary for locked architecture."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "Match source",
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "4:5",
+            "5:4",
+        ),
+        default_aspect="Match source",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=3,
+        image_field="image_urls",
+        edit_model_key="fibo edit 1.5",
+        supports_strength=False,
+        extra_defaults={},
+    ),
     "fibo edit i2i": VisionModelSpec(
         key="fibo edit i2i",
-        label="Fibo Edit",
+        label="Fibo Edit (v1)",
         mode="image_to_image",
         endpoint="bria/fibo-edit/edit",
         cost_estimate_usd=0.04,
         notes=(
-            "Bria Fibo Edit — precise local edits, optional mask, targeted changes "
-            "(furniture, sky, cleanup) without a full scene rewrite. "
-            "~$0.04/image. Licensed data, commercial OK."
+            "Bria Fibo Edit v1 — single-image local edits, optional mask. "
+            "~$0.04/image. Prefer Fibo Edit 1.5 for multi-ref. "
+            "Licensed data, commercial OK."
         ),
         duration_choices=(),
         default_duration="",

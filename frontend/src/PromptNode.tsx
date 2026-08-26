@@ -518,7 +518,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               storyShots,
               holds,
             )
-        : composePrompt(prompt.trim(), characters, scenes);
+        : (selectedModel?.endpoint || "").includes("fibo-edit-1.5")
+          ? composeFibo15Prompt(prompt.trim(), data.source, characters, scenes)
+          : composePrompt(prompt.trim(), characters, scenes);
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
@@ -988,11 +990,18 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 ? "Describe the sound…"
                 : isAudio
                   ? "Style, mood, instruments…"
-                  : "Describe the still, clip, or track…"
+                  : (selectedModel?.endpoint || "").includes("fibo-edit-1.5")
+                    ? "Edit instruction. <image_1> is the source; <image_2>… are refs."
+                    : "Describe the still, clip, or track…"
           }
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
+        {(selectedModel?.endpoint || "").includes("fibo-edit-1.5") ? (
+          <p className="hint">
+            {fibo15Legend(data.source, characters, scenes)}
+          </p>
+        ) : null}
 
         {!isFrame && !isStoryboard && !isAudio ? (
           <details className="advanced nodrag">
@@ -1100,8 +1109,21 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         </div>
         <p className="estimate">{estimate}</p>
 
-        {!isStoryboard && !isFrame && (plan.characters || plan.scenes) ? (
+        {!isStoryboard && !isFrame && (plan.characters || plan.scenes || plan.extraRefs) ? (
           <div className="source-row">
+            {plan.extraRefs ? (
+              <button
+                type="button"
+                className="ghost nodrag"
+                disabled={
+                  maxRefs > 0 &&
+                  reservedRefNodes(data.source, characters, scenes) >= maxRefs
+                }
+                onClick={data.onAddCharacter}
+              >
+                Add reference
+              </button>
+            ) : null}
             {plan.characters ? (
               <button
                 type="button"
@@ -1135,6 +1157,29 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             {missing.includes("Character, Scene, or Source") ? (
               <span className="hint warn">
                 Needs a Character, Scene, or Source
+              </span>
+            ) : null}
+            {plan.mask ? (
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() => {
+                  data.onLibraryPick?.((item) => {
+                    if (itemMediaKind(item) === "video") {
+                      toast("Mask must be a still.", true);
+                      return false;
+                    }
+                    setMaskItem(item);
+                    return true;
+                  });
+                }}
+              >
+                {maskItem ? "Mask attached" : "Add Mask (optional)"}
+              </button>
+            ) : null}
+            {plan.mask && maskItem ? (
+              <span className="hint" title={maskItem.path}>
+                {maskItem.name}
               </span>
             ) : null}
           </div>
@@ -1603,6 +1648,52 @@ export function reservedRefNodes(
   return characters.length + scenes.length + (source?.path ? 1 : 0);
 }
 
+function fibo15Legend(
+  source: LibraryItem | null,
+  characters: RefSlotState[],
+  scenes: RefSlotState[],
+): string {
+  const bits: string[] = [];
+  let i = 1;
+  if (source?.path) {
+    bits.push(`<image_${i}> = source (${source.name})`);
+    i += 1;
+  }
+  for (const row of [...characters, ...scenes]) {
+    if (!row.item?.path) continue;
+    const name = row.label || row.item.name || `ref ${i}`;
+    bits.push(`<image_${i}> = ${name}`);
+    i += 1;
+  }
+  if (!bits.length) {
+    return "Fibo Edit 1.5: attach a source still plus up to 3 refs. Tags: <image_1> source, <image_2>… refs.";
+  }
+  return `Fibo Edit 1.5 refs: ${bits.join(" · ")}`;
+}
+
+function composeFibo15Prompt(
+  base: string,
+  source: LibraryItem | null,
+  characters: RefSlotState[],
+  scenes: RefSlotState[],
+): string {
+  const labels: string[] = [];
+  let i = 1;
+  if (source?.path) {
+    labels.push(`<image_${i}> is the source to edit (${source.name}).`);
+    i += 1;
+  }
+  for (const row of [...characters, ...scenes]) {
+    if (!row.item?.path) continue;
+    const name = row.label || row.item.name || `ref ${i}`;
+    labels.push(`<image_${i}> is a reference (${name}).`);
+    i += 1;
+  }
+  const body = base.trim();
+  if (!labels.length) return body;
+  return `${labels.join(" ")} ${body}`.trim();
+}
+
 function composePrompt(
   base: string,
   characters: RefSlotState[],
@@ -1635,8 +1726,10 @@ function enhanceImagePaths(data: PromptNodeData): string[] {
     out.push(p);
   };
   if (itemMediaKind(data.source) === "image") add(data.source?.path);
+  for (const row of data.characters || []) add(row.item?.path);
+  for (const row of data.scenes || []) add(row.item?.path);
   for (const pin of data.pins || []) add(pin.image?.path);
-  return out.slice(0, 3);
+  return out.slice(0, 4);
 }
 
 function enhanceRefs(

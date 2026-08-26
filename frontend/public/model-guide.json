@@ -312,19 +312,42 @@
           ]
         },
         {
+          "id": "studio:img:fibo edit 1.5",
+          "label": "Fibo Edit 1.5",
+          "modalities": [
+            "i2i",
+            "r2i"
+          ],
+          "tagline": "Best multi-ref try-on / object combo (licensed)",
+          "strengths": [
+            "1–4 images: Image 1 is the source; 2–4 are refs.",
+            "Cite <image_1> <image_2> in the instruction.",
+            "Licensed data, commercial OK. ~$0.04/image."
+          ],
+          "weaknesses": [
+            "Furniture pop-in is a test case — Flux 2 Pro / Nano Banana Pro stay primary for locked architecture.",
+            "Mask only on single-image edits."
+          ],
+          "use_cases": [
+            "Virtual try-on",
+            "Object combo / furniture look refs",
+            "Background swap"
+          ]
+        },
+        {
           "id": "studio:img:fibo edit",
-          "label": "Fibo Edit",
+          "label": "Fibo Edit (v1)",
           "modalities": [
             "i2i"
           ],
-          "tagline": "Best precise local edit with optional mask",
+          "tagline": "Single-image local edit with optional mask",
           "strengths": [
             "Targeted changes (furniture, sky, cleanup) without a full rewrite.",
             "Optional mask. ~$0.04/image.",
             "Licensed data, commercial OK."
           ],
           "weaknesses": [
-            "Not a multi-ref identity pack (use Flux Pro).",
+            "Single image only — use Fibo Edit 1.5 for refs.",
             "No region box — mask still or prompt only."
           ],
           "use_cases": [

@@ -94,6 +94,7 @@ export type GraphInputs = {
   lastOptional?: boolean;
   mask?: boolean;
   maskOptional?: boolean;
+  extraRefs?: boolean;
   characters?: boolean;
   scenes?: boolean;
 };
@@ -621,7 +622,13 @@ export function inputPlan(
   }
   if (modality === "i2i") {
     const mask = Boolean(model?.optional_slots?.includes("mask"));
-    return { source: "image", mask, maskOptional: mask };
+    const extra = maxRefImages(model, "i2i") > 1;
+    return {
+      source: "image",
+      mask,
+      maskOptional: mask,
+      extraRefs: extra,
+    };
   }
   if (modality === "region") {
     return { source: "image" };

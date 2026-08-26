@@ -570,6 +570,29 @@ def apply_wan30_payload(
     return out
 
 
+def _inject_fibo15_image_tags(instruction: str, n_images: int) -> str:
+    """Ensure Fibo Edit 1.5 instructions cite <image_1>… for attached stills."""
+    text = (instruction or "").strip()
+    n = max(0, int(n_images or 0))
+    if n < 1:
+        return text
+    low = text.lower()
+    missing = [f"<image_{i}>" for i in range(1, n + 1) if f"<image_{i}>" not in low]
+    if not missing:
+        return text
+    if n == 1:
+        suffix = "<image_1> is the source image to edit."
+    else:
+        refs = ", ".join(f"<image_{i}>" for i in range(2, n + 1))
+        suffix = (
+            f"<image_1> is the source to edit; {refs} "
+            f"{'is a reference image' if n == 2 else 'are reference images'}."
+        )
+    if text:
+        return text.rstrip(".") + ". " + suffix
+    return suffix
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -894,9 +917,47 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Est. $0.04 @1K · $0.075 @2K."
         ),
     ),
+    "fibo edit 1.5": ImageEditModelSpec(
+        key="fibo edit 1.5",
+        label="Image · Fibo Edit 1.5",
+        endpoint="bria/fibo-edit-1.5/edit",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=4,
+        max_num_images=1,
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=(
+            "Match source",
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "4:5",
+            "5:4",
+        ),
+        default_aspect_ratio="Match source",
+        resolution_param=None,
+        image_size_param=None,
+        allowed_resolutions=(),
+        output_format_param=None,
+        default_output_format="png",
+        cost_per_image=0.04,
+        extra_defaults={},
+        notes=(
+            "Bria Fibo Edit 1.5 — multi-ref I2I/R2I (1–4 images). "
+            "Image 1 is the source to edit; 2–4 are optional refs "
+            "(furniture, costume, object, style). Cite <image_1> <image_2> in the "
+            "instruction. Optional mask on single-image edits. ~$0.04/image. "
+            "Licensed data, commercial OK. Flux 2 Pro / Nano Banana Pro stay "
+            "primary for locked architecture."
+        ),
+    ),
     "fibo edit": ImageEditModelSpec(
         key="fibo edit",
-        label="Image · Fibo Edit",
+        label="Image · Fibo Edit (v1)",
         endpoint="bria/fibo-edit/edit",
         image_field="image_url",
         multi_image=False,
@@ -911,9 +972,9 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         cost_per_image=0.04,
         extra_defaults={"steps_num": 30},
         notes=(
-            "Bria Fibo Edit — precise local edits, optional mask, targeted changes "
-            "(furniture, sky, cleanup) without a full scene rewrite. "
-            "~$0.04/image. Licensed training data, commercial OK."
+            "Bria Fibo Edit v1 — single-image local edits, optional mask. "
+            "~$0.04/image. Prefer Fibo Edit 1.5 for multi-ref. "
+            "Licensed training data, commercial OK."
         ),
     ),
 }
@@ -1911,10 +1972,19 @@ _ALIASES: dict[str, str] = {
     "grok imagine image 2.0": "grok imagine 2.0 edit",
     "image · grok imagine 2.0 edit": "grok imagine 2.0 edit",
     "xai/grok-imagine-image/v2.0/edit": "grok imagine 2.0 edit",
+    "fibo edit 1.5": "fibo edit 1.5",
+    "fibo-edit-1.5": "fibo edit 1.5",
+    "fibo edit 1.5 multi-ref": "fibo edit 1.5",
+    "bria fibo edit 1.5": "fibo edit 1.5",
+    "image · fibo edit 1.5": "fibo edit 1.5",
+    "bria/fibo-edit-1.5/edit": "fibo edit 1.5",
     "fibo edit": "fibo edit",
     "fibo-edit": "fibo edit",
+    "fibo edit v1": "fibo edit",
+    "fibo edit (v1)": "fibo edit",
     "bria fibo edit": "fibo edit",
     "image · fibo edit": "fibo edit",
+    "image · fibo edit (v1)": "fibo edit",
     "bria/fibo-edit/edit": "fibo edit",
     "grok imagine edit video": "grok imagine edit video",
     "grok imagine video edit": "grok imagine edit video",
@@ -2060,6 +2130,7 @@ def model_dropdown_choices() -> list[str]:
         "grok imagine edit",
         "grok imagine quality edit",
         "grok imagine 2.0 edit",
+        "fibo edit 1.5",
         "fibo edit",
     ):
         spec = IMAGE_EDIT_MODELS.get(key)
@@ -2425,7 +2496,40 @@ def build_edit_arguments(
             notes.append(f"Ignoring non-numeric strength={strength!r}.")
 
     ep = (spec.endpoint or "").lower()
-    if "fibo-edit" in ep:
+    if "fibo-edit-1.5" in ep:
+        instr = (prompt or "").strip()
+        args.pop("prompt", None)
+        n_imgs = 0
+        raw_urls = args.get("image_urls")
+        if isinstance(raw_urls, list):
+            n_imgs = len(raw_urls)
+        elif args.get("image_url"):
+            n_imgs = 1
+        args["instruction"] = _inject_fibo15_image_tags(instr, n_imgs)
+        if n_imgs and "<image_1>" in args["instruction"].lower() and (
+            "<image_1>" not in instr.lower()
+        ):
+            notes.append("Labeled refs as <image_1>… in the Fibo Edit 1.5 instruction.")
+        args.pop("num_images", None)
+        args.pop("output_format", None)
+        args.pop("image_size", None)
+        args.pop("strength", None)
+        args.pop("negative_prompt", None)
+        ar = str(args.get("aspect_ratio") or "").strip().lower()
+        if n_imgs < 2 or ar in ("", "auto", "default", "match source", "match"):
+            args.pop("aspect_ratio", None)
+        mask_url = (
+            params.get("mask_url")
+            or other.get("mask_url")
+            or params.get("mask")
+            or other.get("mask")
+        )
+        if mask_url and n_imgs <= 1:
+            args["mask_url"] = str(mask_url)
+            notes.append("Fibo Edit 1.5: optional mask attached (single-ref only).")
+        elif mask_url and n_imgs > 1:
+            notes.append("Fibo Edit 1.5: mask ignored when more than one reference is sent.")
+    elif "fibo-edit" in ep:
         instr = (prompt or "").strip()
         args.pop("prompt", None)
         if instr:
