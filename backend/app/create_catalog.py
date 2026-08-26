@@ -66,6 +66,7 @@ class ModelEntry:
     supports_multi_prompt: bool = False
     max_multi_prompt: int = 0
     supports_mask: bool = False
+    supports_region_boxes: bool = False
 
 
 def _parse_duration_token(tok: str | None) -> int | None:
@@ -363,6 +364,7 @@ def _entry_from_vision(spec: Any) -> ModelEntry:
         first_last=first_last,
         supports_draft=supports_draft,
         supports_mask=supports_mask,
+        supports_region_boxes=bool(getattr(spec, "supports_region_boxes", False)),
         **_kling_ui_flags(spec),
     )
 
@@ -389,6 +391,7 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
     endpoint = str(getattr(spec, "endpoint", "") or "")
     notes = str(getattr(spec, "notes", "") or "")
     supports_mask = bool(getattr(spec, "supports_mask", False))
+    supports_region_boxes = bool(getattr(spec, "supports_region_boxes", False))
     if supports_mask and "mask" not in opt:
         opt = tuple(list(opt) + ["mask"])
     suffix = "region" if primary == "region" else "img"
@@ -432,6 +435,7 @@ def _entry_from_image_edit(spec: Any, *, extra_modalities: tuple[str, ...] = ())
         first_last=False,
         supports_draft=False,
         supports_mask=supports_mask,
+        supports_region_boxes=supports_region_boxes,
     )
 
 
@@ -536,7 +540,6 @@ def _entry_from_video(spec: Any) -> ModelEntry:
 
 def _build_catalog() -> list[ModelEntry]:
     from app.fal.models import IMAGE_EDIT_MODELS, VIDEO_MODELS
-    from app.region_edit import REGION_MODEL_KEYS
     from app.vision_registry import (
         BRIDGE_MODELS,
         EXTEND_MODELS,
@@ -552,10 +555,7 @@ def _build_catalog() -> list[ModelEntry]:
     out: list[ModelEntry] = []
 
     for spec in IMAGE_EDIT_MODELS.values():
-        extra: tuple[str, ...] = ()
-        if spec.key in REGION_MODEL_KEYS:
-            extra = ("region",)
-        out.append(_entry_from_image_edit(spec, extra_modalities=extra))
+        out.append(_entry_from_image_edit(spec))
 
     for spec in VIDEO_MODELS.values():
         out.append(_entry_from_video(spec))

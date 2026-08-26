@@ -104,6 +104,24 @@ def run_image_edit(
 
     progress(f"Model: {spec.label} ({spec.endpoint})")
 
+    params = dict(parameters or {})
+    if getattr(spec, "supports_region_boxes", False):
+        from app.region_edit import apply_region_boxes_to_edit
+
+        boxes_raw = params.get("boxes")
+        other = params.get("other") if isinstance(params.get("other"), dict) else {}
+        if not boxes_raw:
+            boxes_raw = other.get("boxes")
+        new_prompt, new_paths, box_note = apply_region_boxes_to_edit(
+            prompt=prompt,
+            image_paths=paths,
+            boxes_raw=boxes_raw,
+        )
+        prompt = new_prompt
+        paths = new_paths
+        if box_note:
+            progress(box_note)
+
     image_urls: list[str] = []
     try:
         for p in paths:
@@ -116,7 +134,6 @@ def run_image_edit(
             status=friendly_error(exc, context="Image edit"),
         )
 
-    params = dict(parameters or {})
     mask_path = params.get("mask_path") or params.get("mask")
     if mask_path and Path(str(mask_path)).is_file() and not params.get("mask_url"):
         try:

@@ -71,6 +71,8 @@ Settings → paths can open the outputs folder.
 
 Need extra refs (a logo, a material)? Use an R2I model and drop extra stills on the ref slots.
 
+For a boxed / painted local edit, pick **Fibo Edit** or **Seedream 5 Pro (edit)** and click **Add Mask** on the Prompt node. Draw boxes or paint on the MASK node — there is no Region tab.
+
 ---
 
 ## 5. Simple image-to-video

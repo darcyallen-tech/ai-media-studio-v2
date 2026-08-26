@@ -108,6 +108,7 @@ class VisionModelSpec:
     max_multi_prompt: int = 0
     # Optional mask_url on the fal edit schema (typically single-ref only).
     supports_mask: bool = False
+    supports_region_boxes: bool = False
 
 
 # UI sentinel when aspect follows the still (disabled control)
@@ -866,6 +867,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         image_field="image_urls",
         edit_model_key="seedream 5 pro",
         supports_strength=False,
+        supports_region_boxes=True,
         extra_defaults={"num_images": 1, "enable_safety_checker": True},
     ),
     "fibo edit 1.5 i2i": VisionModelSpec(
@@ -1678,6 +1680,7 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         max_refs=3,
         image_field="image_urls",
         edit_model_key="seedream 5 pro",
+        supports_region_boxes=True,
         extra_defaults={"num_images": 1},
     ),
 }

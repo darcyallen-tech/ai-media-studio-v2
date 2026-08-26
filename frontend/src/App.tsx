@@ -356,6 +356,7 @@ function StudioCanvas() {
   >({});
   const [studioMode, setStudioMode] = useState<Mode>("image");
   const [studioModality, setStudioModality] = useState("t2i");
+  const [maskReady, setMaskReady] = useState(false);
   const [instrumental, setInstrumental] = useState(true);
   const [appliedPrompt, setAppliedPrompt] = useState<{
     text: string;
@@ -539,7 +540,10 @@ function StudioCanvas() {
         return;
       }
       if (id === SOURCE_ID) setSourceItem(null);
-      if (id === MASK_ID) maskApiRef.current = null;
+      if (id === MASK_ID) {
+        maskApiRef.current = null;
+        setMaskReady(false);
+      }
       if (id === FIRST_ID) setFirstItem(null);
       if (id === LAST_ID) setLastItem(null);
       if (id.startsWith("char-")) {
@@ -1313,10 +1317,11 @@ function StudioCanvas() {
 
   const onModalityChange = useCallback(
     (mode: Mode, modality: string, model?: ModelRow | null) => {
+      const nextMod = modality === "region" ? "i2i" : modality;
       setStudioMode(mode);
-      setStudioModality(modality);
+      setStudioModality(nextMod);
       setPlan((prev) => {
-        const next = inputPlan(modality, model, mode);
+        const next = inputPlan(nextMod, model, mode);
         if (
           prev.source === next.source &&
           Boolean(prev.sourceOptional) === Boolean(next.sourceOptional) &&
@@ -1330,7 +1335,7 @@ function StudioCanvas() {
         }
         return next;
       });
-      setMaxRefs(maxRefImages(model, modality));
+      setMaxRefs(maxRefImages(model, nextMod));
     },
     [],
   );
@@ -2653,6 +2658,8 @@ function StudioCanvas() {
                 return maskApiRef.current.rasterize();
               },
               getMaskSuffix: () => maskApiRef.current?.suffix() || "",
+              getMaskBoxes: () => maskApiRef.current?.boxes() ?? [],
+              maskReady,
               onAddFirst: addFirstNode,
               onAddLast: addLastNode,
               onAddCharacter: addCharacterNode,
@@ -2829,6 +2836,7 @@ function StudioCanvas() {
               disabledNote: "Mask is single-ref only on this model",
               onClose: () => closeNode(MASK_ID),
               onRegister: registerMaskApi,
+              onContent: setMaskReady,
             },
           };
         }
@@ -3420,6 +3428,7 @@ function StudioCanvas() {
     spawnTool,
     studioMode,
     studioModality,
+    maskReady,
     toolSources,
     tryAttachSlot,
     upsertSheetAngle,

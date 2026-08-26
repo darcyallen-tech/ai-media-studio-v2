@@ -71,7 +71,7 @@
 <nav>
   <h1>Model Guide</h1>
   <p class="sub">AMS V2 · 2026-08-23<br/>Match ids to GET /models</p>
-  <a href="#t2i" data-section="t2i">Text → Image <span>12</span></a><a href="#i2i" data-section="i2i">Image → Image <span>13</span></a><a href="#r2i" data-section="r2i">Reference → Image <span>9</span></a><a href="#region" data-section="region">Region edit <span>1</span></a><a href="#t2v" data-section="t2v">Text → Video <span>14</span></a><a href="#i2v" data-section="i2v">Image → Video <span>15</span></a><a href="#r2v" data-section="r2v">Reference → Video <span>5</span></a><a href="#bridge" data-section="bridge">First → Last <span>3</span></a><a href="#v2v" data-section="v2v">Video → Video <span>6</span></a><a href="#extend" data-section="extend">Extend <span>1</span></a><a href="#music" data-section="music">Music <span>7</span></a><a href="#sfx" data-section="sfx">Sound effects <span>2</span></a><a href="#voiceover" data-section="voiceover">Voiceover <span>4</span></a><a href="#upscale" data-section="upscale">Upscale <span>9</span></a><a href="#finish" data-section="finish">Finish / restore <span>2</span></a>
+  <a href="#t2i" data-section="t2i">Text → Image <span>12</span></a><a href="#i2i" data-section="i2i">Image → Image <span>13</span></a><a href="#r2i" data-section="r2i">Reference → Image <span>9</span></a><a href="#t2v" data-section="t2v">Text → Video <span>14</span></a><a href="#i2v" data-section="i2v">Image → Video <span>15</span></a><a href="#r2v" data-section="r2v">Reference → Video <span>5</span></a><a href="#bridge" data-section="bridge">First → Last <span>3</span></a><a href="#v2v" data-section="v2v">Video → Video <span>6</span></a><a href="#extend" data-section="extend">Extend <span>1</span></a><a href="#music" data-section="music">Music <span>7</span></a><a href="#sfx" data-section="sfx">Sound effects <span>2</span></a><a href="#voiceover" data-section="voiceover">Voiceover <span>4</span></a><a href="#upscale" data-section="upscale">Upscale <span>9</span></a><a href="#finish" data-section="finish">Finish / restore <span>2</span></a>
 </nav>
 <main>
   <div class="toolbar">
@@ -270,7 +270,7 @@
   <p class="id">studio:img:flux 2 pro</p>
   <div class="cols">
     <div><h4>Strengths</h4><ul><li>V2 default. Multi-ref (~$0.03 first MP).</li><li>Strong furniture/sky/staging swaps.</li><li>Up to 4 refs.</li></ul></div>
-    <div><h4>Watch-outs</h4><ul><li>Not region-boxed (use Seedream 5 Pro edit).</li><li>Type/signage: Qwen.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>For boxed edits, pick Seedream 5 Pro and Add Mask on I2I.</li><li>Type/signage: Qwen.</li></ul></div>
     <div><h4>Use for</h4><ul><li>Virtual staging</li><li>Sky / lawn cleanup</li><li>Product on a plate</li></ul></div>
   </div>
 </article>
@@ -349,15 +349,15 @@
     <div><h4>Use for</h4><ul><li>Volume edits</li><li>Explore then promote to Pro</li></ul></div>
   </div>
 </article>
-<article class="card" data-name="seedream 5 pro (region) best for boxed / grounded edits studio:region:seedream 5 pro" data-section="i2i">
+<article class="card" data-name="seedream 5 pro (region) best for boxed / grounded edits studio:img:seedream 5 pro" data-section="i2i">
   <header>
     <div>
-      <h3>Seedream 5 Pro (region)</h3>
+      <h3>Seedream 5 Pro (edit)</h3>
       <p class="tagline">Best for boxed / grounded edits</p>
     </div>
     <div class="meta"><em class="mod">REGION</em> <em class="mod">I2I</em></div>
   </header>
-  <p class="id">studio:region:seedream 5 pro</p>
+  <p class="id">studio:img:seedream 5 pro</p>
   <div class="cols">
     <div><h4>Strengths</h4><ul><li>Region-precise (colored box / layer).</li><li>Up to 10 refs on the family.</li><li>Listing-safe local changes.</li></ul></div>
     <div><h4>Watch-outs</h4><ul><li>Heavier than a Flux Pro dab.</li><li>Whole-frame restyles may prefer Flux / Banana.</li></ul></div>
@@ -465,7 +465,7 @@
   <p class="id">studio:img:flux 2 pro</p>
   <div class="cols">
     <div><h4>Strengths</h4><ul><li>V2 default. Multi-ref (~$0.03 first MP).</li><li>Strong furniture/sky/staging swaps.</li><li>Up to 4 refs.</li></ul></div>
-    <div><h4>Watch-outs</h4><ul><li>Not region-boxed (use Seedream 5 Pro edit).</li><li>Type/signage: Qwen.</li></ul></div>
+    <div><h4>Watch-outs</h4><ul><li>For boxed edits, pick Seedream 5 Pro and Add Mask on I2I.</li><li>Type/signage: Qwen.</li></ul></div>
     <div><h4>Use for</h4><ul><li>Virtual staging</li><li>Sky / lawn cleanup</li><li>Product on a plate</li></ul></div>
   </div>
 </article>
@@ -587,21 +587,6 @@
     <div><h4>Strengths</h4><ul><li>~$0.022/image. Up to 3 sources.</li></ul></div>
     <div><h4>Watch-outs</h4><ul><li>Weaker text/detail than Quality / 2.0.</li></ul></div>
     <div><h4>Use for</h4><ul><li>Low-stakes tweaks</li></ul></div>
-  </div>
-</article></section><section id="region"><div class="sec-head"><h2>Region edit</h2><p>Grounded, boxed, or layer edits instead of a whole-frame rewrite.</p></div>
-<article class="card" data-name="seedream 5 pro (region) best for boxed / grounded edits studio:region:seedream 5 pro" data-section="region">
-  <header>
-    <div>
-      <h3>Seedream 5 Pro (region)</h3>
-      <p class="tagline">Best for boxed / grounded edits</p>
-    </div>
-    <div class="meta"><em class="mod">REGION</em> <em class="mod">I2I</em></div>
-  </header>
-  <p class="id">studio:region:seedream 5 pro</p>
-  <div class="cols">
-    <div><h4>Strengths</h4><ul><li>Region-precise (colored box / layer).</li><li>Up to 10 refs on the family.</li><li>Listing-safe local changes.</li></ul></div>
-    <div><h4>Watch-outs</h4><ul><li>Heavier than a Flux Pro dab.</li><li>Whole-frame restyles may prefer Flux / Banana.</li></ul></div>
-    <div><h4>Use for</h4><ul><li>Replace a sofa</li><li>Fix a sky in-frame</li><li>Signage in a photo</li></ul></div>
   </div>
 </article></section><section id="t2v"><div class="sec-head"><h2>Text → Video</h2><p>Prompt to a clip. Native audio on most flagship models.</p></div>
 <article class="card" data-name="flux 3 best all-round t2v with draft→enhance vision:flux 3 t2v" data-section="t2v">

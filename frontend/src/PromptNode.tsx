@@ -40,7 +40,11 @@ import {
   hasLibraryPayload,
   inputPlan,
   maxRefImages,
+  MASK_BOX_COLOR_NAMES,
+  MASK_BOX_COLORS,
   modelSupportsMask,
+  modelUsesRegionBoxes,
+  modelUsesSpatialMask,
   parseLibraryPayload,
   resolutionOptions,
   type FramePin,
@@ -68,7 +72,6 @@ const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
     { id: "t2i", label: "T2I" },
     { id: "i2i", label: "I2I" },
     { id: "r2i", label: "R2I" },
-    { id: "region", label: "Region" },
   ],
   video: [
     { id: "t2v", label: "T2V" },
@@ -191,12 +194,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const filledRefs = countFilledRefs(data.source, characters, scenes);
   const onDuration = useCallback((s: number) => setClipDuration(s), []);
   const supportsMask = modelSupportsMask(selectedModel);
+  const usesRegionBoxes = modelUsesRegionBoxes(selectedModel);
+  const usesSpatial = modelUsesSpatialMask(selectedModel);
   const maskBlocked =
-    supportsMask && filledRefs > 1 && modality !== "region";
+    supportsMask && !usesRegionBoxes && filledRefs > 1;
   const showMaskUi =
-    modality === "region" ||
-    (supportsMask && modality === "i2i") ||
-    (supportsMask && modality === "r2i" && filledRefs === 1);
+    usesSpatial &&
+    (modality === "i2i" ||
+      (modality === "r2i" && (usesRegionBoxes || filledRefs === 1)));
   const maskEnabled = showMaskUi && !maskBlocked;
   const maskNote = maskBlocked ? "Mask is single-ref only on this model" : "";
 
@@ -293,6 +298,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     setPins([]);
     setClipDuration(0);
   }, [mode, isLocked, setPins]);
+
+  useEffect(() => {
+    if (modality !== "region") return;
+    setModality("i2i");
+    data.onModalityChange?.(mode, "i2i", null);
+  }, [modality, mode, data.onModalityChange]);
 
   useEffect(() => {
     if (!incomingToken) return;
@@ -497,7 +508,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       const sbMod = isStoryboard ? storyboardKlingModality(selectedModel) : modality;
       let sendMask: LibraryItem | null = null;
       let maskSuffix = "";
-      if (maskEnabled && data.rasterizeMask) {
+      const maskBoxes = maskEnabled ? data.getMaskBoxes?.() ?? [] : [];
+      const seedreamBoxes =
+        maskEnabled && usesRegionBoxes && maskBoxes.length ? maskBoxes : [];
+      if (seedreamBoxes.length) {
+        maskSuffix = seedreamBoxes
+          .map((b, i) => {
+            const label = b.label.trim();
+            if (!label) return "";
+            const color = MASK_BOX_COLOR_NAMES[i % MASK_BOX_COLOR_NAMES.length];
+            return `In the ${color.toUpperCase()} box only: ${label.replace(/\.$/, "")}.`;
+          })
+          .filter(Boolean)
+          .join(" ");
+      } else if (maskEnabled && supportsMask && data.rasterizeMask) {
         try {
           const out = await data.rasterizeMask();
           sendMask = out.item;
@@ -570,6 +594,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
+      if (seedreamBoxes.length) {
+        extra.mode = "region_edit";
+        extra.boxes = seedreamBoxes.map((b, i) => ({
+          id: b.id,
+          left: b.x,
+          top: b.y,
+          width: b.w,
+          height: b.h,
+          prompt: b.label,
+          color_name: MASK_BOX_COLOR_NAMES[i % MASK_BOX_COLOR_NAMES.length],
+          color_hex: MASK_BOX_COLORS[i % MASK_BOX_COLORS.length],
+        }));
+        console.info("[generate] seedream boxes", seedreamBoxes.length);
+      }
       const trayEls =
         showElements && elements.length
           ? serializeElements(elements)
@@ -1176,6 +1214,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               {data.hasMaskNode ? "Mask" : "Add Mask"}
             </button>
           ) : null}
+          {showMaskUi && data.maskReady ? (
+            <span className="hint">Mask attached</span>
+          ) : null}
           <button
             type="button"
             className="generate nodrag"
@@ -1260,31 +1301,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             )}
           </div>
         ) : null}
-        {showMaskUi ? (
-          <div className="source-row">
-            <button
-              type="button"
-              className="ghost nodrag"
-              disabled={!maskEnabled}
-              title={
-                maskEnabled
-                  ? "Draw boxes or paint a mask. White = edit, black = keep."
-                  : maskNote
-              }
-              onClick={() => {
-                if (!maskEnabled) return;
-                if (!data.onAddMask) {
-                  toast("Add Mask is not wired.", true);
-                  return;
-                }
-                data.onAddMask();
-              }}
-            >
-              {data.hasMaskNode ? "Mask" : "Add Mask"}
-            </button>
-            {maskNote ? <p className="hint">{maskNote}</p> : null}
-          </div>
-        ) : null}
+        {showMaskUi && maskNote ? <p className="hint">{maskNote}</p> : null}
 
         {!isFrame && (plan.first || plan.last) ? (
           <div className="source-row">

@@ -411,6 +411,70 @@ REGION_MODEL_KEYS: tuple[str, ...] = ("seedream 5 pro",)
 REGION_MODEL_LABELS: tuple[str, ...] = (REGION_DEFAULT_MODEL,)
 
 
+def boxes_from_payload(raw: Any) -> list[RegionBox]:
+    if not isinstance(raw, list):
+        return []
+    out: list[RegionBox] = []
+    for i, item in enumerate(raw):
+        if not isinstance(item, dict):
+            continue
+        color_name = str(item.get("color_name") or item.get("color") or "")
+        color_hex = str(item.get("color_hex") or "")
+        if not color_name or not color_hex:
+            name, hex_c = REGION_COLORS[i % len(REGION_COLORS)]
+            color_name = color_name or name
+            color_hex = color_hex or hex_c
+        try:
+            left = float(item.get("left", item.get("x", 0.0)))
+            top = float(item.get("top", item.get("y", 0.0)))
+            width = float(item.get("width", item.get("w", 0.0)))
+            height = float(item.get("height", item.get("h", 0.0)))
+        except (TypeError, ValueError):
+            continue
+        if width <= 0.005 or height <= 0.005:
+            continue
+        box = RegionBox(
+            id=str(item.get("id") or f"box_{i}_{color_name}"),
+            color_name=color_name,
+            color_hex=color_hex,
+            prompt=str(item.get("prompt") or item.get("label") or ""),
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+        )
+        box.clamp()
+        out.append(box)
+    return out
+
+
+def apply_region_boxes_to_edit(
+    *,
+    prompt: str,
+    image_paths: list[Path],
+    boxes_raw: Any,
+) -> tuple[str, list[Path], str | None]:
+    """
+    Seedream-style: paint colored boxes onto the primary still and
+    color-key the prompt. Returns (prompt, paths, note).
+    """
+    boxes = boxes_from_payload(boxes_raw)
+    if not boxes or not image_paths:
+        return prompt, image_paths, None
+    src = image_paths[0]
+    if not src.is_file():
+        return prompt, image_paths, None
+    dest = src.with_name(f"{src.stem}__region_overlay.png")
+    draw_region_overlay(src, boxes, dest)
+    keyed = build_region_prompt(boxes)
+    new_prompt = (prompt or "").strip()
+    if keyed and keyed not in new_prompt:
+        new_prompt = f"{new_prompt}\n\n{keyed}".strip() if new_prompt else keyed
+    note = f"Seedream region overlay ({len(boxes)} box(es)) → {dest.name}"
+    print(f"[generate] {note}", flush=True)
+    return new_prompt, [dest, *image_paths[1:]], note
+
+
 def enhance_region_user_payload(
     boxes: list[RegionBox],
     *,

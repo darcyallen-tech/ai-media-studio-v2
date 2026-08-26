@@ -47,6 +47,7 @@ export type ModelRow = {
   };
   requires_runware?: boolean;
   supports_mask?: boolean;
+  supports_region_boxes?: boolean;
 };
 
 export type GenerateResponse = {
@@ -204,6 +205,8 @@ export type PromptNodeData = {
   hasMaskNode?: boolean;
   rasterizeMask?: () => Promise<MaskRasterResult>;
   getMaskSuffix?: () => string;
+  getMaskBoxes?: () => MaskBox[];
+  maskReady?: boolean;
 };
 
 export type MaskRasterResult = {
@@ -214,6 +217,8 @@ export type MaskRasterResult = {
 export type MaskApi = {
   rasterize: () => Promise<MaskRasterResult>;
   suffix: () => string;
+  boxes: () => MaskBox[];
+  hasContent: () => boolean;
 };
 
 export type MaskBox = {
@@ -231,6 +236,7 @@ export type MaskNodeData = {
   disabledNote?: string;
   onClose?: () => void;
   onRegister?: (api: MaskApi | null) => void;
+  onContent?: (has: boolean) => void;
 };
 
 export type PromptBuilderNodeData = {
@@ -674,7 +680,7 @@ export function inputPlan(
     };
   }
   if (modality === "region") {
-    return { source: "image", mask: true, maskOptional: true };
+    return { source: "image" };
   }
   if (modality === "r2i" || modality === "r2v") {
     const mask = modality === "r2i" && modelSupportsMask(model);
@@ -700,6 +706,40 @@ export function modelSupportsMask(model?: ModelRow | null): boolean {
   const key = (model.id || "").toLowerCase();
   return ep.includes("fibo-edit") || key.includes("fibo edit");
 }
+
+export function modelUsesRegionBoxes(model?: ModelRow | null): boolean {
+  if (!model) return false;
+  if (model.supports_region_boxes === true) return true;
+  const ep = (model.endpoint || "").toLowerCase();
+  const key = `${model.id || ""} ${model.label || ""}`.toLowerCase();
+  return ep.includes("seedream") && ep.includes("/edit") || key.includes("seedream 5 pro (edit)") || key.includes("seedream 5 pro · r2i");
+}
+
+export function modelUsesSpatialMask(model?: ModelRow | null): boolean {
+  return modelSupportsMask(model) || modelUsesRegionBoxes(model);
+}
+
+export const MASK_BOX_COLORS = [
+  "#E53935",
+  "#1E88E5",
+  "#43A047",
+  "#FDD835",
+  "#8E24AA",
+  "#FB8C00",
+  "#6fdc12",
+  "#abb2bf",
+] as const;
+
+export const MASK_BOX_COLOR_NAMES = [
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "purple",
+  "orange",
+  "lime",
+  "gray",
+] as const;
 
 export function maxRefImages(
   model?: ModelRow | null,

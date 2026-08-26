@@ -3,27 +3,19 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
 import { toast } from "./toast";
-import type {
-  LibraryItem,
-  MaskApi,
-  MaskBox,
-  MaskNodeData,
-  MaskRasterResult,
+import {
+  MASK_BOX_COLORS,
+  type LibraryItem,
+  type MaskApi,
+  type MaskBox,
+  type MaskNodeData,
+  type MaskRasterResult,
 } from "./types";
 
 export type MaskFlowNode = Node<MaskNodeData, "mask">;
 
 const MAX_BOXES = 8;
-const BOX_COLORS = [
-  "#6fdc12",
-  "#3b7ed4",
-  "#e8b84a",
-  "#e06c75",
-  "#c678dd",
-  "#56b6c2",
-  "#d19a66",
-  "#abb2bf",
-];
+const BOX_COLORS = MASK_BOX_COLORS;
 const MASK_HINT =
   "White = edit, black = keep. Mask must be the same pixel size as the source still.";
 
@@ -204,6 +196,24 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
     }
   }, [nat]);
 
+  const brushHasPaint = useCallback(() => {
+    const c = brushRef.current;
+    const ctx = c?.getContext("2d");
+    if (!c || !ctx || !c.width || !c.height) return false;
+    const data = ctx.getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > 8) return true;
+    }
+    return false;
+  }, []);
+
+  const hasContent = useCallback(
+    () => boxesRef.current.length > 0 || brushHasPaint(),
+    [brushHasPaint],
+  );
+
+  const boxesFn = useCallback(() => boxesRef.current, []);
+
   const rasterize = useCallback(async (): Promise<MaskRasterResult> => {
     const still = sourceRef.current;
     const url = stillSrc(still);
@@ -242,10 +252,19 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
   const suffixFn = useCallback(() => labelSuffix(boxesRef.current), []);
 
   useEffect(() => {
-    const api: MaskApi = { rasterize, suffix: suffixFn };
+    const api: MaskApi = {
+      rasterize,
+      suffix: suffixFn,
+      boxes: boxesFn,
+      hasContent,
+    };
     data.onRegister?.(api);
     return () => data.onRegister?.(null);
-  }, [data.onRegister, rasterize, suffixFn]);
+  }, [data.onRegister, rasterize, suffixFn, boxesFn, hasContent]);
+
+  useEffect(() => {
+    data.onContent?.(boxes.length > 0 || brushHasPaint());
+  }, [boxes, data.onContent, brushHasPaint]);
 
   function paintBrush(x: number, y: number, last?: { x: number; y: number }) {
     const c = brushRef.current;
@@ -306,6 +325,7 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
       }
       dragRef.current = { kind: "brush", lastX: p.x, lastY: p.y };
       paintBrush(p.x, p.y);
+      data.onContent?.(true);
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
@@ -398,6 +418,7 @@ export default function MaskNode({ data }: NodeProps<MaskFlowNode>) {
     const c = brushRef.current;
     const ctx = c?.getContext("2d");
     if (c && ctx) ctx.clearRect(0, 0, c.width, c.height);
+    data.onContent?.(false);
   }
 
   function undoStroke() {

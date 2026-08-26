@@ -302,7 +302,7 @@
             "Up to 4 refs."
           ],
           "weaknesses": [
-            "Not region-boxed (use Seedream 5 Pro edit).",
+            "For boxed edits, pick Seedream 5 Pro and Add Mask on I2I.",
             "Type/signage: Qwen."
           ],
           "use_cases": [
@@ -460,15 +460,15 @@
           ]
         },
         {
-          "id": "studio:region:seedream 5 pro",
-          "label": "Seedream 5 Pro (region)",
+          "id": "studio:img:seedream 5 pro",
+          "label": "Seedream 5 Pro (edit)",
           "modalities": [
-            "region",
-            "i2i"
+            "i2i",
+            "r2i"
           ],
-          "tagline": "Best for boxed / grounded edits",
+          "tagline": "Boxed / grounded edits via Add Mask on I2I",
           "strengths": [
-            "Region-precise (colored box / layer).",
+            "Draw boxes on Add Mask (I2I).",
             "Up to 10 refs on the family.",
             "Listing-safe local changes."
           ],
@@ -617,7 +617,7 @@
             "Up to 4 refs."
           ],
           "weaknesses": [
-            "Not region-boxed (use Seedream 5 Pro edit).",
+            "For boxed edits, pick Seedream 5 Pro and Add Mask on I2I.",
             "Type/signage: Qwen."
           ],
           "use_cases": [
@@ -784,36 +784,6 @@
           ],
           "use_cases": [
             "Low-stakes tweaks"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "region",
-      "label": "Region edit",
-      "blurb": "Grounded, boxed, or layer edits instead of a whole-frame rewrite.",
-      "models": [
-        {
-          "id": "studio:region:seedream 5 pro",
-          "label": "Seedream 5 Pro (region)",
-          "modalities": [
-            "region",
-            "i2i"
-          ],
-          "tagline": "Best for boxed / grounded edits",
-          "strengths": [
-            "Region-precise (colored box / layer).",
-            "Up to 10 refs on the family.",
-            "Listing-safe local changes."
-          ],
-          "weaknesses": [
-            "Heavier than a Flux Pro dab.",
-            "Whole-frame restyles may prefer Flux / Banana."
-          ],
-          "use_cases": [
-            "Replace a sofa",
-            "Fix a sky in-frame",
-            "Signage in a photo"
           ]
         }
       ]
@@ -2504,7 +2474,7 @@
         "Up to 4 refs."
       ],
       "weaknesses": [
-        "Not region-boxed (use Seedream 5 Pro edit).",
+        "For boxed edits, pick Seedream 5 Pro and Add Mask on I2I.",
         "Type/signage: Qwen."
       ],
       "use_cases": [

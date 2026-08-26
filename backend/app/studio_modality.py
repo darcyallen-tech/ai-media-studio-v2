@@ -1,7 +1,7 @@
 """
 Studio Image / Video modality sub-tabs and model filtering.
 
-Image: I2I | T2I | R2I | Region
+Image: I2I | T2I | R2I
 Video: I2V | T2V | V2V | R2V
 """
 
@@ -25,7 +25,6 @@ IMAGE_MODALITY_PILLS: list[tuple[str, str]] = [
     ("i2i", "I2I"),
     ("t2i", "T2I"),
     ("r2i", "R2I"),
-    ("region", "Region"),
 ]
 VIDEO_MODALITY_PILLS: list[tuple[str, str]] = [
     ("i2v", "I2V"),
@@ -42,7 +41,6 @@ _DEFAULTS: dict[str, str] = {
     "i2i": DEFAULT_IMAGE_MODEL,
     "t2i": "Flux 2 Pro (T2I)",
     "r2i": DEFAULT_IMAGE_MODEL,
-    "region": "Image · Seedream 5 Pro (edit)",
     "i2v": "Video · Kling O3 Standard – Image-to-Video",
     "t2v": "Veo 3.1 Fast",
     "v2v": DEFAULT_VIDEO_EDIT_MODEL,

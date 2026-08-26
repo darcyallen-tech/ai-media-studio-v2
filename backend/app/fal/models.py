@@ -258,6 +258,8 @@ class ImageEditModelSpec:
     hidden: bool = False
     # Optional mask_url / mask on the fal edit schema (single-ref unless noted).
     supports_mask: bool = False
+    # Colored annotation boxes on the source still (Seedream-style).
+    supports_region_boxes: bool = False
 
     def clamp_num_images(self, n: int | None) -> int:
         if n is None or n < 1:
@@ -727,6 +729,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Est. ~$0.0675/image @≤1536."
         ),
         extra_defaults={"num_images": 1, "enable_safety_checker": True},
+        supports_region_boxes=True,
     ),
     # Extra practical options (still curated)
     "flux 2 flex": ImageEditModelSpec(
