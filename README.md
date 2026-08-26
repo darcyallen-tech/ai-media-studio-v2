@@ -2,7 +2,7 @@
 
 A free desktop app for stills, video, audio, and a clip Frame Editor. You work on a node canvas, pick a model, and generate. You bring your own API keys (fal for almost everything; optional xAI for prompt enhance; optional Runware for Frame Editor / Aleph). You pay those providers for usage. This app does not sell credits.
 
-Version **2.0.0-rc2**.
+Version **2.0.0-rc3**.
 
 **Windows** has a Release zip with an `.exe`. **macOS and Linux** run from source (no packaged binary yet).
 
@@ -10,15 +10,17 @@ Version **2.0.0-rc2**.
 
 Video catalog includes **Alibaba Wan 3.0** on fal (T2V / I2V / R2V): up to 30s at 1080p, native audio, up to 10 reference stills on R2V.
 
-Image catalog includes **Bria Fibo Gen 1.5** (T2I) and **Fibo Edit 1.5** (I2I/R2I, up to 4 refs) plus Fibo Edit v1 — licensed data, commercial OK. Region edits use the **Mask node** (boxes + brush) on I2I, not a Region tab.
+Image catalog includes **Bria Fibo Gen 1.5** (T2I) and **Fibo Edit 1.5** (I2I/R2I, up to 4 refs) plus Fibo Edit v1 — licensed data, commercial OK. Fibo Edit 1.5 is a strong default for staging; Flux 2 Pro / Nano Banana Pro remain in the list. Region edits use the **Mask node** (boxes + brush) on I2I, not a Region tab.
 
 ---
 
 ## Windows (Release zip)
 
-Current package: **`AIMediaStudioV2-2.0.0-rc2-windows.zip`** (GitHub Releases). Includes Wan 3.0 (T2V / I2V / R2V) and Fibo Gen 1.5 (T2I) / Fibo Edit (I2I).
+Current package: **`AIMediaStudioV2-2.0.0-rc3-windows.zip`** (GitHub Releases). Includes Compare Source, the Mask node, Fibo Edit 1.5, Wan 3.0 (T2V / I2V / R2V), and Fibo Gen 1.5.
 
-1. Download the Release zip for this repo (GitHub Releases). Unzip it.
+The older **2.0.0-rc2** GitHub asset is stale. It does **not** include Compare Source or the Mask node. Do not download `AIMediaStudioV2-2.0.0-rc2-windows.zip` if you want those.
+
+1. Download the **2.0.0-rc3** Windows zip for this repo (GitHub Releases). Unzip it.
 2. Run `AIMediaStudioV2.exe` or `AMS_V2.bat`. Keep the `_internal` folder next to the exe.
 3. Open **Settings**, paste your keys, **Save keys**.
 
@@ -94,4 +96,3 @@ Packaged Windows app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.
 [MIT](LICENSE). Free to use. No warranty. You are responsible for API bills, keys, and what you generate.
 
 Built with [Grok](https://grok.com).
-

@@ -59,19 +59,23 @@ The still appears on a Result node and in **Library**. Disk path:
 
 Settings → paths can open the outputs folder.
 
+T2I Results show **Compare Source** next to Upscale, but the button is disabled (“No source image on this job.”).
+
 ---
 
 ## 4. Edit a still (I2I)
 
-1. Stay on **Image**. Pick an **edit** model (default is Flux 2 Pro edit).
+1. Stay on **Image**. For listing furniture / staging, pick **Fibo Edit 1.5** (I2I/R2I, up to 4 refs, ~$0.04). Flux 2 Pro / Nano Banana Pro remain in the list for other looks.
 2. Put a still on **Source**:
    - drag from **Library**, or
    - import a file into Library (image/video/audio picker), then drag it on.
 3. Prompt what should change. Generate.
 
-Need extra refs (a logo, a material)? Use an R2I model and drop extra stills on the ref slots.
+Need extra refs (a sofa look, a logo, a material)? Fibo Edit 1.5 takes up to 4 images: Image 1 is the source; 2–4 are refs. Cite `<image_1>` / `<image_2>` in the instruction.
 
-For a boxed / painted local edit, pick **Fibo Edit** or **Seedream 5 Pro (edit)** and click **Add Mask** on the Prompt node. Draw boxes or paint on the MASK node — there is no Region tab.
+Optional **Add Mask** (Fibo Edit 1.5 / Fibo Edit v1) when you have exactly one source still. Click **Add Mask** on the Prompt node. Draw boxes or paint on the MASK node — white = edit, black = keep, same pixel size as the source. Extra refs on Fibo 1.5 disable mask. There is no Image Region tab; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
+
+After generate, **Compare Source** on the still Result opens a COMPARE node (source under result, opacity, overlay toggle, swap).
 
 ---
 
@@ -156,6 +160,7 @@ Library row or Result node → **Send to Resolve**. Needs Resolve running with i
 | Est. cost is a dash | Wrong model id or the helper could not price it. Switch model or check Settings keys. |
 | Still/clip not on disk where you looked | Packaged app writes `%LOCALAPPDATA%\AI Media Studio V2\outputs\`, not the unzip folder. |
 | From Resolve is empty | Set Resolve inbox in Settings, then Refresh. |
+| Compare Source is greyed out | T2I jobs have no source still. I2I/R2I Results enable it when the job had a source. |
 
 Nothing in this app phones home except the APIs behind the keys you pasted.
 

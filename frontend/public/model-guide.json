@@ -1,7 +1,7 @@
 {
   "title": "AI Media Studio V2 · Model Guide",
   "version": "1.0",
-  "updated": "2026-08-23",
+  "updated": "2026-08-26",
   "app": "AI Media Studio V2",
   "note": "Catalog ids match GET /models. Drop this JSON next to the frontend or fetch it from /model-guide.json. Taglines are routing hints, not Fal marketing.",
   "sections": [
@@ -318,14 +318,14 @@
             "i2i",
             "r2i"
           ],
-          "tagline": "Best multi-ref try-on / object combo (licensed)",
+          "tagline": "Strong default for staging / furniture pop-in (licensed)",
           "strengths": [
             "1–4 images: Image 1 is the source; 2–4 are refs.",
             "Cite <image_1> <image_2> in the instruction.",
             "Licensed data, commercial OK. ~$0.04/image."
           ],
           "weaknesses": [
-            "Furniture pop-in is a test case — Flux 2 Pro / Nano Banana Pro stay primary for locked architecture.",
+            "Strong furniture pop-in in testing. Flux 2 Pro / Nano Banana Pro remain in the list.",
             "Mask only on single-image edits."
           ],
           "use_cases": [
@@ -348,7 +348,7 @@
           ],
           "weaknesses": [
             "Single image only — use Fibo Edit 1.5 for refs.",
-            "No region box — mask still or prompt only."
+            "Use the Mask node (boxes + brush) or prompt only."
           ],
           "use_cases": [
             "Swap a sofa",

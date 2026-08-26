@@ -1,10 +1,10 @@
 # AI Media Studio V2 — Features
 
-**Version:** 2.0.0-rc2 (Windows)
+**Version:** 2.0.0-rc3 (Windows)
 
 Free desktop app. You bring your own API keys. You pay the providers for what you generate — not a subscription to this app.
 
-Catalog below is from the live app (`GET /models`, `GET /tools`) on 23 Aug 2026. Names match the in-app dropdowns.
+Catalog below is from the live app (`GET /models`, `GET /tools`) on 26 Aug 2026. Names match the in-app dropdowns.
 
 ---
 
@@ -26,15 +26,19 @@ Without a fal key, Create and Tools stay blocked. Without Runware, Frame Editor 
 
 ---
 
+## Compare + Mask
+
+**Compare Source** on still Results opens a COMPARE node: source under the result, opacity, overlay toggle, swap. Enabled when the generate job had a source still. On T2I the button is visible but disabled (“No source image on this job.”).
+
+**Mask node.** On I2I (and R2I with exactly one image), **Add Mask** appears when the model supports it (Fibo Edit 1.5 / Fibo Edit v1). Boxes + brush. White = edit, black = keep. Same pixel size as the source. Extra refs on Fibo 1.5 disable mask. The Image Region subtab is gone; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
+
+---
+
 ## Create
 
 Each mode is a Prompt node plus slots (source still, last frame, refs, elements). Duration, aspect, resolution, and native audio on/off appear when the model supports them. Advanced (when shown): seed, negative prompt, image count, FLUX 3 draft.
 
 Cost is estimated before you generate.
-
-Compare Source overlay on Result.
-
-Region tab removed; box/brush Mask node is the region tool.
 
 ### Image
 
@@ -44,7 +48,7 @@ Region tab removed; box/brush Mask node is the region tool.
 | **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine Edit / Quality Edit / 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro (boxed edits via **Add Mask**), **Fibo Edit 1.5** (multi-ref, optional mask on single-ref), Fibo Edit v1 (optional mask) |
 | **R2I** | Edit from extra reference stills | Flux 2 Pro / Max / Flex, Nano Banana Pro / 2, Grok Imagine Edit / Quality / 2.0, Qwen Image 3, Seedream 5 Pro R2I, **Fibo Edit 1.5** (up to 4 images, `<image_1>`… tags) |
 
-Default image model: Flux 2 Pro (edit).
+Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, **Fibo Edit 1.5** is a strong default. Flux 2 Pro / Nano Banana Pro remain in the list.
 
 ### Video
 
@@ -176,4 +180,4 @@ Estimates are helpers, not invoices. Provider dashboards are the source of truth
 - Not a hosted SaaS. No included credits.
 - Not a second catalog on Runware (Aleph / Frame only).
 - Not an After Effects or Resolve plugin. Resolve is a handoff, not a host.
-- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc2**.
+- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc3**.
