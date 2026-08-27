@@ -1211,7 +1211,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 data.onAddMask();
               }}
             >
-              {data.hasMaskNode ? "Mask" : "Add Mask"}
+              Add Mask
             </button>
           ) : null}
           {showMaskUi && data.maskReady ? (

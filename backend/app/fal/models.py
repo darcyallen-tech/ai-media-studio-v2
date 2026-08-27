@@ -957,8 +957,8 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Image 1 is the source to edit; 2–4 are optional refs "
             "(furniture, costume, object, style). Cite <image_1> <image_2> in the "
             "instruction. Optional mask on single-image edits. ~$0.04/image. "
-            "Licensed data, commercial OK. Flux 2 Pro / Nano Banana Pro stay "
-            "primary for locked architecture."
+            "Licensed data, commercial OK. Strong for staging / furniture pop-in. "
+            "Flux 2 Pro and Nano Banana Pro remain available."
         ),
     ),
     "fibo edit": ImageEditModelSpec(
@@ -2091,8 +2091,6 @@ _ALIASES: dict[str, str] = {
     "wan 3.0 image-to-video": "wan 3.0 i2v",
     "video · wan 3.0 – image-to-video": "wan 3.0 i2v",
     "alibaba/wan-3.0/image-to-video": "wan 3.0 i2v",
-    "wan 3.0 t2v": "wan 3.0 i2v",
-    "alibaba/wan-3.0/text-to-video": "wan 3.0 i2v",
     "wan 3.0 reference": "wan 3.0 reference",
     "wan 3.0 r2v": "wan 3.0 reference",
     "wan 3.0 reference-to-video": "wan 3.0 reference",

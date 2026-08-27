@@ -487,6 +487,7 @@ function StudioCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const maskApiRef = useRef<MaskApi | null>(null);
+  const toolCompareSourceRef = useRef<Record<string, LibraryItem | null>>({});
   const registerMaskApi = useCallback((api: MaskApi | null) => {
     maskApiRef.current = api;
   }, []);
@@ -960,6 +961,13 @@ function StudioCanvas() {
       const resultId = `result-${Date.now().toString(36)}`;
       setNodes((current) => {
         const parent = current.find((n) => n.id === fromId);
+        let compareSource: LibraryItem | null = null;
+        if (parent?.type === "result") {
+          compareSource = stillItem(parent.data.compareSource);
+        }
+        if (!compareSource) {
+          compareSource = stillItem(toolCompareSourceRef.current[fromId]);
+        }
         const node: StudioNode = {
           id: resultId,
           type: "result",
@@ -970,10 +978,14 @@ function StudioCanvas() {
           dragHandle: ".node-header",
           data: {
             result,
+            compareSource,
             onClose: () => closeNode(resultId),
             onTool: () => undefined,
           },
         };
+        if (compareSource) {
+          toolCompareSourceRef.current[resultId] = compareSource;
+        }
         return [...current, node];
       });
       setEdges((current) =>
@@ -1013,6 +1025,14 @@ function StudioCanvas() {
       setToolSources((cur) => ({ ...cur, [id]: item }));
       setNodes((current) => {
         const parent = current.find((n) => n.id === parentId);
+        let cs: LibraryItem | null = null;
+        if (parent?.type === "result") {
+          cs = stillItem(parent.data.compareSource);
+        }
+        if (!cs) {
+          cs = stillItem(toolCompareSourceRef.current[parentId]);
+        }
+        if (cs) toolCompareSourceRef.current[id] = cs;
         const node: StudioNode = {
           id,
           type: kind,

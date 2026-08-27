@@ -880,8 +880,8 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
             "Bria Fibo Edit 1.5 — multi-ref (source + up to 3 refs). "
             "Cite <image_1> (source) and <image_2>… in the instruction. "
             "Try-on / object combo / bg swap; furniture pop-in is a test case. "
-            "~$0.04/image. Licensed, commercial OK. Flux 2 Pro / Nano Banana Pro "
-            "stay primary for locked architecture."
+            "~$0.04/image. Licensed, commercial OK. Strong for staging / furniture pop-in. "
+            "Flux 2 Pro and Nano Banana Pro remain available."
         ),
         duration_choices=(),
         default_duration="",

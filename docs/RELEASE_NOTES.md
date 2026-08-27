@@ -8,8 +8,8 @@ Mac/Linux have no exe — run from source (see README). The older **2.0.0-rc2** 
 
 **Catalog / canvas**
 - **Fibo Edit 1.5** (`bria/fibo-edit-1.5/edit`) — I2I/R2I, up to 4 refs, ~$0.04, licensed. Strong furniture pop-in in testing. A strong default for staging; Flux 2 Pro / Nano Banana Pro remain in the list. Optional mask only with a single source still. Extra refs disable mask.
-- **Compare Source** on still Results — opens a COMPARE node (source under result, opacity, overlay toggle, swap). Enabled when the job had a source still. T2I: button visible, disabled, “No source image on this job.”
-- **Mask node** — Add Mask on I2I (and R2I with exactly 1 image) when the model supports_mask (Fibo Edit 1.5 / Fibo Edit v1). Boxes + brush. White = edit, black = keep. Same pixel size as source.
+- **Compare Source** on still Results — opens a COMPARE node (source under result, opacity, overlay toggle, swap). Enabled when the job had a source still. T2I: button visible, disabled, “No source image on this job.” Tool results (Upscale / Restore / Deblur) inherit the original job’s source still.
+- **Mask node** — one **Add Mask** button on Prompt; **Mask attached** chip when a mask exists. I2I (and R2I with exactly 1 image) when the model supports_mask (Fibo Edit 1.5 / Fibo Edit v1) or Seedream boxes. Boxes + brush. White = edit, black = keep. Same pixel size as source.
 - Image Region subtab removed. Region editing is the Mask node only. Drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
 
 ## 2.0.0-rc2 (Windows)
