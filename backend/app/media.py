@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 from pathlib import Path
 from typing import Any, Callable
@@ -12,10 +13,19 @@ from PIL import Image
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 # Muse edit (and similar) reject transparent stills — flatten these to JPEG.
-_FLATTEN_TO_JPEG_EXTS = {".png", ".webp"}
+_FLATTEN_TO_JPEG_EXTS = {".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 _BG_COLORS: dict[str, tuple[int, int, int]] = {
     "white": (255, 255, 255),
     "black": (0, 0, 0),
+}
+# Partner-fetch fallback: data URIs for stills under ~4MB (file bytes, not base64).
+DATA_URI_MAX_BYTES = 4 * 1024 * 1024
+_DATA_URI_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
 }
 
 ProgressCallback = Callable[[str], None]
@@ -54,15 +64,18 @@ def flatten_still_to_jpeg(
     background: str = "white",
     on_progress: ProgressCallback | None = None,
     timeout_s: float = 15.0,
+    force: bool = False,
 ) -> Path:
     """
     Optional JPEG flatten (PNG / WebP / alpha → white JPEG).
 
-    Backend-only. 15s timeout — never a required Muse generate step.
-    Original is never mutated. On timeout or error, returns the original path.
+    Backend-only. 15s timeout (the cancel). Original is never mutated.
+    On timeout or error, returns the original path.
     """
     src = Path(path)
     if not src.is_file():
+        return src
+    if src.suffix.lower() in {".jpg", ".jpeg"}:
         return src
 
     bg = _BG_COLORS.get((background or "white").strip().lower(), (255, 255, 255))
@@ -77,7 +90,11 @@ def flatten_still_to_jpeg(
             except Exception:
                 pass
             ext = src.suffix.lower()
-            if ext not in _FLATTEN_TO_JPEG_EXTS and not image_has_alpha(im):
+            if (
+                not force
+                and ext not in _FLATTEN_TO_JPEG_EXTS
+                and not image_has_alpha(im)
+            ):
                 return src
 
             if image_has_alpha(im):
@@ -136,6 +153,66 @@ def flatten_still_to_jpeg(
         if on_progress:
             on_progress(f"JPEG flatten skipped ({src.name}): {exc}")
         return src
+
+
+def _file_bytes(path: Path) -> int:
+    try:
+        return int(path.stat().st_size)
+    except OSError:
+        return 0
+
+
+def encode_still_as_data_uri(path: str | Path) -> str | None:
+    """``data:image/…;base64,…`` or None if missing / over the size cap."""
+    src = Path(path)
+    if not src.is_file():
+        return None
+    size = _file_bytes(src)
+    if size <= 0 or size > DATA_URI_MAX_BYTES:
+        return None
+    mime = _DATA_URI_MIME.get(src.suffix.lower())
+    if not mime:
+        mime = "image/jpeg" if src.suffix.lower() in {".jpg", ".jpeg"} else None
+    if not mime:
+        return None
+    try:
+        raw = src.read_bytes()
+    except OSError:
+        return None
+    if len(raw) > DATA_URI_MAX_BYTES:
+        return None
+    b64 = base64.b64encode(raw).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def compact_still_for_partner_fetch(
+    path: str | Path,
+    *,
+    output_dir: str | Path,
+    on_progress: ProgressCallback | None = None,
+    timeout_s: float = 15.0,
+) -> Path:
+    """
+    JPEG/WebP compact copy for Muse partner-fetch fallback.
+
+    Never mutates the original (Source node preview stays PNG). Backend-only,
+    15s timeout.
+    """
+    src = Path(path)
+    if not src.is_file():
+        return src
+    compact = flatten_still_to_jpeg(
+        src,
+        output_dir=output_dir,
+        quality=90,
+        background="white",
+        on_progress=on_progress,
+        timeout_s=timeout_s,
+        force=True,
+    )
+    if compact.is_file() and compact.suffix.lower() in {".jpg", ".jpeg", ".webp"}:
+        return compact
+    return src
 
 
 def extract_first_frame(video_path: str | Path, output_path: str | Path | None = None) -> Path:

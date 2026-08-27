@@ -703,7 +703,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             ? body.detail
             : body.error || `Generate failed (${res.status})`;
         setError(msg);
-        if (/re-upload retry failed/i.test(msg)) {
+        if (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg)) {
           toast(msg, true);
         }
         return;
@@ -711,7 +711,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       if (!body.ok) {
         const msg = body.error || body.status || "Generate failed.";
         setError(msg);
-        if (/re-upload retry failed/i.test(msg)) {
+        if (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg)) {
           toast(msg, true);
         }
         return;

@@ -498,6 +498,85 @@ def _refresh_media_urls(
     return upload_file(local, on_progress=on_progress, force_fresh=True)
 
 
+_STILL_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+MUSE_FETCH_FAIL = "Muse could not fetch the source. Try a smaller JPEG export."
+
+
+def _is_still_local(path: Path) -> bool:
+    return path.suffix.lower() in _STILL_EXTS
+
+
+def _partner_fetch_still_value(
+    local: Path,
+    *,
+    on_progress: ProgressCallback | None = None,
+) -> str:
+    """
+    After file_download_error on fal.media: data URI (A) or JPEG upload (B).
+
+    Original PNG is never mutated. Convert is backend-only with a 15s timeout.
+    """
+    from app.media import (
+        compact_still_for_partner_fetch,
+        encode_still_as_data_uri,
+    )
+
+    out_dir = _staging_dir()
+    if on_progress:
+        on_progress(
+            f"Partner fetch fallback for {local.name}: JPEG/data-URI (not another fal.media PNG)…"
+        )
+    compact = compact_still_for_partner_fetch(
+        local,
+        output_dir=out_dir,
+        on_progress=on_progress,
+        timeout_s=15.0,
+    )
+    # A: data URI for compact (or original) stills under ~4MB
+    for candidate in (compact, local):
+        uri = encode_still_as_data_uri(candidate)
+        if uri:
+            if on_progress:
+                on_progress(
+                    f"Sending {candidate.name} as data URI ({format_bytes(candidate.stat().st_size)})"
+                )
+            return uri
+    # B: upload the JPEG/WebP compact copy once
+    upload_src = compact if compact.is_file() else local
+    if on_progress:
+        on_progress(f"Data URI too large; uploading compact {upload_src.name}…")
+    return upload_file(upload_src, on_progress=on_progress, force_fresh=True)
+
+
+def _partner_fetch_fallback(
+    obj: Any,
+    *,
+    on_progress: ProgressCallback | None = None,
+) -> Any:
+    """Replace fal.media still URLs with data URIs or compact JPEG uploads."""
+    if isinstance(obj, dict):
+        skip = {"prompt", "negative_prompt", "script", "text"}
+        return {
+            k: (
+                v
+                if k in skip
+                else _partner_fetch_fallback(v, on_progress=on_progress)
+            )
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_partner_fetch_fallback(v, on_progress=on_progress) for v in obj]
+    if not isinstance(obj, str) or not is_fal_media_url(obj):
+        return obj
+    local_s = _local_by_url.get(obj)
+    if not local_s:
+        return obj
+    local = Path(local_s)
+    if not local.is_file() or not _is_still_local(local):
+        return obj
+    return _partner_fetch_still_value(local, on_progress=on_progress)
+
+
 def upload_error_detail(path: str | Path | None, exc: BaseException | str) -> str:
     """Status line including local path + size when an upload-related step fails."""
     bits = [str(exc).strip() if not isinstance(exc, str) else exc.strip()]
@@ -670,34 +749,37 @@ def subscribe(
         if on_progress:
             on_progress(f"URL refresh skipped ({exc})")
 
-    def _run_subscribe() -> Any:
+    def _run_subscribe(payload: dict[str, Any]) -> Any:
         return fal_client.subscribe(
             endpoint,
-            arguments=args_out,
+            arguments=payload,
             with_logs=with_logs,
             on_queue_update=_on_queue_update if with_logs else None,
         )
 
     try:
-        result = _run_subscribe()
+        result = _run_subscribe(args_out)
     except Exception as exc:
         if is_file_download_error(exc):
             if on_progress:
                 on_progress(
-                    "fal could not fetch the upload; re-uploading from disk once…"
+                    "fal.media download failed; retrying with data-URI / JPEG fallback…"
                 )
             try:
-                args_out = _refresh_media_urls(
-                    args_out, force=True, on_progress=on_progress
+                args_out = _partner_fetch_fallback(
+                    args_out, on_progress=on_progress
                 )
-                result = _run_subscribe()
+                result = _run_subscribe(args_out)
             except Exception as exc2:
+                from app.media import is_muse_edit_endpoint
+
                 raw2 = _format_fal_error_body(exc2)
-                friendly2 = friendly_error(exc2, context=f"fal ({endpoint})")
+                if is_muse_edit_endpoint(endpoint):
+                    raise FalClientError(MUSE_FETCH_FAIL) from exc2
                 raise FalClientError(
-                    "Re-upload retry failed: fal still cannot fetch the source. "
-                    "Re-select the local file and try again. "
-                    f"RAW fal: {raw2[:800]}\n{friendly2}"
+                    "This model could not fetch the fal.media source. "
+                    "Try a smaller JPEG export. "
+                    f"RAW fal: {raw2[:600]}"
                 ) from exc2
         else:
             # Prefer RAW fal body in UI/logs (not only rewritten help text)
