@@ -1,5 +1,19 @@
 # AI Media Studio V2 — release notes
 
+## 2.0.0-rc4 (Windows)
+
+Windows zip: `AIMediaStudioV2-2.0.0-rc4-windows.zip`. Double-click `AIMediaStudioV2.exe` (keep `_internal` next to it). Keys stay in Settings / `%LOCALAPPDATA%\AI Media Studio V2`.
+
+Mac/Linux have no exe — run from source (see README). The older **2.0.0-rc3** GitHub zip is stale: it does not include Muse fallback / Match source, H3 Max, or Gemini Omni Flash 1.1.
+
+**Catalog / canvas**
+- **Muse Image** (`meta/muse-image/text-to-image`) and **Muse Image Edit** (`meta/muse-image/edit`) — T2I + I2I/R2I, ~$0.01, no `mask_url`. Strong cheap furniture test. Aspect **Match source** omits `aspect_ratio` so output follows the still; do not default I2I to 9:16. Partner fetch cannot use stale `v3b.fal.media` URLs — app falls back to data-URI / JPEG-WebP re-upload on `file_download_error`.
+- **MiniMax H3 Max** T2V + I2V beside existing H3 (does not replace it). Promo ~$0.025/s @480p / ~$0.04/s @768p until 1 Sep 2026.
+- **Gemini Omni Flash 1.1** — T2V, I2V, R2V, and V2V edit (NL video edit: prompt + source clip).
+- **Catalog hide** (endpoints kept for history): Flux 1.1 Pro Ultra, Seedream 4.5, Fibo Edit v1, Kling 2.5 / 2.6, Grok Imagine v1 Edit / Quality Edit, MiniMax Music 2.6, Lyria 2, Luma Ray 2, MiniMax Speech 02 HD.
+- Still visible: Flux Kontext Pro, LTX 2.3 Retake, Fibo Edit 1.5, Aleph 2.0.
+- JPEG convert must not lock the UI.
+
 ## 2.0.0-rc3 (Windows)
 
 Windows zip: `AIMediaStudioV2-2.0.0-rc3-windows.zip`. Double-click `AIMediaStudioV2.exe` (keep `_internal` next to it). Keys stay in Settings / `%LOCALAPPDATA%\AI Media Studio V2`.

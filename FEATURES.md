@@ -1,6 +1,6 @@
 # AI Media Studio V2 — Features
 
-**Version:** 2.0.0-rc3 (Windows)
+**Version:** 2.0.0-rc4 (Windows)
 
 Free desktop app. You bring your own API keys. You pay the providers for what you generate — not a subscription to this app.
 
@@ -32,6 +32,8 @@ Without a fal key, Create and Tools stay blocked. Without Runware, Frame Editor 
 
 **Mask node.** On I2I (and R2I with exactly one image), **Add Mask** appears when the model supports it (Fibo Edit 1.5). Boxes + brush. White = edit, black = keep. Same pixel size as the source. Extra refs on Fibo 1.5 disable mask. Muse Image Edit has no mask. The Image Region subtab is gone; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
 
+JPEG convert (Library / partner re-upload) does not lock the UI.
+
 ---
 
 ## Create
@@ -48,7 +50,9 @@ Cost is estimated before you generate.
 | **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro (boxed edits via **Add Mask**), **Fibo Edit 1.5** (multi-ref, optional mask on single-ref), **Muse Image Edit** (precise instruction, no mask, up to 10 stills) |
 | **R2I** | Edit from extra reference stills | Flux 2 Pro / Max / Flex, Nano Banana Pro / 2, Grok Imagine 2.0 Edit, Qwen Image 3, Seedream 5 Pro R2I, **Fibo Edit 1.5** (up to 4 images, `<image_1>`… tags), **Muse Image Edit** (up to 10 stills) |
 
-Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, **Fibo Edit 1.5** is a strong default. Flux 2 Pro / Nano Banana Pro remain in the list.
+Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, **Fibo Edit 1.5** is a strong default (~$0.04, licensed, optional Mask). **Muse Image Edit** is a strong cheap furniture test (~$0.01, no mask). Flux 2 Pro / Nano Banana Pro remain in the list.
+
+**Muse Image** (`meta/muse-image/text-to-image` + `meta/muse-image/edit`): Partner commercial. Edit is I2I/R2I, no `mask_url`. Aspect **Match source** omits `aspect_ratio` so the output follows the still — do not default I2I to 9:16. Partner fetch cannot use stale `v3b.fal.media` URLs; the app falls back to a data-URI / JPEG-WebP re-upload on `file_download_error`.
 
 ### Video
 
@@ -66,7 +70,7 @@ Default video model: Kling O3 Standard V2V edit.
 **Listing-oriented notes (not a ranking):**
 
 - Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3 / H3 Max, LTX 2.5, Wan 3.0, Gemini Omni Flash 1.1, and the dedicated Bridge / First→Last rows.
-- **MiniMax H3 Max** sits beside H3 (does not replace it). 5–15s · 480P/768P. Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; catalog after that $0.05 / $0.08.
+- **MiniMax H3 Max** sits beside H3 (does not replace it). T2V + I2V. 5–15s · 480P/768P. Launch promo ~$0.025/s @480P · ~$0.04/s @768P until 1 Sep 2026; catalog after that $0.05 / $0.08.
 - **Gemini Omni Flash 1.1** T2V / I2V / R2V / V2V edit. V2V is NL video edit (prompt + source clip; no first/last frame). R2V cites `<IMAGE_REF_0>` / `<VIDEO_REF_0>`. Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k.
 - **Wan 3.0** (T2V / I2V / R2V): up to 30s @ 1080p, native audio, cost scales with seconds × resolution. R2V locks character/scene from up to 10 stills (cite Image 1 / Image 2 in the prompt).
 - Kling 3.0 I2V can lock characters with **Elements** (`@Element1` …) and cut a board with **native multi-shot**.
@@ -82,6 +86,16 @@ Default video model: Kling O3 Standard V2V edit.
 | **Voiceover** | MiniMax Speech 2.8 HD, MiniMax Speech 2.6 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |
 
 Instrumental is a toggle on music models that support it. Voice is a dropdown on TTS models that ship a voice list.
+
+---
+
+## Catalog hide (rc4)
+
+Dropdowns hide older siblings. Endpoints stay callable for existing jobs:
+
+Flux 1.1 Pro Ultra, Seedream 4.5, Fibo Edit v1, Kling 2.5 / 2.6, Grok Imagine v1 Edit / Quality Edit, MiniMax Music 2.6, Lyria 2, Luma Ray 2, MiniMax Speech 02 HD.
+
+Still visible: **Flux Kontext Pro**, **LTX 2.3 Retake**, **Fibo Edit 1.5**, **Aleph 2.0**.
 
 ---
 
@@ -182,4 +196,4 @@ Estimates are helpers, not invoices. Provider dashboards are the source of truth
 - Not a hosted SaaS. No included credits.
 - Not a second catalog on Runware (Aleph / Frame only).
 - Not an After Effects or Resolve plugin. Resolve is a handoff, not a host.
-- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc3**.
+- Catalog will change as you add rows in the app; this file is a snapshot of **2.0.0-rc4**.

@@ -49,7 +49,7 @@ You can use the app with **fal only**. Add Runware when you want Frame Editor. A
 ## 3. First still (T2I)
 
 1. Mode: **Image**.
-2. Model: something cheap to start, e.g. **Flux 2 (T2I · cheaper)**.
+2. Model: something cheap to start, e.g. **Flux 2 (T2I · cheaper)** or **Muse Image** (~$0.01).
 3. Type a prompt (a listing kitchen, a product, a title card).
 4. Check **Est. cost** under the prompt. Generate.
 
@@ -65,26 +65,28 @@ T2I Results show **Compare Source** next to Upscale, but the button is disabled 
 
 ## 4. Edit a still (I2I)
 
-1. Stay on **Image**. For listing furniture / staging, pick **Fibo Edit 1.5** (I2I/R2I, up to 4 refs, ~$0.04). Flux 2 Pro / Nano Banana Pro remain in the list for other looks.
+1. Stay on **Image**. For listing furniture / staging:
+   - **Muse Image Edit** (~$0.01, I2I/R2I, no mask) for a cheap furniture test. Set aspect to **Match source** so the output follows the still (do not leave I2I on 9:16).
+   - **Fibo Edit 1.5** (~$0.04, licensed, up to 4 refs) plus optional **Add Mask** on a single source still. Flux 2 Pro / Nano Banana Pro remain in the list for other looks.
 2. Put a still on **Source**:
    - drag from **Library**, or
    - import a file into Library (image/video/audio picker), then drag it on.
 3. Prompt what should change. Generate.
 
-Need extra refs (a sofa look, a logo, a material)? Fibo Edit 1.5 takes up to 4 images: Image 1 is the source; 2–4 are refs. Cite `<image_1>` / `<image_2>` in the instruction.
+Need extra refs (a sofa look, a logo, a material)? Fibo Edit 1.5 takes up to 4 images: Image 1 is the source; 2–4 are refs. Cite `<image_1>` / `<image_2>` in the instruction. Muse Image Edit takes up to 10 stills (no mask).
 
-Optional **Add Mask** (Fibo Edit 1.5 / Fibo Edit v1) when you have exactly one source still. Click **Add Mask** on the Prompt node. Draw boxes or paint on the MASK node — white = edit, black = keep, same pixel size as the source. Extra refs on Fibo 1.5 disable mask. There is no Image Region tab; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
+Optional **Add Mask** on Fibo Edit 1.5 when you have exactly one source still. Click **Add Mask** on the Prompt node. Draw boxes or paint on the MASK node — white = edit, black = keep, same pixel size as the source. Extra refs on Fibo 1.5 disable mask. There is no Image Region tab; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
 
-After generate, **Compare Source** on the still Result opens a COMPARE node (source under result, opacity, overlay toggle, swap).
+After generate, **Compare Source** on the still Result opens a COMPARE node (source under result, opacity, overlay toggle, swap). JPEG convert does not freeze the window.
 
 ---
 
 ## 5. Simple image-to-video
 
 1. Mode: **Video**.
-2. Pick an **Image-to-Video** model (Kling O3 Standard I2V is a reasonable first try).
+2. Pick an **Image-to-Video** model (Kling O3 Standard I2V is a reasonable first try; MiniMax H3 Max is a cheaper iteration lane beside H3).
 3. Drop a start still on **Source** (Library or disk via Library).
-4. Optional: **Last Frame** if that model shows the chip (Kling 3.0 / O3, Seedance 2.5, H3, LTX 2.5).
+4. Optional: **Last Frame** if that model shows the chip (Kling 3.0 / O3, Seedance 2.5, H3 / H3 Max, LTX 2.5, Gemini Omni Flash 1.1).
 5. Set duration / aspect / audio if shown. Read Est. cost. Generate.
 
 The clip lands in the same dated outputs folder and in Library (Video filter).
@@ -161,6 +163,7 @@ Library row or Result node → **Send to Resolve**. Needs Resolve running with i
 | Still/clip not on disk where you looked | Packaged app writes `%LOCALAPPDATA%\AI Media Studio V2\outputs\`, not the unzip folder. |
 | From Resolve is empty | Set Resolve inbox in Settings, then Refresh. |
 | Compare Source is greyed out | T2I jobs have no source still. I2I/R2I Results enable it when the job had a source. |
+| Muse partner fetch fails | Stale `v3b.fal.media` URLs are retried as a data-URI / JPEG-WebP re-upload. JPEG convert should not freeze the window. |
 
 Nothing in this app phones home except the APIs behind the keys you pasted.
 
