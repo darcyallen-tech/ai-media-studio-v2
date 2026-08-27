@@ -698,15 +698,22 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       });
       const body = (await res.json()) as GenerateResponse & { detail?: string };
       if (!res.ok) {
-        setError(
+        const msg =
           typeof body.detail === "string"
             ? body.detail
-            : body.error || `Generate failed (${res.status})`,
-        );
+            : body.error || `Generate failed (${res.status})`;
+        setError(msg);
+        if (/re-upload retry failed/i.test(msg)) {
+          toast(msg, true);
+        }
         return;
       }
       if (!body.ok) {
-        setError(body.error || body.status || "Generate failed.");
+        const msg = body.error || body.status || "Generate failed.";
+        setError(msg);
+        if (/re-upload retry failed/i.test(msg)) {
+          toast(msg, true);
+        }
         return;
       }
       data.onGenerated(body, {

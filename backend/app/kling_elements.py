@@ -41,7 +41,9 @@ def _is_url(raw: str) -> bool:
 
 def _file_ok(raw: str | None) -> bool:
     p = (raw or "").strip()
-    return bool(p) and Path(p).is_file()
+    if not p or p.lower().startswith(("http://", "https://", "data:")):
+        return False
+    return Path(p).is_file()
 
 
 def validate_element_rows(

@@ -115,14 +115,24 @@ class CreateSlots:
         if name in ("ref_images", "ref_videos", "ref_audios"):
             out: list[str] = []
             for p in getattr(self, name) or []:
-                if p and Path(p).is_file():
-                    out.append(p)
+                if not p:
+                    continue
+                raw = str(p).strip()
+                if raw.lower().startswith(("http://", "https://", "data:")):
+                    continue
+                if Path(raw).is_file():
+                    out.append(raw)
             return out
         if name in ("character_ids", "scene_ids"):
             return [str(x) for x in (getattr(self, name) or []) if x]
         val = getattr(self, name, None)
-        if val and Path(str(val)).is_file():
-            return [str(val)]
+        if not val:
+            return []
+        raw = str(val).strip()
+        if raw.lower().startswith(("http://", "https://", "data:")):
+            return []
+        if Path(raw).is_file():
+            return [raw]
         return []
 
     def filled(self, name: str) -> bool:

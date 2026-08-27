@@ -139,7 +139,12 @@ def _fail(msg: str, errors: list[str] | None = None, *, model: str = "") -> Crea
 
 
 def _file_ok(path: str | None) -> bool:
-    return bool(path and Path(path).is_file())
+    if not path:
+        return False
+    raw = str(path).strip()
+    if raw.lower().startswith(("http://", "https://", "data:")):
+        return False
+    return Path(raw).is_file()
 
 
 def _resolved_key(path: str) -> str:

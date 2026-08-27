@@ -12,6 +12,7 @@ import hashlib
 import mimetypes
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -23,6 +24,15 @@ ProgressCallback = Callable[[str], None]
 
 # Prefer a long-lived public object so the model runner can re-download mid-job.
 _UPLOAD_LIFECYCLE_EXPIRES = "1d"
+# In-memory only — fal.media URLs are ephemeral across app restarts.
+_URL_FRESH_S = 8.0
+_VERIFY_TIMEOUT_S = 5.0
+# url -> monotonic time of last HTTP 200
+_url_verified_at: dict[str, float] = {}
+# url -> local path used to produce it
+_local_by_url: dict[str, str] = {}
+# resolved local path -> (url, verified_at)
+_url_by_local: dict[str, tuple[str, float]] = {}
 
 # MIME overrides for extensions that Windows mimetypes sometimes miss
 _MIME_BY_EXT: dict[str, str] = {
@@ -104,6 +114,18 @@ def is_remote_url(value: str | Path | None) -> bool:
     return s.startswith("http://") or s.startswith("https://") or s.startswith("data:")
 
 
+def is_fal_media_url(value: str | Path | None) -> bool:
+    if not is_remote_url(value):
+        return False
+    host = (urlparse(str(value).strip()).hostname or "").lower()
+    return host.endswith("fal.media") or host.endswith("fal.ai")
+
+
+def is_file_download_error(exc: BaseException | str) -> bool:
+    s = str(exc).lower()
+    return "file_download_error" in s or "failed to download the file" in s
+
+
 def require_local_file(path: str | Path | None, *, context: str = "Upload") -> Path:
     """
     Resolve and validate a *local* media path.
@@ -175,23 +197,41 @@ def _needs_staging(path: Path) -> bool:
     return False
 
 
-def _stage_for_upload(path: Path, on_progress: ProgressCallback | None = None) -> Path:
+def _prune_staging(max_age_s: float = 24 * 3600) -> None:
+    try:
+        root = _staging_dir()
+        now = time.time()
+        for p in root.iterdir():
+            if not p.is_file():
+                continue
+            try:
+                if now - p.stat().st_mtime > max_age_s:
+                    p.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _stage_for_upload(
+    path: Path,
+    on_progress: ProgressCallback | None = None,
+    *,
+    unique: bool = True,
+) -> Path:
     """
     Copy to a clean short filename under outputs/_fal_upload.
 
-    Always used for large/awkward paths so fal receives a simple .mp4 name.
+    Unique names by default so fal does not return a stale content-addressed
+    fal.media URL for the same ``src_{digest}.png`` across app restarts.
     """
+    _prune_staging()
     digest = hashlib.sha1(str(path.resolve()).encode("utf-8", errors="replace")).hexdigest()[:10]
     ext = path.suffix.lower() or ".bin"
     if ext == ".jpeg":
         ext = ".jpg"
-    dest = _staging_dir() / f"src_{digest}{ext}"
-
-    try:
-        if dest.is_file() and dest.stat().st_size == path.stat().st_size:
-            return dest
-    except OSError:
-        pass
+    token = uuid.uuid4().hex[:10] if unique else digest
+    dest = _staging_dir() / f"src_{digest}_{token}{ext}"
 
     if on_progress:
         on_progress(
@@ -216,23 +256,46 @@ def _lifecycle_settings() -> Any:
         return None
 
 
-def _verify_url_reachable(url: str, *, timeout: float = 30.0) -> tuple[bool, str]:
-    """Best-effort check that the uploaded URL is publicly fetchable."""
+def _verify_url_reachable(url: str, *, timeout: float = _VERIFY_TIMEOUT_S) -> tuple[bool, str]:
+    """HEAD/GET the URL; only 200-class counts. Short timeout so generate cannot hang."""
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-            # HEAD first; some CDNs only allow GET
             try:
                 resp = client.head(url)
-                if resp.status_code < 400:
+                if 200 <= resp.status_code < 300:
                     return True, f"HTTP {resp.status_code}"
             except Exception:
                 pass
             resp = client.get(url, headers={"Range": "bytes=0-1023"})
-            if resp.status_code < 400:
+            if 200 <= resp.status_code < 300:
                 return True, f"HTTP {resp.status_code}"
             return False, f"HTTP {resp.status_code}"
     except Exception as exc:
         return False, str(exc)
+
+
+def _remember_url(local: Path, url: str) -> None:
+    now = time.monotonic()
+    resolved = str(local.resolve())
+    _url_verified_at[url] = now
+    _local_by_url[url] = resolved
+    _url_by_local[resolved] = (url, now)
+
+
+def _url_fresh(url: str) -> bool:
+    """True if this fal.media URL returned 200 within the last few seconds."""
+    if not url:
+        return False
+    now = time.monotonic()
+    seen = _url_verified_at.get(url)
+    if seen is not None and (now - seen) <= _URL_FRESH_S:
+        return True
+    ok, _detail = _verify_url_reachable(url)
+    if ok:
+        _url_verified_at[url] = time.monotonic()
+        return True
+    _url_verified_at.pop(url, None)
+    return False
 
 
 def _upload_bytes_with_mime(
@@ -295,12 +358,17 @@ def _upload_bytes_with_mime(
     )
 
 
-def upload_file(path: str | Path, on_progress: ProgressCallback | None = None) -> str:
+def upload_file(
+    path: str | Path,
+    on_progress: ProgressCallback | None = None,
+    *,
+    force_fresh: bool = False,
+) -> str:
     """
     Upload a *local* file to fal storage; return a public URL.
 
-    Always uploads from disk — never reuses prior fal.media URLs.
-    Stages awkward paths (spaces / uppercase ext) to a clean temp name first.
+    Local path is the source of truth. In-memory fal.media URLs are reused only
+    if a HEAD/GET returned 200 in the last few seconds. Never persisted.
     """
     from app.errors import friendly_error
 
@@ -308,18 +376,25 @@ def upload_file(path: str | Path, on_progress: ProgressCallback | None = None) -
     local = require_local_file(path, context="fal upload")
     size = local.stat().st_size
     size_s = format_bytes(size)
+    local_key = str(local.resolve())
 
-    # Stage for reliable MIME / filename (and always for videos with awkward paths)
+    if not force_fresh:
+        cached = _url_by_local.get(local_key)
+        if cached:
+            cached_url, _ts = cached
+            if _url_fresh(cached_url):
+                if on_progress:
+                    on_progress(f"Using live fal URL for {local.name} (verified just now)")
+                return cached_url
+            _url_by_local.pop(local_key, None)
+
+    # Unique stage every upload so fal cannot hand back a stale src_{digest}.png URL.
     upload_path = local
-    staged: Path | None = None
     try:
-        if _needs_staging(local):
-            staged = _stage_for_upload(local, on_progress=on_progress)
-            upload_path = staged
+        upload_path = _stage_for_upload(local, on_progress=on_progress, unique=True)
     except FalClientError:
         raise
     except Exception as exc:
-        # Staging is best-effort; fall back to original path
         if on_progress:
             on_progress(f"Staging skipped ({exc}); uploading original path.")
         upload_path = local
@@ -328,7 +403,6 @@ def upload_file(path: str | Path, on_progress: ProgressCallback | None = None) -
     if on_progress:
         on_progress(f"Uploading {local.name} ({size_s}, {mime}) to fal…")
 
-    # Sniff image vs video so “too large” copy never suggests Render-in-Place for stills
     _img_ext = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
     media_kind = (
         "image"
@@ -358,22 +432,20 @@ def upload_file(path: str | Path, on_progress: ProgressCallback | None = None) -
 
     url = str(url).strip()
 
-    # Verify the URL is publicly reachable before the model tries (and fails)
     ok, detail = _verify_url_reachable(url)
     if not ok:
         if on_progress:
-            on_progress(f"Upload URL not reachable ({detail}); retrying once…")
+            on_progress(f"Upload URL not reachable ({detail}); re-uploading once…")
         try:
-            # Force re-stage with unique name and re-upload
-            forced = _staging_dir() / f"retry_{uuid.uuid4().hex[:12]}{upload_path.suffix.lower()}"
-            shutil.copy2(local, forced)
-            url = _upload_bytes_with_mime(forced, mime=_mime_for_path(forced), on_progress=on_progress)
+            forced = _stage_for_upload(local, on_progress=on_progress, unique=True)
+            url = _upload_bytes_with_mime(
+                forced, mime=_mime_for_path(forced), on_progress=on_progress
+            )
             ok2, detail2 = _verify_url_reachable(url)
             if not ok2:
                 raise FalClientError(
                     f"fal upload URL is not publicly downloadable ({detail2}). "
-                    f"Local: {local} ({size_s}). "
-                    "Try a shorter mp4 proxy (3–10s) from Resolve, or re-export the clip."
+                    f"Local: {local} ({size_s}). Re-select the file from disk and retry."
                 )
         except FalClientError:
             raise
@@ -382,9 +454,48 @@ def upload_file(path: str | Path, on_progress: ProgressCallback | None = None) -
                 f"fal upload verify failed for {local} ({size_s}): {exc}"
             ) from exc
 
+    _remember_url(local, url)
     if on_progress:
         on_progress(f"Upload complete: {local.name} ({size_s})")
     return url
+
+
+def _refresh_media_urls(
+    obj: Any,
+    *,
+    force: bool = False,
+    on_progress: ProgressCallback | None = None,
+) -> Any:
+    """Replace stale fal.media URLs in a payload by re-uploading the local file."""
+    if isinstance(obj, dict):
+        skip = {"prompt", "negative_prompt", "script", "text"}
+        return {
+            k: (
+                v
+                if k in skip
+                else _refresh_media_urls(v, force=force, on_progress=on_progress)
+            )
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [
+            _refresh_media_urls(v, force=force, on_progress=on_progress) for v in obj
+        ]
+    if not isinstance(obj, str) or not is_fal_media_url(obj):
+        return obj
+    if not force and _url_fresh(obj):
+        return obj
+    local = _local_by_url.get(obj)
+    if not local or not Path(local).is_file():
+        if _url_fresh(obj):
+            return obj
+        raise FalClientError(
+            "Stale fal.media URL with no local file to re-upload. "
+            "Re-select the still from the Library (local path is the source of truth)."
+        )
+    if on_progress:
+        on_progress(f"Re-uploading {Path(local).name} (fal URL not live)…")
+    return upload_file(local, on_progress=on_progress, force_fresh=True)
 
 
 def upload_error_detail(path: str | Path | None, exc: BaseException | str) -> str:
@@ -552,48 +663,77 @@ def subscribe(
     from app.errors import friendly_error
 
     try:
-        result = fal_client.subscribe(
+        args_out = _refresh_media_urls(args_out, force=False, on_progress=on_progress)
+    except FalClientError:
+        raise
+    except Exception as exc:
+        if on_progress:
+            on_progress(f"URL refresh skipped ({exc})")
+
+    def _run_subscribe() -> Any:
+        return fal_client.subscribe(
             endpoint,
             arguments=args_out,
             with_logs=with_logs,
             on_queue_update=_on_queue_update if with_logs else None,
         )
-    except Exception as exc:
-        # Prefer RAW fal body in UI/logs (not only rewritten help text)
-        raw_body = _format_fal_error_body(exc)
-        try:
-            from app.aspect_omit import append_aspect_debug_log
 
-            append_aspect_debug_log(
-                f"FAL_ERROR endpoint={endpoint} body={raw_body[:4000]}"
-            )
-            append_aspect_debug_log(
-                f"FAL_ERROR_PAYLOAD endpoint={endpoint} sent_keys={sorted(args_out.keys())} "
-                f"sent={{{', '.join(f'{k}={args_out.get(k)!r}' for k in sorted(args_out) if k != 'prompt')}}}"
-            )
-        except Exception:
-            pass
-        if on_progress:
-            try:
-                on_progress(f"FAL_RAW: {raw_body[:900]}")
-            except Exception:
-                pass
-            try:
+    try:
+        result = _run_subscribe()
+    except Exception as exc:
+        if is_file_download_error(exc):
+            if on_progress:
                 on_progress(
-                    f"FAL_SENT keys={sorted(args_out.keys())} "
-                    f"aspect={args_out.get('aspect_ratio')!r} "
-                    f"dur={args_out.get('duration')!r} "
-                    f"res={args_out.get('resolution')!r}"
+                    "fal could not fetch the upload; re-uploading from disk once…"
+                )
+            try:
+                args_out = _refresh_media_urls(
+                    args_out, force=True, on_progress=on_progress
+                )
+                result = _run_subscribe()
+            except Exception as exc2:
+                raw2 = _format_fal_error_body(exc2)
+                friendly2 = friendly_error(exc2, context=f"fal ({endpoint})")
+                raise FalClientError(
+                    "Re-upload retry failed: fal still cannot fetch the source. "
+                    "Re-select the local file and try again. "
+                    f"RAW fal: {raw2[:800]}\n{friendly2}"
+                ) from exc2
+        else:
+            # Prefer RAW fal body in UI/logs (not only rewritten help text)
+            raw_body = _format_fal_error_body(exc)
+            try:
+                from app.aspect_omit import append_aspect_debug_log
+
+                append_aspect_debug_log(
+                    f"FAL_ERROR endpoint={endpoint} body={raw_body[:4000]}"
+                )
+                append_aspect_debug_log(
+                    f"FAL_ERROR_PAYLOAD endpoint={endpoint} sent_keys={sorted(args_out.keys())} "
+                    f"sent={{{', '.join(f'{k}={args_out.get(k)!r}' for k in sorted(args_out) if k != 'prompt')}}}"
                 )
             except Exception:
                 pass
-        # Lead with RAW so panel shows fal body even when friendly rewrites aspect text
-        friendly = friendly_error(exc, context=f"fal ({endpoint})")
-        raise FalClientError(
-            f"RAW fal: {raw_body[:1200]}\n{friendly}"
-            if raw_body
-            else friendly
-        ) from exc
+            if on_progress:
+                try:
+                    on_progress(f"FAL_RAW: {raw_body[:900]}")
+                except Exception:
+                    pass
+                try:
+                    on_progress(
+                        f"FAL_SENT keys={sorted(args_out.keys())} "
+                        f"aspect={args_out.get('aspect_ratio')!r} "
+                        f"dur={args_out.get('duration')!r} "
+                        f"res={args_out.get('resolution')!r}"
+                    )
+                except Exception:
+                    pass
+            friendly = friendly_error(exc, context=f"fal ({endpoint})")
+            raise FalClientError(
+                f"RAW fal: {raw_body[:1200]}\n{friendly}"
+                if raw_body
+                else friendly
+            ) from exc
 
     if result is None:
         raise FalClientError(f"fal returned empty result for {endpoint}")

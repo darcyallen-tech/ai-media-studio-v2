@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from PIL import Image
 
 # Common extensions we accept
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+# Muse edit (and similar) reject transparent stills — flatten these to JPEG.
+_FLATTEN_TO_JPEG_EXTS = {".png", ".webp"}
+_BG_COLORS: dict[str, tuple[int, int, int]] = {
+    "white": (255, 255, 255),
+    "black": (0, 0, 0),
+}
+
+ProgressCallback = Callable[[str], None]
 
 
 def is_image_path(path: str | Path | None) -> bool:
@@ -22,6 +31,111 @@ def is_video_path(path: str | Path | None) -> bool:
     if not path:
         return False
     return Path(path).suffix.lower() in VIDEO_EXTENSIONS
+
+
+def is_muse_edit_endpoint(endpoint: str | None) -> bool:
+    ep = (endpoint or "").lower()
+    return "muse-image" in ep and "edit" in ep
+
+
+def image_has_alpha(im: Image.Image) -> bool:
+    if im.mode in ("RGBA", "LA", "PA"):
+        return True
+    if im.mode == "P" and "transparency" in im.info:
+        return True
+    return False
+
+
+def flatten_still_to_jpeg(
+    path: str | Path,
+    *,
+    output_dir: str | Path,
+    quality: int = 90,
+    background: str = "white",
+    on_progress: ProgressCallback | None = None,
+    timeout_s: float = 15.0,
+) -> Path:
+    """
+    Optional JPEG flatten (PNG / WebP / alpha → white JPEG).
+
+    Backend-only. 15s timeout — never a required Muse generate step.
+    Original is never mutated. On timeout or error, returns the original path.
+    """
+    src = Path(path)
+    if not src.is_file():
+        return src
+
+    bg = _BG_COLORS.get((background or "white").strip().lower(), (255, 255, 255))
+    q = max(40, min(95, int(quality or 90)))
+
+    def _work() -> Path:
+        with Image.open(src) as im:
+            try:
+                from PIL import ImageOps
+
+                im = ImageOps.exif_transpose(im)
+            except Exception:
+                pass
+            ext = src.suffix.lower()
+            if ext not in _FLATTEN_TO_JPEG_EXTS and not image_has_alpha(im):
+                return src
+
+            if image_has_alpha(im):
+                rgba = im.convert("RGBA")
+                canvas = Image.new("RGB", rgba.size, bg)
+                canvas.paste(rgba, mask=rgba.split()[-1])
+                rgb = canvas
+            else:
+                rgb = im.convert("RGB")
+
+            try:
+                st = src.stat()
+                tag = f"{src.resolve()}|{st.st_size}|{int(st.st_mtime)}|flat_q{q}|{bg}"
+            except OSError:
+                tag = f"{src}|flat_q{q}|{bg}"
+            fp = hashlib.sha1(tag.encode("utf-8", errors="replace")).hexdigest()[:12]
+            dest_dir = Path(output_dir) / "_muse_flat"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / f"{src.stem[:40]}_{fp}.jpg"
+            if dest.is_file() and dest.stat().st_size > 256:
+                if on_progress:
+                    on_progress(f"Using cached JPEG flatten: {dest.name}")
+                return dest.resolve()
+            rgb.save(
+                dest,
+                format="JPEG",
+                quality=q,
+                optimize=True,
+                subsampling=0,
+            )
+            if on_progress:
+                on_progress(
+                    f"Flattened {src.name} → JPEG q{q} on {background} "
+                    f"({dest.stat().st_size / 1024:.0f} KB)"
+                )
+            return dest.resolve()
+
+    try:
+        limit = float(timeout_s or 0)
+        if limit > 0:
+            from concurrent.futures import ThreadPoolExecutor
+            from concurrent.futures import TimeoutError as FuturesTimeout
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_work)
+                try:
+                    return fut.result(timeout=limit)
+                except FuturesTimeout:
+                    if on_progress:
+                        on_progress(
+                            f"JPEG flatten timed out after {int(limit)}s; using original"
+                        )
+                    return src
+        return _work()
+    except Exception as exc:
+        if on_progress:
+            on_progress(f"JPEG flatten skipped ({src.name}): {exc}")
+        return src
 
 
 def extract_first_frame(video_path: str | Path, output_path: str | Path | None = None) -> Path:
