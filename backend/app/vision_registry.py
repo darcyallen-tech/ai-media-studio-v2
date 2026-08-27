@@ -368,6 +368,7 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         max_num_images=4,
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "2"},
+        hidden=True,
     ),
     "recraft v4 t2i": VisionModelSpec(
         key="recraft v4 t2i",
@@ -515,6 +516,7 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         max_num_images=4,
         extra_defaults={"num_images": 1, "enable_safety_checker": True},
+        hidden=True,
     ),
     "seedream 5 lite t2i": VisionModelSpec(
         key="seedream 5 lite t2i",
@@ -633,6 +635,29 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         max_num_images=1,
         extra_defaults={"style_preset": "No Style"},
+    ),
+    "muse image t2i": VisionModelSpec(
+        key="muse image t2i",
+        label="Muse Image (T2I)",
+        mode="text_to_image",
+        endpoint="meta/muse-image/text-to-image",
+        cost_estimate_usd=0.01,
+        notes=(
+            "Meta Muse Image T2I — instruction-following and typography. "
+            "~$0.01/image. Aspects 21:9–9:21. Up to 10 images per call."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21",
+        ),
+        default_aspect="16:9",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=10,
+        extra_defaults={"num_images": 1, "output_format": "jpeg"},
     ),
 }
 
@@ -909,6 +934,34 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         supports_mask=True,
         extra_defaults={},
     ),
+    "muse image edit i2i": VisionModelSpec(
+        key="muse image edit i2i",
+        label="Muse Image Edit",
+        mode="image_to_image",
+        endpoint="meta/muse-image/edit",
+        cost_estimate_usd=0.01,
+        notes=(
+            "Meta Muse Image edit — precise “change only what I asked.” "
+            "1–10 stills (I2I / R2I). No mask. ~$0.01/image."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "Match source",
+            "21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21",
+        ),
+        default_aspect="Match source",
+        resolution_choices=(),
+        default_resolution="",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=9,
+        image_field="image_urls",
+        edit_model_key="muse image edit",
+        supports_strength=False,
+        supports_mask=False,
+        extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
     "fibo edit i2i": VisionModelSpec(
         key="fibo edit i2i",
         label="Fibo Edit (v1)",
@@ -934,6 +987,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         supports_strength=False,
         supports_mask=True,
         extra_defaults={"steps_num": 30},
+        hidden=True,
     ),
 }
 
@@ -982,6 +1036,7 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         resolution_choices=("540p", "720p", "1080p"),
         default_resolution="720p",
         extra_defaults={"loop": False},
+        hidden=True,
     ),
     "minimax h3 t2v": VisionModelSpec(
         key="minimax h3 t2v",
@@ -1004,6 +1059,78 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         supports_negative=False,
         duration_as_int=True,
         native_stereo_audio=True,
+    ),
+    "minimax h3 max t2v": VisionModelSpec(
+        key="minimax h3 max t2v",
+        label="MiniMax H3 Max · Text→Video",
+        mode="text_to_video",
+        endpoint="minimax/h3-max/text-to-video",
+        cost_estimate_usd=0.20,  # 5s × $0.04 @768P promo
+        cost_per_second=0.04,
+        cost_per_second_by_resolution={"480p": 0.025, "768p": 0.04},
+        notes=(
+            "MiniMax H3 Max T2V — 5–15s · 480P/768P. Beside H3 (does not replace it). "
+            "Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; "
+            "catalog after that $0.05/s · $0.08/s. prompt_expansion_mode default balanced."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+    ),
+    "gemini omni 1.1 t2v": VisionModelSpec(
+        key="gemini omni 1.1 t2v",
+        label="Gemini Omni Flash 1.1 · Text→Video",
+        mode="text_to_video",
+        endpoint="google/gemini-omni-flash/v1.1/text-to-video",
+        cost_estimate_usd=0.80,  # 8s × $0.10 @720p
+        cost_per_second=0.10,
+        cost_per_second_by_resolution={
+            "360p": 0.03, "720p": 0.10, "1080p": 0.15, "4k": 0.30,
+        },
+        notes=(
+            "Gemini Omni Flash 1.1 T2V — 3–10s (default 8) · 16:9/9:16. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+        duration_choices=tuple(str(i) for i in range(3, 11)),
+        default_duration="8",
+        aspect_choices=("16:9", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("360p", "720p", "1080p", "4k"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+    ),
+    "luma ray 3.2": VisionModelSpec(
+        key="luma ray 3.2",
+        label="Luma Ray 3.2",
+        mode="text_to_video",
+        endpoint="luma/agent/ray/v3.2/text-to-video",
+        cost_estimate_usd=0.50,  # 5s @540p
+        cost_per_second=0.10,
+        cost_per_second_by_resolution={"540p": 0.10, "720p": 0.20, "1080p": 0.40},
+        notes=(
+            "Luma Ray 3.2 T2V — 5s or 10s · 540p/720p/1080p. "
+            "Est. $0.50 / $1 / $2 for 5s at 540/720/1080; 10s doubles. Replaces Ray 2 in the list."
+        ),
+        duration_choices=("5s", "10s"),
+        default_duration="5s",
+        aspect_choices=("3:4", "4:3", "1:1", "9:16", "16:9", "21:9"),
+        default_aspect="16:9",
+        resolution_choices=("540p", "720p", "1080p"),
+        default_resolution="540p",
+        supports_audio=False,
+        supports_negative=False,
     ),
     "grok imagine 1.5 t2v": VisionModelSpec(
         key="grok imagine 1.5 t2v",
@@ -1430,6 +1557,61 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         native_stereo_audio=True,
     ),
+    "minimax h3 max i2v": VisionModelSpec(
+        key="minimax h3 max i2v",
+        label="MiniMax H3 Max · Image→Video",
+        mode="image_to_video",
+        endpoint="minimax/h3-max/image-to-video",
+        cost_estimate_usd=0.20,
+        cost_per_second=0.04,
+        cost_per_second_by_resolution={"480p": 0.025, "768p": 0.04},
+        notes=(
+            "H3 Max I2V — start still as first frame; optional end still (end_image_url). "
+            "5–15s · 480P/768P. Aspect follows the start image. "
+            "Promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; then $0.05 / $0.08."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=("auto",),
+        default_aspect="auto",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        supports_end_frame=True,
+        duration_as_int=True,
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+    ),
+    "gemini omni 1.1 i2v": VisionModelSpec(
+        key="gemini omni 1.1 i2v",
+        label="Gemini Omni Flash 1.1 · Image→Video",
+        mode="image_to_video",
+        endpoint="google/gemini-omni-flash/v1.1/image-to-video",
+        cost_estimate_usd=0.80,
+        cost_per_second=0.10,
+        cost_per_second_by_resolution={
+            "360p": 0.03, "720p": 0.10, "1080p": 0.15, "4k": 0.30,
+        },
+        notes=(
+            "Gemini Omni Flash 1.1 I2V — start still required; optional last frame "
+            "(end_image_url). 3–10s · 16:9/9:16 · 360p–4k. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+        duration_choices=tuple(str(i) for i in range(3, 11)),
+        default_duration="8",
+        aspect_choices=("16:9", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("360p", "720p", "1080p", "4k"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        supports_end_frame=True,
+        duration_as_int=True,
+        image_field="image_url",
+    ),
     "grok imagine 1.5 i2v": VisionModelSpec(
         key="grok imagine 1.5 i2v",
         label="Grok Imagine 1.5 · Image→Video",
@@ -1683,6 +1865,30 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         supports_region_boxes=True,
         extra_defaults={"num_images": 1},
     ),
+    "muse image edit r2i": VisionModelSpec(
+        key="muse image edit r2i",
+        label="Muse Image Edit · R2I",
+        mode="reference_to_image",
+        endpoint="meta/muse-image/edit",
+        cost_estimate_usd=0.01,
+        notes=(
+            "Meta Muse multi-ref stills — precise instruction edits. "
+            "Up to 10 images. No mask. ~$0.01/image."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "Match source",
+            "21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21",
+        ),
+        default_aspect="Match source",
+        supports_audio=False,
+        max_refs=9,
+        image_field="image_urls",
+        edit_model_key="muse image edit",
+        supports_mask=False,
+        extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -1720,6 +1926,36 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         native_stereo_audio=True,
         prompt_citation_style="plain",
+    ),
+    "gemini omni 1.1 reference": VisionModelSpec(
+        key="gemini omni 1.1 reference",
+        label="Gemini Omni Flash 1.1 · Reference→Video",
+        mode="reference_to_video",
+        endpoint="google/gemini-omni-flash/v1.1/reference-to-video",
+        cost_estimate_usd=0.80,
+        cost_per_second=0.10,
+        cost_per_second_by_resolution={
+            "360p": 0.03, "720p": 0.10, "1080p": 0.15, "4k": 0.30,
+        },
+        notes=(
+            "Gemini Omni Flash 1.1 R2V — cite <IMAGE_REF_0> / <VIDEO_REF_0> in the prompt. "
+            "image_urls plus up to 3 reference videos (each ≤3s). No audio refs on this schema. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+        duration_choices=tuple(str(i) for i in range(3, 11)),
+        default_duration="8",
+        aspect_choices=("16:9", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("360p", "720p", "1080p", "4k"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=8,
+        max_ref_videos=3,
+        max_ref_audios=0,
+        duration_as_int=True,
+        prompt_citation_style="image_ref",
+        image_field="image_urls",
     ),
     "mirage avatar x r2v": VisionModelSpec(
         key="mirage avatar x r2v",
@@ -1961,6 +2197,34 @@ V2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         video_field="video_url",
         extra_defaults={"generate_audio": True, "safety_tolerance": 2},
+    ),
+    "gemini omni 1.1 edit": VisionModelSpec(
+        key="gemini omni 1.1 edit",
+        label="Gemini Omni Flash 1.1 · Edit (V2V)",
+        mode="video_to_video",
+        endpoint="google/gemini-omni-flash/v1.1/edit",
+        cost_estimate_usd=0.80,  # estimate uses ~8s @720p; output follows source
+        cost_per_second=0.10,
+        cost_per_second_by_resolution={
+            "360p": 0.03, "720p": 0.10, "1080p": 0.15, "4k": 0.30,
+        },
+        notes=(
+            "Gemini Omni Flash 1.1 NL video edit — prompt + source clip (video_url). "
+            "No first/last frame. No duration/aspect on the API; output follows the source. "
+            "Optional resolution 360p/720p/1080p/4k. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+        duration_param="",
+        duration_choices=(),
+        default_duration="8",
+        aspect_choices=(),
+        default_aspect="",
+        resolution_choices=("360p", "720p", "1080p", "4k"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        supports_end_frame=False,
+        video_field="video_url",
     ),
     "sync 3 lipsync": VisionModelSpec(
         key="sync 3 lipsync",
@@ -2746,6 +3010,18 @@ def build_vision_arguments(
             args["resolution"] = picked or (spec.default_resolution or "1MP")
             args.pop("num_images", None)
             args.pop("image_size", None)
+        elif "muse-image" in ep:
+            raw_ar = (aspect_ratio or spec.default_aspect or "16:9").strip()
+            allowed = {str(a).lower(): str(a) for a in (spec.aspect_choices or ())}
+            picked_ar = allowed.get(raw_ar.lower())
+            if not picked_ar:
+                bare = raw_ar.replace(" ", "")
+                if "9:21" in bare:
+                    picked_ar = allowed.get("9:21")
+                else:
+                    picked_ar = allowed.get(colon_ar.lower())
+            args["aspect_ratio"] = picked_ar or spec.default_aspect or "16:9"
+            args.pop("image_size", None)
         else:
             # Flux 2 family: image_size enum
             args["image_size"] = size
@@ -2802,6 +3078,9 @@ def build_vision_arguments(
                     args[spec.duration_param] = int(str(dur).replace("s", ""))
                 except (TypeError, ValueError):
                     args[spec.duration_param] = dur
+            elif "veo" in ep or "luma" in ep:
+                # Veo / Luma Ray enums are "5s" / "10s"
+                args[spec.duration_param] = dur
             else:
                 # Seedance (and similar): string enum "15" / "auto", not int
                 args[spec.duration_param] = str(dur).replace("s", "").strip()
@@ -2811,9 +3090,13 @@ def build_vision_arguments(
 
     if is_h3:
         res = resolution or spec.default_resolution or "2K"
-        # API expects "2K"
-        if str(res).lower() == "2k":
-            res = "2K"
+        # API expects "2K" on H3; H3 Max uses 480P / 768P
+        choices = tuple(spec.resolution_choices or ())
+        amap = {str(a).lower(): str(a) for a in choices}
+        if str(res).lower() == "2k" and (not amap or "2k" in amap):
+            res = amap.get("2k", "2K")
+        elif amap:
+            res = amap.get(str(res).lower(), amap.get(str(spec.default_resolution or "").lower(), res))
         args["resolution"] = res
         # I2V: aspect follows start image (no aspect_ratio param)
         # T2V / omni: send aspect including "adaptive"
@@ -2884,12 +3167,17 @@ def build_vision_arguments(
         if aspect and aspect not in ("", "auto", "—"):
             args["aspect_ratio"] = aspect
     else:
-        # Veo / Luma / reference
+        # Veo / Luma / Gemini / reference
         if aspect and aspect not in ("", "—"):
             args["aspect_ratio"] = aspect
         res = resolution or spec.default_resolution
         if res and spec.resolution_choices:
-            args["resolution"] = res
+            picked = None
+            for a in spec.resolution_choices:
+                if str(a).lower() == str(res).lower():
+                    picked = str(a)
+                    break
+            args["resolution"] = picked or str(res)
 
     if generate_audio is not None and spec.supports_audio:
         args["generate_audio"] = bool(generate_audio)
@@ -2934,7 +3222,14 @@ def build_vision_arguments(
             raise ValueError(
                 "R2V needs Character 1 / identity refs (or a motion clip)."
             )
-        if getattr(spec, "omni_reference", False) or (
+        if "gemini-omni-flash" in ep:
+            cap_i = max(1, int(spec.max_refs or 8))
+            cap_v = max(0, int(getattr(spec, "max_ref_videos", 0) or 0)) or 3
+            if imgs:
+                args["image_urls"] = imgs[:cap_i]
+            if vids:
+                args["reference_video_urls"] = vids[:cap_v]
+        elif getattr(spec, "omni_reference", False) or (
             is_h3 and "reference-to-video" in ep
         ):
             cap_i = max(1, int(spec.max_refs or 9))
@@ -2996,7 +3291,11 @@ def build_vision_arguments(
             field = (spec.image_field or "image_url").strip() or "image_url"
             args[field] = imgs[0]
         # Soft-inject citation if missing
-        if imgs and (getattr(spec, "omni_reference", False) or int(spec.max_refs or 0) > 1):
+        if (imgs or vids) and (
+            getattr(spec, "omni_reference", False)
+            or int(spec.max_refs or 0) > 1
+            or (spec.prompt_citation_style or "") == "image_ref"
+        ):
             low = text.lower()
             style = (spec.prompt_citation_style or "plain").lower()
             if style == "angle" and "<image_0>" not in low and "<image0>" not in low:
@@ -3005,6 +3304,17 @@ def build_vision_arguments(
                     text.rstrip(".")
                     + f". Use {tags} as visual reference(s) for subject and style."
                 )
+            elif style == "image_ref" and "<image_ref_0>" not in low and "<video_ref_0>" not in low:
+                tags: list[str] = []
+                n_img = len(args.get("image_urls") or imgs or [])
+                n_vid = len(args.get("reference_video_urls") or vids or [])
+                tags.extend(f"<IMAGE_REF_{i}>" for i in range(min(n_img, 8)))
+                tags.extend(f"<VIDEO_REF_{i}>" for i in range(min(n_vid, 3)))
+                if tags:
+                    args["prompt"] = (
+                        text.rstrip(".")
+                        + f". Use {', '.join(tags)} as reference(s)."
+                    )
             elif style == "plain" and "image 1" not in low:
                 args["prompt"] = (
                     text.rstrip(".")

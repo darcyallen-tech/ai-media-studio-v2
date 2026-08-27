@@ -4,7 +4,7 @@
 
 Free desktop app. You bring your own API keys. You pay the providers for what you generate — not a subscription to this app.
 
-Catalog below is from the live app (`GET /models`, `GET /tools`) on 26 Aug 2026. Names match the in-app dropdowns.
+Catalog below is from the live app (`GET /models`, `GET /tools`) on 27 Aug 2026. Names match the in-app dropdowns. Older sibling SKUs stay callable for existing jobs (endpoints kept) but are hidden from dropdowns and the Model Guide current lists.
 
 ---
 
@@ -30,7 +30,7 @@ Without a fal key, Create and Tools stay blocked. Without Runware, Frame Editor 
 
 **Compare Source** on still Results opens a COMPARE node: source under the result, opacity, overlay toggle, swap. Enabled when the generate job had a source still. On T2I the button is visible but disabled (“No source image on this job.”).
 
-**Mask node.** On I2I (and R2I with exactly one image), **Add Mask** appears when the model supports it (Fibo Edit 1.5 / Fibo Edit v1). Boxes + brush. White = edit, black = keep. Same pixel size as the source. Extra refs on Fibo 1.5 disable mask. The Image Region subtab is gone; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
+**Mask node.** On I2I (and R2I with exactly one image), **Add Mask** appears when the model supports it (Fibo Edit 1.5). Boxes + brush. White = edit, black = keep. Same pixel size as the source. Extra refs on Fibo 1.5 disable mask. Muse Image Edit has no mask. The Image Region subtab is gone; drop-a-still is no longer the primary mask UI. Seedream 5 Pro edit stays in the I2I model list.
 
 ---
 
@@ -44,9 +44,9 @@ Cost is estimated before you generate.
 
 | Path | What it does | Models in catalog |
 |------|----------------|-------------------|
-| **T2I** | Text to a still | Flux 2 Pro, Flux 2 (cheaper), Flux 2 Flex, Flux 1.1 Pro Ultra, Recraft V4, Qwen Image 3, Nano Banana 2 (fast), Nano Banana Pro, Seedream 4.5, Seedream 5.0 Lite, Seedream 5.0 Pro, Grok Imagine Image 2.0, **Fibo Gen 1.5** |
-| **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine Edit / Quality Edit / 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro (boxed edits via **Add Mask**), **Fibo Edit 1.5** (multi-ref, optional mask on single-ref), Fibo Edit v1 (optional mask) |
-| **R2I** | Edit from extra reference stills | Flux 2 Pro / Max / Flex, Nano Banana Pro / 2, Grok Imagine Edit / Quality / 2.0, Qwen Image 3, Seedream 5 Pro R2I, **Fibo Edit 1.5** (up to 4 images, `<image_1>`… tags) |
+| **T2I** | Text to a still | Flux 2 Pro, Flux 2 (cheaper), Flux 2 Flex, Recraft V4, Qwen Image 3, Nano Banana 2 (fast), Nano Banana Pro, Seedream 5.0 Lite, Seedream 5.0 Pro, Grok Imagine Image 2.0, **Fibo Gen 1.5**, **Muse Image** (~$0.01, instruction + typography) |
+| **I2I** | Edit one still | Flux 2 Pro / Max / Flex, MAI-Image-2.5 Pro / 2.5, Nano Banana Pro / 2, Flux Kontext Pro, Grok Imagine 2.0 Edit, Qwen Image 3, Seedream 5.0 Pro (boxed edits via **Add Mask**), **Fibo Edit 1.5** (multi-ref, optional mask on single-ref), **Muse Image Edit** (precise instruction, no mask, up to 10 stills) |
+| **R2I** | Edit from extra reference stills | Flux 2 Pro / Max / Flex, Nano Banana Pro / 2, Grok Imagine 2.0 Edit, Qwen Image 3, Seedream 5 Pro R2I, **Fibo Edit 1.5** (up to 4 images, `<image_1>`… tags), **Muse Image Edit** (up to 10 stills) |
 
 Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, **Fibo Edit 1.5** is a strong default. Flux 2 Pro / Nano Banana Pro remain in the list.
 
@@ -54,10 +54,10 @@ Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, 
 
 | Path | What it does | Models in catalog |
 |------|----------------|-------------------|
-| **T2V** | Text to a clip | Veo 3.1 / Fast, Luma Ray 2, MiniMax H3, Grok Imagine 1.5, FLUX 3 (draft available), Seedance 2.5, **Wan 3.0** (up to 30s @ 1080p, native audio), LTX 2.5 Pro / Fast, Kling 3.0 Pro / Standard (native multi-shot), Kling O3 Pro / Standard, Mirage Avatar X |
-| **I2V** | Animate a start still (optional last frame on flagged models) | Grok Imagine 1.5, Kling O3 Standard / Pro, Kling 3.0 Standard / Pro (elements + multi-shot + last frame), Kling 2.6 Pro, Kling 2.5 Turbo Pro, Seedance 2.5 (last frame), **Wan 3.0** (last frame, 30s @ 1080p), FLUX 3 I2V (draft), FLUX 3 First→Last, MiniMax H3, Veo 3.1 Fast / 3.1, LTX 2.5 Pro / Fast |
-| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), Seedance 2.5, **Wan 3.0** (10 image refs + video/audio, cite Image 1 / Image 2), Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X |
-| **V2V** | Edit or retake an existing clip | Kling O3 Standard / Pro edit (elements), LTX 2.3 Retake, Grok Imagine Edit Video, FLUX 3 Extend (draft), sync-3 lipsync (needs dialogue audio; prompt unused) |
+| **T2V** | Text to a clip | Veo 3.1 / Fast, Luma Ray 3.2, MiniMax H3, **MiniMax H3 Max**, Grok Imagine 1.5, FLUX 3 (draft available), Seedance 2.5, **Wan 3.0** (up to 30s @ 1080p, native audio), LTX 2.5 Pro / Fast, Kling 3.0 Pro / Standard (native multi-shot), Kling O3 Pro / Standard, Mirage Avatar X, **Gemini Omni Flash 1.1** |
+| **I2V** | Animate a start still (optional last frame on flagged models) | Grok Imagine 1.5, Kling O3 Standard / Pro, Kling 3.0 Standard / Pro (elements + multi-shot + last frame), Seedance 2.5 (last frame), **Wan 3.0** (last frame, 30s @ 1080p), FLUX 3 I2V (draft), FLUX 3 First→Last, MiniMax H3, **MiniMax H3 Max**, Veo 3.1 Fast / 3.1, LTX 2.5 Pro / Fast, **Gemini Omni Flash 1.1** |
+| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), Seedance 2.5, **Wan 3.0** (10 image refs + video/audio, cite Image 1 / Image 2), Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X, **Gemini Omni Flash 1.1** (cite `<IMAGE_REF_0>` / `<VIDEO_REF_0>`) |
+| **V2V** | Edit or retake an existing clip | Kling O3 Standard / Pro edit (elements), LTX 2.3 Retake, Grok Imagine Edit Video, FLUX 3 Extend (draft), sync-3 lipsync (needs dialogue audio; prompt unused), **Gemini Omni Flash 1.1 Edit** (NL prompt + source clip) |
 | **Bridge** | First still → last still | Veo 3.1 Fast / 3.1, Kling O3 Pro / Standard, FLUX 3, Seedance 2.5, MiniMax H3, Wan 3.0 (I2V last frame) |
 | **Extend** | Continue a clip | FLUX 3 Extend |
 
@@ -65,7 +65,9 @@ Default video model: Kling O3 Standard V2V edit.
 
 **Listing-oriented notes (not a ranking):**
 
-- Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3, LTX 2.5, Wan 3.0, and the dedicated Bridge / First→Last rows.
+- Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3 / H3 Max, LTX 2.5, Wan 3.0, Gemini Omni Flash 1.1, and the dedicated Bridge / First→Last rows.
+- **MiniMax H3 Max** sits beside H3 (does not replace it). 5–15s · 480P/768P. Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; catalog after that $0.05 / $0.08.
+- **Gemini Omni Flash 1.1** T2V / I2V / R2V / V2V edit. V2V is NL video edit (prompt + source clip; no first/last frame). R2V cites `<IMAGE_REF_0>` / `<VIDEO_REF_0>`. Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k.
 - **Wan 3.0** (T2V / I2V / R2V): up to 30s @ 1080p, native audio, cost scales with seconds × resolution. R2V locks character/scene from up to 10 stills (cite Image 1 / Image 2 in the prompt).
 - Kling 3.0 I2V can lock characters with **Elements** (`@Element1` …) and cut a board with **native multi-shot**.
 - FLUX 3 can run a cheap **draft**, then Enhance to full quality on the same motion.
@@ -75,9 +77,9 @@ Default video model: Kling O3 Standard V2V edit.
 
 | Kind | Models |
 |------|--------|
-| **Music** | MiniMax Music 3 (default), MiniMax Music 2.6, Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Google Lyria 2, Stable Audio 2.5 |
+| **Music** | MiniMax Music 3 (default), Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
 | **SFX** | ElevenLabs Sound Effects V2, Sonilo Text-to-SFX |
-| **Voiceover** | MiniMax Speech 02 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |
+| **Voiceover** | MiniMax Speech 2.8 HD, MiniMax Speech 2.6 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |
 
 Instrumental is a toggle on music models that support it. Voice is a dropdown on TTS models that ship a voice list.
 

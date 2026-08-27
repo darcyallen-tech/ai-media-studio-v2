@@ -517,7 +517,8 @@ class VideoModelSpec:
                         if "720p" in self.cost_per_second_by_resolution
                         else next(iter(self.cost_per_second_by_resolution), "")
                     )
-            rate = self.cost_per_second_by_resolution.get(res, rate)
+            amap = {str(k).lower(): float(v) for k, v in self.cost_per_second_by_resolution.items()}
+            rate = amap.get(res, rate)
         if rate is None and self.cost_fixed is None:
             return None
         tok = self.nearest_duration(duration_seconds)
@@ -549,6 +550,36 @@ WAN30_ASPECTS: tuple[str, ...] = (
 )
 WAN30_RESOLUTIONS: tuple[str, ...] = ("480p", "720p", "1080p")
 WAN30_COST_PER_S: dict[str, float] = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
+
+# Meta Muse Image
+MUSE_ASPECT_RATIOS: tuple[str, ...] = (
+    "21:9", "16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "9:21",
+)
+
+# MiniMax H3 Max — promo $/s until 2026-09-01; catalog after is $0.05 / $0.08
+H3MAX_ASPECTS: tuple[str, ...] = (
+    "21:9", "16:9", "4:3", "1:1", "3:4", "9:16",
+)
+H3MAX_RESOLUTIONS: tuple[str, ...] = ("480P", "768P")
+H3MAX_DURATIONS: tuple[str, ...] = tuple(str(i) for i in range(5, 16))
+H3MAX_COST_PER_S: dict[str, float] = {"480p": 0.025, "768p": 0.04}
+H3MAX_CATALOG_COST_PER_S: dict[str, float] = {"480p": 0.05, "768p": 0.08}
+
+# Google Gemini Omni Flash v1.1
+GEMINI_OMNI_ASPECTS: tuple[str, ...] = ("16:9", "9:16")
+GEMINI_OMNI_RESOLUTIONS: tuple[str, ...] = ("360p", "720p", "1080p", "4k")
+GEMINI_OMNI_DURATIONS: tuple[str, ...] = tuple(str(i) for i in range(3, 11))
+GEMINI_OMNI_COST_PER_S: dict[str, float] = {
+    "360p": 0.03,
+    "720p": 0.10,
+    "1080p": 0.15,
+    "4k": 0.30,
+}
+
+# Luma Ray 3.2 T2V — $0.50/$1/$2 for 5s at 540/720/1080; 10s doubles
+RAY32_ASPECTS: tuple[str, ...] = ("3:4", "4:3", "1:1", "9:16", "16:9", "21:9")
+RAY32_RESOLUTIONS: tuple[str, ...] = ("540p", "720p", "1080p")
+RAY32_COST_PER_S: dict[str, float] = {"540p": 0.10, "720p": 0.20, "1080p": 0.40}
 
 
 def is_wan30_endpoint(endpoint: str | None) -> bool:
@@ -803,6 +834,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "xAI Grok Imagine image edit (~$0.022/image: $0.02 out + $0.002 in). "
             "Up to 3 source images. Strength is optional if the API accepts it."
         ),
+        hidden=True,
     ),
     "grok imagine quality edit": ImageEditModelSpec(
         key="grok imagine quality edit",
@@ -842,6 +874,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "xAI Grok Imagine Quality / Pro edit — stronger detail & text. "
             "Est. ~$0.06/image @1k, ~$0.08 @2k (includes one input). Up to 3 refs."
         ),
+        hidden=True,
     ),
     "grok imagine 2.0 edit": ImageEditModelSpec(
         key="grok imagine 2.0 edit",
@@ -982,6 +1015,32 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Bria Fibo Edit v1 — single-image local edits, optional mask. "
             "~$0.04/image. Prefer Fibo Edit 1.5 for multi-ref. "
             "Licensed training data, commercial OK."
+        ),
+        hidden=True,
+    ),
+    "muse image edit": ImageEditModelSpec(
+        key="muse image edit",
+        label="Image · Muse Image Edit",
+        endpoint="meta/muse-image/edit",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=10,
+        max_num_images=10,
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=MUSE_ASPECT_RATIOS,
+        default_aspect_ratio="16:9",
+        resolution_param=None,
+        image_size_param=None,
+        allowed_resolutions=(),
+        output_format_param="output_format",
+        default_output_format="jpeg",
+        cost_per_image=0.01,
+        extra_defaults={"output_format": "jpeg"},
+        supports_mask=False,
+        notes=(
+            "Meta Muse Image edit — precise “change only what I asked.” "
+            "1–10 stills (I2I / R2I). No mask_url on this schema. ~$0.01/image. "
+            "Strength: instruction + typography."
         ),
     ),
 }
@@ -1306,6 +1365,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         allowed_durations=("5", "10"),
         cost_per_second=0.07,
         notes="Kling 2.6 Pro image-to-video (native audio).",
+        hidden=True,
     ),
     "kling 2.5 turbo pro i2v": VideoModelSpec(
         key="kling 2.5 turbo pro i2v",
@@ -1321,6 +1381,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         allowed_durations=("5", "10"),
         cost_per_second=0.07,
         notes="Kling 2.5 Turbo Pro — fast cinematic I2V.",
+        hidden=True,
     ),
     # --- Seedance 2.0 (ByteDance on fal) — furniture motion / high-res I2V ---
     "seedance 2.0 i2v": VideoModelSpec(
@@ -1754,6 +1815,136 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Native stereo audio on output. Est. ~$0.26/s @2K (+ ref surcharges per fal)."
         ),
     ),
+    "minimax h3 max i2v": VideoModelSpec(
+        key="minimax h3 max i2v",
+        label="Video · MiniMax H3 Max – Image-to-Video",
+        endpoint="minimax/h3-max/image-to-video",
+        task="image_to_video",
+        image_field=None,
+        i2v_image_field="image_url",
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        generate_audio_param=None,
+        supports_end_frame=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=15.0,
+        allowed_durations=H3MAX_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=H3MAX_RESOLUTIONS,
+        default_resolution="768P",
+        aspect_ratio_param=None,  # aspect follows start frame when image_url is set
+        cost_per_second=0.04,
+        cost_per_second_by_resolution=dict(H3MAX_COST_PER_S),
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+        notes=(
+            "MiniMax H3 Max I2V — start still; optional end_image_url last frame. "
+            "5–15s · 480P/768P. Beside H3 (does not replace it). "
+            "Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; "
+            "catalog after that $0.05/s · $0.08/s."
+        ),
+    ),
+    "gemini omni 1.1 i2v": VideoModelSpec(
+        key="gemini omni 1.1 i2v",
+        label="Video · Gemini Omni Flash 1.1 – Image-to-Video",
+        endpoint="google/gemini-omni-flash/v1.1/image-to-video",
+        task="image_to_video",
+        image_field=None,
+        i2v_image_field="image_url",
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        generate_audio_param=None,
+        supports_end_frame=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="8",
+        min_duration_seconds=3.0,
+        max_duration_seconds=10.0,
+        allowed_durations=GEMINI_OMNI_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=GEMINI_OMNI_RESOLUTIONS,
+        default_resolution="720p",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=GEMINI_OMNI_ASPECTS,
+        default_aspect_ratio="16:9",
+        cost_per_second=0.10,
+        cost_per_second_by_resolution=dict(GEMINI_OMNI_COST_PER_S),
+        notes=(
+            "Gemini Omni Flash 1.1 I2V — image_url required; optional end_image_url. "
+            "3–10s · 16:9/9:16 · 360p/720p/1080p/4k. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+    ),
+    "gemini omni 1.1 reference": VideoModelSpec(
+        key="gemini omni 1.1 reference",
+        label="Video · Gemini Omni Flash 1.1 – Reference-to-Video",
+        endpoint="google/gemini-omni-flash/v1.1/reference-to-video",
+        task="image_to_video",
+        image_field="image_urls",
+        i2v_image_field="image_urls",
+        multi_image=True,
+        max_ref_images=8,
+        max_ref_videos=3,
+        max_ref_audios=0,
+        ref_image_field="image_urls",
+        ref_video_field="reference_video_urls",
+        prompt_citation_style="image_ref",
+        keep_audio_param=None,
+        generate_audio_param=None,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="8",
+        min_duration_seconds=3.0,
+        max_duration_seconds=10.0,
+        allowed_durations=GEMINI_OMNI_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=GEMINI_OMNI_RESOLUTIONS,
+        default_resolution="720p",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=GEMINI_OMNI_ASPECTS,
+        default_aspect_ratio="16:9",
+        auto_image_refs_in_prompt=True,
+        cost_per_second=0.10,
+        cost_per_second_by_resolution=dict(GEMINI_OMNI_COST_PER_S),
+        notes=(
+            "Gemini Omni Flash 1.1 R2V — cite <IMAGE_REF_0> / <VIDEO_REF_0>. "
+            "image_urls + up to 3 reference_video_urls (each ≤3s). No audio refs. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+    ),
+    "gemini omni 1.1 edit": VideoModelSpec(
+        key="gemini omni 1.1 edit",
+        label="Video · Gemini Omni Flash 1.1 – Edit",
+        endpoint="google/gemini-omni-flash/v1.1/edit",
+        task="video_edit",
+        video_field="video_url",
+        image_field=None,
+        multi_image=False,
+        keep_audio_param=None,
+        duration_param=None,
+        min_duration_seconds=1.0,
+        max_duration_seconds=10.0,
+        allowed_durations=GEMINI_OMNI_DURATIONS,
+        default_duration="8",
+        resolution_param="resolution",
+        allowed_resolutions=GEMINI_OMNI_RESOLUTIONS,
+        default_resolution="720p",
+        cost_per_second=0.10,
+        cost_per_second_by_resolution=dict(GEMINI_OMNI_COST_PER_S),
+        auto_image_refs_in_prompt=False,
+        notes=(
+            "Gemini Omni Flash 1.1 NL video edit — prompt + source video_url. "
+            "No first/last frame. No duration/aspect on the API. Optional resolution. "
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+        ),
+    ),
     "minimax h3 reference": VideoModelSpec(
         key="minimax h3 reference",
         label="Video · MiniMax H3 – Omni Reference",
@@ -1993,6 +2184,11 @@ _ALIASES: dict[str, str] = {
     "image · fibo edit": "fibo edit",
     "image · fibo edit (v1)": "fibo edit",
     "bria/fibo-edit/edit": "fibo edit",
+    "muse image edit": "muse image edit",
+    "muse edit": "muse image edit",
+    "muse image": "muse image edit",
+    "image · muse image edit": "muse image edit",
+    "meta/muse-image/edit": "muse image edit",
     "grok imagine edit video": "grok imagine edit video",
     "grok imagine video edit": "grok imagine edit video",
     "grok edit video": "grok imagine edit video",
@@ -2085,6 +2281,26 @@ _ALIASES: dict[str, str] = {
     "video · minimax h3 – omni reference": "minimax h3 reference",
     "minimax/h3/reference-to-video": "minimax h3 reference",
     "fal-ai/minimax/hailuo-03/reference-to-video": "minimax h3 reference",
+    "minimax h3 max": "minimax h3 max i2v",
+    "minimax h3 max i2v": "minimax h3 max i2v",
+    "minimax h3 max image-to-video": "minimax h3 max i2v",
+    "video · minimax h3 max – image-to-video": "minimax h3 max i2v",
+    "minimax/h3-max/image-to-video": "minimax h3 max i2v",
+    "gemini omni 1.1 i2v": "gemini omni 1.1 i2v",
+    "gemini omni flash 1.1 i2v": "gemini omni 1.1 i2v",
+    "gemini omni 1.1 image-to-video": "gemini omni 1.1 i2v",
+    "video · gemini omni flash 1.1 – image-to-video": "gemini omni 1.1 i2v",
+    "google/gemini-omni-flash/v1.1/image-to-video": "gemini omni 1.1 i2v",
+    "gemini omni 1.1 reference": "gemini omni 1.1 reference",
+    "gemini omni 1.1 r2v": "gemini omni 1.1 reference",
+    "gemini omni flash 1.1 reference": "gemini omni 1.1 reference",
+    "video · gemini omni flash 1.1 – reference-to-video": "gemini omni 1.1 reference",
+    "google/gemini-omni-flash/v1.1/reference-to-video": "gemini omni 1.1 reference",
+    "gemini omni 1.1 edit": "gemini omni 1.1 edit",
+    "gemini omni 1.1 v2v": "gemini omni 1.1 edit",
+    "gemini omni flash 1.1 edit": "gemini omni 1.1 edit",
+    "video · gemini omni flash 1.1 – edit": "gemini omni 1.1 edit",
+    "google/gemini-omni-flash/v1.1/edit": "gemini omni 1.1 edit",
     # Alibaba Wan 3.0
     "wan 3.0": "wan 3.0 i2v",
     "wan 3.0 i2v": "wan 3.0 i2v",
@@ -2132,11 +2348,9 @@ def model_dropdown_choices() -> list[str]:
         "seedream 5 pro",
         "flux 2 flex",
         "flux kontext pro",
-        "grok imagine edit",
-        "grok imagine quality edit",
         "grok imagine 2.0 edit",
         "fibo edit 1.5",
-        "fibo edit",
+        "muse image edit",
     ):
         spec = IMAGE_EDIT_MODELS.get(key)
         if spec and not spec.hidden:
@@ -2148,6 +2362,7 @@ def model_dropdown_choices() -> list[str]:
         "flux 3 extend",
         "ltx retake",
         "grok imagine edit video",
+        "gemini omni 1.1 edit",
     ):
         spec = VIDEO_MODELS.get(key)
         if spec and not spec.hidden:
@@ -2158,8 +2373,6 @@ def model_dropdown_choices() -> list[str]:
         "kling o3 pro i2v",
         "kling v3 standard i2v",
         "kling v3 pro i2v",
-        "kling 2.6 pro i2v",
-        "kling 2.5 turbo pro i2v",
         "grok imagine 1.5 i2v",
         "grok imagine 1.5 reference",
         "seedance 2.5 i2v",
@@ -2167,7 +2380,10 @@ def model_dropdown_choices() -> list[str]:
         "flux 3 i2v",
         "flux 3 first last",
         "minimax h3 i2v",
+        "minimax h3 max i2v",
         "minimax h3 reference",
+        "gemini omni 1.1 i2v",
+        "gemini omni 1.1 reference",
         "wan 3.0 i2v",
         "wan 3.0 reference",
     ):
@@ -2817,7 +3033,37 @@ def build_i2v_arguments(
             )
         ):
             low = prompt_out.lower()
-            if style == "angle":
+            if style == "image_ref":
+                # Gemini Omni Flash 1.1 R2V: <IMAGE_REF_0>, <VIDEO_REF_0>
+                if "<image_ref_0>" not in low and "<video_ref_0>" not in low:
+                    n_img = 0
+                    n_vid = 0
+                    for fk in (spec.ref_image_field, "image_urls", "reference_image_urls"):
+                        if fk and isinstance(args.get(fk), list):
+                            n_img = max(n_img, len(args[fk]))
+                    for fk in (spec.ref_video_field, "reference_video_urls"):
+                        if fk and isinstance(args.get(fk), list):
+                            n_vid = max(n_vid, len(args[fk]))
+                    pending_v = (
+                        params.get("reference_video_urls")
+                        or other.get("reference_video_urls")
+                        or params.get("video_urls")
+                        or other.get("video_urls")
+                        or []
+                    )
+                    if isinstance(pending_v, str):
+                        pending_v = [pending_v]
+                    n_vid = max(n_vid, len([u for u in pending_v if u]))
+                    n_img = max(1 if (image_url or extra_imgs) else 0, n_img)
+                    tags = [f"<IMAGE_REF_{i}>" for i in range(min(n_img, 8))]
+                    tags.extend(f"<VIDEO_REF_{i}>" for i in range(min(n_vid, 3)))
+                    if tags:
+                        prompt_out = (
+                            prompt_out.rstrip(".")
+                            + f". Use {', '.join(tags)} as reference(s)."
+                        )
+                        notes.append("Injected <IMAGE_REF_n> / <VIDEO_REF_n> tags into prompt.")
+            elif style == "angle":
                 # Grok Imagine 1.5 R2V: <IMAGE_0>, <IMAGE_1>, …
                 if "<image_0>" not in low and "<image0>" not in low:
                     n_refs = 0

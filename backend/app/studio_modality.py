@@ -79,6 +79,8 @@ def _image_edit_labels(*, multi_ref_only: bool = False) -> list[str]:
     # Fallback from registry if MODEL_LABELS empty of image entries
     if not out:
         for spec in IMAGE_EDIT_MODELS.values():
+            if getattr(spec, "hidden", False):
+                continue
             if multi_ref_only and int(spec.max_ref_images or 1) <= 1:
                 continue
             out.append(spec.label)
@@ -88,7 +90,7 @@ def _image_edit_labels(*, multi_ref_only: bool = False) -> list[str]:
 def _t2i_labels() -> list[str]:
     from app.vision_registry import T2I_MODELS
 
-    return [s.label for s in T2I_MODELS.values()]
+    return [s.label for s in T2I_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def _region_labels() -> list[str]:
@@ -124,6 +126,8 @@ def _video_labels_for(modality: VideoModality) -> list[str]:
         from app.vision_registry import T2V_MODELS
 
         for spec in T2V_MODELS.values():
+            if getattr(spec, "hidden", False):
+                continue
             if getattr(spec, "omni_reference", False):
                 continue
             # Pure text — exclude reference-pack models that require stills
@@ -154,6 +158,8 @@ def _video_labels_for(modality: VideoModality) -> list[str]:
     if not out:
         # Registry fallback (keys not in curated MODEL_LABELS order)
         for spec in VIDEO_MODELS.values():
+            if getattr(spec, "hidden", False):
+                continue
             if modality == "v2v" and spec.task == "video_edit":
                 out.append(spec.label)
             elif modality == "i2v" and spec.task == "image_to_video" and not _is_r2v_video_spec(spec):

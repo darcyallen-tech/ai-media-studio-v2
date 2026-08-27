@@ -40,6 +40,8 @@ class AudioSpec:
     # Soft/hard prompt length limit (chars). None = no enforced limit.
     max_prompt_chars: int | None = None
     extra_defaults: dict[str, Any] = field(default_factory=dict)
+    # Keep callable via resolve; omit from default dropdowns
+    hidden: bool = False
 
     def resolved_pricing_mode(self) -> str:
         raw = (self.pricing_mode or "").strip().lower()
@@ -146,6 +148,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
             "is_instrumental": True,
             "lyrics_optimizer": False,
         },
+        hidden=True,
     ),
     "sonilo text music": AudioSpec(
         key="sonilo text music",
@@ -215,6 +218,7 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         extra_defaults={
             "negative_prompt": "vocals, lyrics, speech, low quality",
         },
+        hidden=True,
     ),
     "stable audio 25": AudioSpec(
         key="stable audio 25",
@@ -417,6 +421,42 @@ VIDEO_SFX_MODELS: dict[str, AudioSpec] = {
 
 # --- Voiceover (TTS) ---
 VOICEOVER_MODELS: dict[str, AudioSpec] = {
+    "minimax speech 2.8 hd": AudioSpec(
+        key="minimax speech 2.8 hd",
+        label="MiniMax Speech 2.8 HD",
+        category="voiceover",
+        endpoint="fal-ai/minimax/speech-2.8-hd",
+        cost_estimate_usd=0.04,
+        notes=(
+            "MiniMax Speech 2.8 HD TTS. $0.10 / 1k characters. "
+            "Emotion + speed. Replaces Speech 02 HD in the list."
+        ),
+        pricing_mode="per_char",
+        supports_voice=True,
+        default_voice="Wise_Woman",
+        voice_provider="minimax",
+        extra_defaults={
+            "output_format": "url",
+        },
+    ),
+    "minimax speech 2.6 hd": AudioSpec(
+        key="minimax speech 2.6 hd",
+        label="MiniMax Speech 2.6 HD",
+        category="voiceover",
+        endpoint="fal-ai/minimax/speech-2.6-hd",
+        cost_estimate_usd=0.04,
+        notes=(
+            "MiniMax Speech 2.6 HD TTS. $0.10 / 1k characters. "
+            "Emotion + speed."
+        ),
+        pricing_mode="per_char",
+        supports_voice=True,
+        default_voice="Wise_Woman",
+        voice_provider="minimax",
+        extra_defaults={
+            "output_format": "url",
+        },
+    ),
     "minimax speech 02 hd": AudioSpec(
         key="minimax speech 02 hd",
         label="MiniMax Speech 02 HD",
@@ -435,6 +475,7 @@ VOICEOVER_MODELS: dict[str, AudioSpec] = {
         extra_defaults={
             "output_format": "url",
         },
+        hidden=True,
     ),
     "grok tts": AudioSpec(
         key="grok tts",
@@ -523,27 +564,27 @@ VOICE_CLONE_MODELS: dict[str, AudioSpec] = {
 
 
 def music_labels() -> list[str]:
-    return [s.label for s in MUSIC_MODELS.values()]
+    return [s.label for s in MUSIC_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def sfx_labels() -> list[str]:
-    return [s.label for s in SFX_MODELS.values()]
+    return [s.label for s in SFX_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def ambience_labels() -> list[str]:
-    return [s.label for s in AMBIENCE_MODELS.values()]
+    return [s.label for s in AMBIENCE_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def video_sfx_labels() -> list[str]:
-    return [s.label for s in VIDEO_SFX_MODELS.values()]
+    return [s.label for s in VIDEO_SFX_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def voiceover_labels() -> list[str]:
-    return [s.label for s in VOICEOVER_MODELS.values()]
+    return [s.label for s in VOICEOVER_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def voice_clone_labels() -> list[str]:
-    return [s.label for s in VOICE_CLONE_MODELS.values()]
+    return [s.label for s in VOICE_CLONE_MODELS.values() if not getattr(s, "hidden", False)]
 
 
 def find_audio(label_or_key: str | None, registry: dict[str, AudioSpec]) -> AudioSpec | None:

@@ -414,6 +414,8 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for category, registry in ui_audio_registries(modality).items():
         for spec in registry.values():
+            if getattr(spec, "hidden", False):
+                continue
             toks, default_dur = duration_tokens(spec)
             voices = default_voices_for_model(spec) if spec.supports_voice else []
             rows.append(

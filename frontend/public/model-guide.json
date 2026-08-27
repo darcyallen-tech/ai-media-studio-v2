@@ -1,9 +1,9 @@
 {
   "title": "AI Media Studio V2 · Model Guide",
   "version": "1.0",
-  "updated": "2026-08-26",
+  "updated": "2026-08-27",
   "app": "AI Media Studio V2",
-  "note": "Catalog ids match GET /models. Drop this JSON next to the frontend or fetch it from /model-guide.json. Taglines are routing hints, not Fal marketing.",
+  "note": "Catalog ids match GET /models. Drop this JSON next to the frontend or fetch it from /model-guide.json. Taglines are routing hints, not Fal marketing. Older sibling SKUs stay callable for existing jobs (endpoints kept) but are hidden from this current list.",
   "sections": [
     {
       "id": "t2i",
@@ -74,26 +74,6 @@
           ]
         },
         {
-          "id": "vision:flux 1.1 pro ultra t2i",
-          "label": "Flux 1.1 Pro Ultra",
-          "modalities": [
-            "t2i"
-          ],
-          "tagline": "Best for high-res photoreal (up to ~2K)",
-          "strengths": [
-            "High-res photoreal stills.",
-            "Good when Flux 2 Pro feels small."
-          ],
-          "weaknesses": [
-            "Older generation than Flux 2.",
-            "Not the fastest iterate SKU."
-          ],
-          "use_cases": [
-            "Print-ish stills",
-            "Detail crops"
-          ]
-        },
-        {
           "id": "vision:seedream 5 pro t2i",
           "label": "Seedream 5.0 Pro",
           "modalities": [
@@ -132,24 +112,6 @@
           "use_cases": [
             "Explore Seedream looks",
             "Volume stills"
-          ]
-        },
-        {
-          "id": "vision:seedream 4.5 t2i",
-          "label": "Seedream 4.5",
-          "modalities": [
-            "t2i"
-          ],
-          "tagline": "Best for detailed listing stills (prior gen)",
-          "strengths": [
-            "Strong detail, listing-friendly.",
-            "Known quantity if 5.x misbehaves."
-          ],
-          "weaknesses": [
-            "Superseded by 5 Pro for most new work."
-          ],
-          "use_cases": [
-            "Fallback listing stills"
           ]
         },
         {
@@ -280,6 +242,28 @@
             "Listing stills on licensed data",
             "Controllable photoreal plates"
           ]
+        },
+        {
+          "id": "vision:muse image t2i",
+          "label": "Muse Image",
+          "modalities": [
+            "t2i"
+          ],
+          "tagline": "Best for instruction + typography (~$0.01)",
+          "strengths": [
+            "Meta Muse T2I — follows the instruction tightly.",
+            "Strong typography / signage stills.",
+            "~$0.01/image. Aspects 21:9–9:21."
+          ],
+          "weaknesses": [
+            "Not the photoreal default (Flux 2 Pro still is).",
+            "No region mask — that's an edit SKU."
+          ],
+          "use_cases": [
+            "Type on a still",
+            "Cheap instruction stills",
+            "Signage / titles"
+          ]
         }
       ]
     },
@@ -335,25 +319,26 @@
           ]
         },
         {
-          "id": "studio:img:fibo edit",
-          "label": "Fibo Edit (v1)",
+          "id": "studio:img:muse image edit",
+          "label": "Muse Image Edit",
           "modalities": [
-            "i2i"
+            "i2i",
+            "r2i"
           ],
-          "tagline": "Single-image local edit with optional mask",
+          "tagline": "Best for “change only what I asked”",
           "strengths": [
-            "Targeted changes (furniture, sky, cleanup) without a full rewrite.",
-            "Optional mask. ~$0.04/image.",
-            "Licensed data, commercial OK."
+            "Precise instruction edits. Up to 10 stills.",
+            "~$0.01/image.",
+            "R2I when you attach extra refs."
           ],
           "weaknesses": [
-            "Single image only — use Fibo Edit 1.5 for refs.",
-            "Use the Mask node (boxes + brush) or prompt only."
+            "No mask_url — Add Mask stays hidden.",
+            "Not a furniture-pop-in default (Fibo Edit 1.5 is)."
           ],
           "use_cases": [
-            "Swap a sofa",
-            "Sky / lawn cleanup",
-            "Local furniture edits"
+            "Local prompt edits",
+            "Typography fixes",
+            "Multi-ref instruction"
           ]
         },
         {
@@ -520,43 +505,6 @@
           ],
           "use_cases": [
             "Grok-stack edits"
-          ]
-        },
-        {
-          "id": "studio:img:grok imagine quality edit",
-          "label": "Grok Imagine Quality Edit",
-          "modalities": [
-            "i2i",
-            "r2i"
-          ],
-          "tagline": "Best Grok edit for detail and text",
-          "strengths": [
-            "Stronger detail and text than the cheap Grok edit."
-          ],
-          "weaknesses": [
-            "Est. ~$0.06/image.",
-            "Superseded in spirit by 2.0 — keep if Quality wins a shot."
-          ],
-          "use_cases": [
-            "Text-in-image fixes"
-          ]
-        },
-        {
-          "id": "studio:img:grok imagine edit",
-          "label": "Grok Imagine Edit",
-          "modalities": [
-            "i2i",
-            "r2i"
-          ],
-          "tagline": "Best cheap Grok edit",
-          "strengths": [
-            "~$0.022/image. Up to 3 sources."
-          ],
-          "weaknesses": [
-            "Weaker text/detail than Quality / 2.0."
-          ],
-          "use_cases": [
-            "Low-stakes tweaks"
           ]
         },
         {
@@ -750,40 +698,24 @@
           ]
         },
         {
-          "id": "studio:img:grok imagine quality edit",
-          "label": "Grok Imagine Quality Edit",
+          "id": "studio:img:muse image edit",
+          "label": "Muse Image Edit",
           "modalities": [
             "i2i",
             "r2i"
           ],
-          "tagline": "Best Grok edit for detail and text",
+          "tagline": "Best cheap multi-ref instruction edit",
           "strengths": [
-            "Stronger detail and text than the cheap Grok edit."
+            "Up to 10 stills. Precise “change only what I asked.”",
+            "~$0.01/image."
           ],
           "weaknesses": [
-            "Est. ~$0.06/image.",
-            "Superseded in spirit by 2.0 — keep if Quality wins a shot."
+            "No mask.",
+            "Cite refs in the instruction; no <image_n> schema."
           ],
           "use_cases": [
-            "Text-in-image fixes"
-          ]
-        },
-        {
-          "id": "studio:img:grok imagine edit",
-          "label": "Grok Imagine Edit",
-          "modalities": [
-            "i2i",
-            "r2i"
-          ],
-          "tagline": "Best cheap Grok edit",
-          "strengths": [
-            "~$0.022/image. Up to 3 sources."
-          ],
-          "weaknesses": [
-            "Weaker text/detail than Quality / 2.0."
-          ],
-          "use_cases": [
-            "Low-stakes tweaks"
+            "Combo stills",
+            "Style + subject refs"
           ]
         }
       ]
@@ -875,6 +807,47 @@
           "use_cases": [
             "Default storyboard T2V",
             "2K delivery on a budget"
+          ]
+        },
+        {
+          "id": "vision:minimax h3 max t2v",
+          "label": "MiniMax H3 Max",
+          "modalities": [
+            "t2v"
+          ],
+          "tagline": "H3 family, 480P/768P (promo pricing)",
+          "strengths": [
+            "5–15s beside H3 (does not replace it).",
+            "Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026.",
+            "prompt_expansion_mode default balanced."
+          ],
+          "weaknesses": [
+            "Catalog after the promo is $0.05 / $0.08 per second.",
+            "No 2K like H3."
+          ],
+          "use_cases": [
+            "Cheaper H3-family T2V",
+            "480P exploration"
+          ]
+        },
+        {
+          "id": "vision:gemini omni 1.1 t2v",
+          "label": "Gemini Omni Flash 1.1",
+          "modalities": [
+            "t2v"
+          ],
+          "tagline": "Best NL Google T2V on fal v1.1",
+          "strengths": [
+            "3–10s (default 8) · 16:9/9:16 · 360p–4k.",
+            "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+          ],
+          "weaknesses": [
+            "Aspect is 16:9 or 9:16 only.",
+            "v1.1 endpoints only — not the old v1 SKU."
+          ],
+          "use_cases": [
+            "Prompt-to-clip",
+            "720p default delivery"
           ]
         },
         {
@@ -1047,21 +1020,23 @@
           ]
         },
         {
-          "id": "vision:luma ray 2",
-          "label": "Luma Ray 2",
+          "id": "vision:luma ray 3.2",
+          "label": "Luma Ray 3.2",
           "modalities": [
             "t2v"
           ],
-          "tagline": "Best Luma cinematic T2V",
+          "tagline": "Best current Luma T2V",
           "strengths": [
-            "Strong cinematic alternative."
+            "5s or 10s · 540p/720p/1080p.",
+            "Est. $0.50 / $1 / $2 for 5s at 540/720/1080; 10s doubles."
           ],
           "weaknesses": [
-            "Duration/aspect follow Luma, not the Fal flagship set.",
-            "Max ~9s in catalog."
+            "Ray 2 is hidden; this is the list SKU.",
+            "Only two durations."
           ],
           "use_cases": [
-            "When you want a Luma look"
+            "Cinematic T2V",
+            "Short Luma takes"
           ]
         },
         {
@@ -1177,6 +1152,46 @@
           ]
         },
         {
+          "id": "studio:vid:minimax h3 max i2v",
+          "label": "MiniMax H3 Max I2V",
+          "modalities": [
+            "i2v"
+          ],
+          "tagline": "H3 I2V sibling — 480P/768P promo",
+          "strengths": [
+            "Start still; optional last frame (end_image_url).",
+            "5–15s. Promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026."
+          ],
+          "weaknesses": [
+            "Aspect follows the start image.",
+            "Does not replace H3 2K."
+          ],
+          "use_cases": [
+            "Cheaper still→clip",
+            "First→last on H3 Max"
+          ]
+        },
+        {
+          "id": "studio:vid:gemini omni 1.1 i2v",
+          "label": "Gemini Omni Flash 1.1 I2V",
+          "modalities": [
+            "i2v"
+          ],
+          "tagline": "Google I2V with optional last frame",
+          "strengths": [
+            "image_url required; optional end_image_url.",
+            "3–10s · 360p–4k. Real fal per-second rates."
+          ],
+          "weaknesses": [
+            "Aspect 16:9 / 9:16 only.",
+            "No fake first/last on the V2V edit SKU — that's a different row."
+          ],
+          "use_cases": [
+            "Animate a still",
+            "First→last Gemini"
+          ]
+        },
+        {
           "id": "studio:vid:kling v3 pro i2v",
           "label": "Kling 3.0 Pro I2V",
           "modalities": [
@@ -1246,41 +1261,6 @@
           ],
           "use_cases": [
             "Draft Kling I2V"
-          ]
-        },
-        {
-          "id": "studio:vid:kling 2.6 pro i2v",
-          "label": "Kling 2.6 Pro I2V",
-          "modalities": [
-            "i2v"
-          ],
-          "tagline": "Best older Kling with native audio",
-          "strengths": [
-            "Native audio. Known 5/10s enum."
-          ],
-          "weaknesses": [
-            "Superseded by 3.0 / O3 for new work.",
-            "Max 10s."
-          ],
-          "use_cases": [
-            "Fallback if 3.0 misbehaves"
-          ]
-        },
-        {
-          "id": "studio:vid:kling 2.5 turbo pro i2v",
-          "label": "Kling 2.5 Turbo Pro I2V",
-          "modalities": [
-            "i2v"
-          ],
-          "tagline": "Best fast legacy Kling I2V",
-          "strengths": [
-            "Fast cinematic I2V."
-          ],
-          "weaknesses": [
-            "Max 10s. Older gen."
-          ],
-          "use_cases": [
-            "Speed tests only"
           ]
         },
         {
@@ -1418,6 +1398,26 @@
             "Synthetic characters",
             "Multi-angle identity",
             "Storyboard shots"
+          ]
+        },
+        {
+          "id": "studio:vid:gemini omni 1.1 reference",
+          "label": "Gemini Omni Flash 1.1 R2V",
+          "modalities": [
+            "r2v"
+          ],
+          "tagline": "Cite <IMAGE_REF_0> / <VIDEO_REF_0>",
+          "strengths": [
+            "image_urls + up to 3 reference videos (each ≤3s).",
+            "Prompt tags match the fal schema."
+          ],
+          "weaknesses": [
+            "No audio ref field on this schema.",
+            "Reference clips must be short (≤3s)."
+          ],
+          "use_cases": [
+            "Identity + motion refs",
+            "Multi-still Gemini clip"
           ]
         },
         {
@@ -1665,6 +1665,26 @@
           ]
         },
         {
+          "id": "studio:vid:gemini omni 1.1 edit",
+          "label": "Gemini Omni Flash 1.1 Edit",
+          "modalities": [
+            "v2v"
+          ],
+          "tagline": "Best NL video edit (prompt + source clip)",
+          "strengths": [
+            "Natural-language video edit. video_url + prompt.",
+            "No first/last frame. Optional 360p–4k."
+          ],
+          "weaknesses": [
+            "No duration/aspect on the API — output follows the source.",
+            "Not a retake SKU (use LTX 2.3 Retake for local reshoots)."
+          ],
+          "use_cases": [
+            "Rewrite a take in prose",
+            "Prompt-only V2V"
+          ]
+        },
+        {
           "id": "studio:vid:flux 3 extend",
           "label": "FLUX 3 Extend",
           "modalities": [
@@ -1762,25 +1782,6 @@
           ]
         },
         {
-          "id": "audio:minimax music 2.6",
-          "label": "MiniMax Music 2.6",
-          "modalities": [
-            "music"
-          ],
-          "tagline": "Best default listing underscore",
-          "strengths": [
-            "Instrumental-friendly.",
-            "V2 music default."
-          ],
-          "weaknesses": [
-            "15s and 60s estimates currently match ($0.15) — likely capped.",
-            "Superseded in length by Music 3."
-          ],
-          "use_cases": [
-            "Listing beds"
-          ]
-        },
-        {
           "id": "audio:elevenlabs music",
           "label": "ElevenLabs Music",
           "modalities": [
@@ -1814,24 +1815,6 @@
           ],
           "use_cases": [
             "When you want a Google song, not a timed bed"
-          ]
-        },
-        {
-          "id": "audio:lyria 2",
-          "label": "Google Lyria 2",
-          "modalities": [
-            "music"
-          ],
-          "tagline": "Best short Google mood clip",
-          "strengths": [
-            "~30s ambient / mood.",
-            "Flat per track."
-          ],
-          "weaknesses": [
-            "Not a 3-minute song (that's Lyria 3)."
-          ],
-          "use_cases": [
-            "Instagram-length beds"
           ]
         },
         {
@@ -1921,23 +1904,39 @@
       "blurb": "TTS for listing reads and avatar scripts.",
       "models": [
         {
-          "id": "audio:minimax speech 02 hd",
-          "label": "MiniMax Speech 02 HD",
+          "id": "audio:minimax speech 2.8 hd",
+          "label": "MiniMax Speech 2.8 HD",
           "modalities": [
             "voiceover"
           ],
-          "tagline": "Best default TTS (My Voices)",
+          "tagline": "Best current MiniMax TTS",
           "strengths": [
-            "Emotion + speed.",
-            "V2 voice default."
+            "$0.10 / 1k characters. Emotion + speed.",
+            "Same MiniMax voice list as the hidden 02 HD SKU."
           ],
           "weaknesses": [
-            "Estimate ignores duration (character-based).",
-            "Empty prompt still shows a stub cost."
+            "Per-character estimate needs a script."
           ],
           "use_cases": [
-            "Listing reads",
-            "Avatar scripts"
+            "Listing VO",
+            "My Voices reads"
+          ]
+        },
+        {
+          "id": "audio:minimax speech 2.6 hd",
+          "label": "MiniMax Speech 2.6 HD",
+          "modalities": [
+            "voiceover"
+          ],
+          "tagline": "MiniMax TTS 2.6",
+          "strengths": [
+            "$0.10 / 1k characters. Emotion + speed."
+          ],
+          "weaknesses": [
+            "Prefer 2.8 when you want the current SKU."
+          ],
+          "use_cases": [
+            "VO fallback"
           ]
         },
         {
@@ -2275,26 +2274,6 @@
       ]
     },
     {
-      "id": "vision:flux 1.1 pro ultra t2i",
-      "label": "Flux 1.1 Pro Ultra",
-      "modalities": [
-        "t2i"
-      ],
-      "tagline": "Best for high-res photoreal (up to ~2K)",
-      "strengths": [
-        "High-res photoreal stills.",
-        "Good when Flux 2 Pro feels small."
-      ],
-      "weaknesses": [
-        "Older generation than Flux 2.",
-        "Not the fastest iterate SKU."
-      ],
-      "use_cases": [
-        "Print-ish stills",
-        "Detail crops"
-      ]
-    },
-    {
       "id": "vision:seedream 5 pro t2i",
       "label": "Seedream 5.0 Pro",
       "modalities": [
@@ -2333,24 +2312,6 @@
       "use_cases": [
         "Explore Seedream looks",
         "Volume stills"
-      ]
-    },
-    {
-      "id": "vision:seedream 4.5 t2i",
-      "label": "Seedream 4.5",
-      "modalities": [
-        "t2i"
-      ],
-      "tagline": "Best for detailed listing stills (prior gen)",
-      "strengths": [
-        "Strong detail, listing-friendly.",
-        "Known quantity if 5.x misbehaves."
-      ],
-      "weaknesses": [
-        "Superseded by 5 Pro for most new work."
-      ],
-      "use_cases": [
-        "Fallback listing stills"
       ]
     },
     {
@@ -2461,6 +2422,50 @@
       ]
     },
     {
+      "id": "vision:fibo gen 1.5 t2i",
+      "label": "Fibo Gen 1.5",
+      "modalities": [
+        "t2i"
+      ],
+      "tagline": "Best licensed T2I for type and control",
+      "strengths": [
+        "High-fidelity T2I with accurate typography.",
+        "Structured/controllable prompts; licensed training data.",
+        "~$0.04/image. Commercial OK."
+      ],
+      "weaknesses": [
+        "No inspire-from-ref in this wiring (v1 is prompt T2I).",
+        "Single image per call."
+      ],
+      "use_cases": [
+        "Signage and type",
+        "Listing stills on licensed data",
+        "Controllable photoreal plates"
+      ]
+    },
+    {
+      "id": "vision:muse image t2i",
+      "label": "Muse Image",
+      "modalities": [
+        "t2i"
+      ],
+      "tagline": "Best for instruction + typography (~$0.01)",
+      "strengths": [
+        "Meta Muse T2I — follows the instruction tightly.",
+        "Strong typography / signage stills.",
+        "~$0.01/image. Aspects 21:9–9:21."
+      ],
+      "weaknesses": [
+        "Not the photoreal default (Flux 2 Pro still is).",
+        "No region mask — that's an edit SKU."
+      ],
+      "use_cases": [
+        "Type on a still",
+        "Cheap instruction stills",
+        "Signage / titles"
+      ]
+    },
+    {
       "id": "studio:img:flux 2 pro",
       "label": "Flux 2 Pro (edit)",
       "modalities": [
@@ -2481,6 +2486,52 @@
         "Virtual staging",
         "Sky / lawn cleanup",
         "Product on a plate"
+      ]
+    },
+    {
+      "id": "studio:img:fibo edit 1.5",
+      "label": "Fibo Edit 1.5",
+      "modalities": [
+        "i2i",
+        "r2i"
+      ],
+      "tagline": "Strong default for staging / furniture pop-in (licensed)",
+      "strengths": [
+        "1–4 images: Image 1 is the source; 2–4 are refs.",
+        "Cite <image_1> <image_2> in the instruction.",
+        "Licensed data, commercial OK. ~$0.04/image."
+      ],
+      "weaknesses": [
+        "Strong furniture pop-in in testing. Flux 2 Pro / Nano Banana Pro remain in the list.",
+        "Mask only on single-image edits."
+      ],
+      "use_cases": [
+        "Virtual try-on",
+        "Object combo / furniture look refs",
+        "Background swap"
+      ]
+    },
+    {
+      "id": "studio:img:muse image edit",
+      "label": "Muse Image Edit",
+      "modalities": [
+        "i2i",
+        "r2i"
+      ],
+      "tagline": "Best for “change only what I asked”",
+      "strengths": [
+        "Precise instruction edits. Up to 10 stills.",
+        "~$0.01/image.",
+        "R2I when you attach extra refs."
+      ],
+      "weaknesses": [
+        "No mask_url — Add Mask stays hidden.",
+        "Not a furniture-pop-in default (Fibo Edit 1.5 is)."
+      ],
+      "use_cases": [
+        "Local prompt edits",
+        "Typography fixes",
+        "Multi-ref instruction"
       ]
     },
     {
@@ -2587,15 +2638,15 @@
       ]
     },
     {
-      "id": "studio:region:seedream 5 pro",
-      "label": "Seedream 5 Pro (region)",
+      "id": "studio:img:seedream 5 pro",
+      "label": "Seedream 5 Pro (edit)",
       "modalities": [
-        "region",
-        "i2i"
+        "i2i",
+        "r2i"
       ],
-      "tagline": "Best for boxed / grounded edits",
+      "tagline": "Boxed / grounded edits via Add Mask on I2I",
       "strengths": [
-        "Region-precise (colored box / layer).",
+        "Draw boxes on Add Mask (I2I).",
         "Up to 10 refs on the family.",
         "Listing-safe local changes."
       ],
@@ -2647,43 +2698,6 @@
       ],
       "use_cases": [
         "Grok-stack edits"
-      ]
-    },
-    {
-      "id": "studio:img:grok imagine quality edit",
-      "label": "Grok Imagine Quality Edit",
-      "modalities": [
-        "i2i",
-        "r2i"
-      ],
-      "tagline": "Best Grok edit for detail and text",
-      "strengths": [
-        "Stronger detail and text than the cheap Grok edit."
-      ],
-      "weaknesses": [
-        "Est. ~$0.06/image.",
-        "Superseded in spirit by 2.0 — keep if Quality wins a shot."
-      ],
-      "use_cases": [
-        "Text-in-image fixes"
-      ]
-    },
-    {
-      "id": "studio:img:grok imagine edit",
-      "label": "Grok Imagine Edit",
-      "modalities": [
-        "i2i",
-        "r2i"
-      ],
-      "tagline": "Best cheap Grok edit",
-      "strengths": [
-        "~$0.022/image. Up to 3 sources."
-      ],
-      "weaknesses": [
-        "Weaker text/detail than Quality / 2.0."
-      ],
-      "use_cases": [
-        "Low-stakes tweaks"
       ]
     },
     {
@@ -2766,6 +2780,27 @@
       ]
     },
     {
+      "id": "vision:wan 3.0 t2v",
+      "label": "Wan 3.0",
+      "modalities": [
+        "t2v"
+      ],
+      "tagline": "Best 30s @ 1080p T2V with native audio",
+      "strengths": [
+        "Up to 30s @ 1080p, native audio.",
+        "Cost scales with seconds × resolution ($0.05/s 480p, $0.10/s 720p, $0.20/s 1080p).",
+        "Commercial use OK on fal."
+      ],
+      "weaknesses": [
+        "Longer clips get expensive at 1080p.",
+        "No Prime SKU in this wiring."
+      ],
+      "use_cases": [
+        "Longer single takes",
+        "1080p prompt-to-clip with audio"
+      ]
+    },
+    {
       "id": "vision:minimax h3 t2v",
       "label": "MiniMax H3",
       "modalities": [
@@ -2784,6 +2819,47 @@
       "use_cases": [
         "Default storyboard T2V",
         "2K delivery on a budget"
+      ]
+    },
+    {
+      "id": "vision:minimax h3 max t2v",
+      "label": "MiniMax H3 Max",
+      "modalities": [
+        "t2v"
+      ],
+      "tagline": "H3 family, 480P/768P (promo pricing)",
+      "strengths": [
+        "5–15s beside H3 (does not replace it).",
+        "Launch promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026.",
+        "prompt_expansion_mode default balanced."
+      ],
+      "weaknesses": [
+        "Catalog after the promo is $0.05 / $0.08 per second.",
+        "No 2K like H3."
+      ],
+      "use_cases": [
+        "Cheaper H3-family T2V",
+        "480P exploration"
+      ]
+    },
+    {
+      "id": "vision:gemini omni 1.1 t2v",
+      "label": "Gemini Omni Flash 1.1",
+      "modalities": [
+        "t2v"
+      ],
+      "tagline": "Best NL Google T2V on fal v1.1",
+      "strengths": [
+        "3–10s (default 8) · 16:9/9:16 · 360p–4k.",
+        "Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k."
+      ],
+      "weaknesses": [
+        "Aspect is 16:9 or 9:16 only.",
+        "v1.1 endpoints only — not the old v1 SKU."
+      ],
+      "use_cases": [
+        "Prompt-to-clip",
+        "720p default delivery"
       ]
     },
     {
@@ -2834,7 +2910,7 @@
       "tagline": "Best cinematic Kling T2V",
       "strengths": [
         "3–15s, native audio, 16:9/9:16/1:1.",
-        "Storyboard-friendly motion."
+        "Storyboard maps Shots to native multi_prompt (customize or intelligent cuts)."
       ],
       "weaknesses": [
         "V2 currently prices Standard T2V the same as Pro — treat Pro as the real SKU until that's fixed.",
@@ -2853,7 +2929,8 @@
       ],
       "tagline": "Best cheaper Kling 3 T2V (in theory)",
       "strengths": [
-        "Same 3–15s native-audio family."
+        "Same 3–15s native-audio family.",
+        "Storyboard multi_prompt like Pro (no @Element tray — T2V schema has no elements)."
       ],
       "weaknesses": [
         "Estimate currently matches Pro ($2.52 / 15s). Prefer O3 Standard if you want a real cheaper Kling.",
@@ -2955,21 +3032,23 @@
       ]
     },
     {
-      "id": "vision:luma ray 2",
-      "label": "Luma Ray 2",
+      "id": "vision:luma ray 3.2",
+      "label": "Luma Ray 3.2",
       "modalities": [
         "t2v"
       ],
-      "tagline": "Best Luma cinematic T2V",
+      "tagline": "Best current Luma T2V",
       "strengths": [
-        "Strong cinematic alternative."
+        "5s or 10s · 540p/720p/1080p.",
+        "Est. $0.50 / $1 / $2 for 5s at 540/720/1080; 10s doubles."
       ],
       "weaknesses": [
-        "Duration/aspect follow Luma, not the Fal flagship set.",
-        "Max ~9s in catalog."
+        "Ray 2 is hidden; this is the list SKU.",
+        "Only two durations."
       ],
       "use_cases": [
-        "When you want a Luma look"
+        "Cinematic T2V",
+        "Short Luma takes"
       ]
     },
     {
@@ -3036,6 +3115,27 @@
       ]
     },
     {
+      "id": "studio:vid:wan 3.0 i2v",
+      "label": "Wan 3.0 I2V",
+      "modalities": [
+        "i2v"
+      ],
+      "tagline": "Best 30s @ 1080p still→video with last frame",
+      "strengths": [
+        "Start still required; optional last frame.",
+        "Up to 30s @ 1080p, native audio.",
+        "Cost scales with seconds × resolution."
+      ],
+      "weaknesses": [
+        "1080p 30s is $6.00 — check Est. cost.",
+        "Not an identity pack (use R2V for multi-ref)."
+      ],
+      "use_cases": [
+        "Long still→clip",
+        "First→last without a dedicated bridge SKU"
+      ]
+    },
+    {
       "id": "studio:vid:minimax h3 i2v",
       "label": "MiniMax H3 I2V",
       "modalities": [
@@ -3057,6 +3157,46 @@
       ]
     },
     {
+      "id": "studio:vid:minimax h3 max i2v",
+      "label": "MiniMax H3 Max I2V",
+      "modalities": [
+        "i2v"
+      ],
+      "tagline": "H3 I2V sibling — 480P/768P promo",
+      "strengths": [
+        "Start still; optional last frame (end_image_url).",
+        "5–15s. Promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026."
+      ],
+      "weaknesses": [
+        "Aspect follows the start image.",
+        "Does not replace H3 2K."
+      ],
+      "use_cases": [
+        "Cheaper still→clip",
+        "First→last on H3 Max"
+      ]
+    },
+    {
+      "id": "studio:vid:gemini omni 1.1 i2v",
+      "label": "Gemini Omni Flash 1.1 I2V",
+      "modalities": [
+        "i2v"
+      ],
+      "tagline": "Google I2V with optional last frame",
+      "strengths": [
+        "image_url required; optional end_image_url.",
+        "3–10s · 360p–4k. Real fal per-second rates."
+      ],
+      "weaknesses": [
+        "Aspect 16:9 / 9:16 only.",
+        "No fake first/last on the V2V edit SKU — that's a different row."
+      ],
+      "use_cases": [
+        "Animate a still",
+        "First→last Gemini"
+      ]
+    },
+    {
       "id": "studio:vid:kling v3 pro i2v",
       "label": "Kling 3.0 Pro I2V",
       "modalities": [
@@ -3065,7 +3205,8 @@
       "tagline": "Best cinematic Kling I2V",
       "strengths": [
         "3–15s, optional end still.",
-        "Pro motion quality."
+        "Elements tray: frontal + extra stills or a motion clip, cited as @Element1.",
+        "Storyboard maps Shots to multi_prompt (customize / intelligent cuts)."
       ],
       "weaknesses": [
         "Still-size limits (Kling proxy).",
@@ -3083,7 +3224,8 @@
       ],
       "tagline": "Best cheaper Kling 3 I2V",
       "strengths": [
-        "Same 3–15s family, actually cheaper than Pro on I2V ($1.68 vs $2.10 / 15s)."
+        "Same 3–15s family, actually cheaper than Pro on I2V ($1.68 vs $2.10 / 15s).",
+        "Same Elements (@ElementN) + Storyboard multi_prompt as Pro."
       ],
       "weaknesses": [
         "Less polish than Pro."
@@ -3124,41 +3266,6 @@
       ],
       "use_cases": [
         "Draft Kling I2V"
-      ]
-    },
-    {
-      "id": "studio:vid:kling 2.6 pro i2v",
-      "label": "Kling 2.6 Pro I2V",
-      "modalities": [
-        "i2v"
-      ],
-      "tagline": "Best older Kling with native audio",
-      "strengths": [
-        "Native audio. Known 5/10s enum."
-      ],
-      "weaknesses": [
-        "Superseded by 3.0 / O3 for new work.",
-        "Max 10s."
-      ],
-      "use_cases": [
-        "Fallback if 3.0 misbehaves"
-      ]
-    },
-    {
-      "id": "studio:vid:kling 2.5 turbo pro i2v",
-      "label": "Kling 2.5 Turbo Pro I2V",
-      "modalities": [
-        "i2v"
-      ],
-      "tagline": "Best fast legacy Kling I2V",
-      "strengths": [
-        "Fast cinematic I2V."
-      ],
-      "weaknesses": [
-        "Max 10s. Older gen."
-      ],
-      "use_cases": [
-        "Speed tests only"
       ]
     },
     {
@@ -3248,6 +3355,27 @@
       ]
     },
     {
+      "id": "studio:vid:flux 3 first last",
+      "label": "FLUX 3 First→Last",
+      "modalities": [
+        "bridge",
+        "i2v"
+      ],
+      "tagline": "Best FLUX 3 connect-shot",
+      "strengths": [
+        "Bridges two stills with native audio.",
+        "Draft→enhance wired."
+      ],
+      "weaknesses": [
+        "Needs both frames.",
+        "20s cap."
+      ],
+      "use_cases": [
+        "Room to room",
+        "Before/after moves"
+      ]
+    },
+    {
       "id": "studio:vid:minimax h3 reference",
       "label": "MiniMax H3 Omni",
       "modalities": [
@@ -3268,6 +3396,48 @@
         "Synthetic characters",
         "Multi-angle identity",
         "Storyboard shots"
+      ]
+    },
+    {
+      "id": "studio:vid:gemini omni 1.1 reference",
+      "label": "Gemini Omni Flash 1.1 R2V",
+      "modalities": [
+        "r2v"
+      ],
+      "tagline": "Cite <IMAGE_REF_0> / <VIDEO_REF_0>",
+      "strengths": [
+        "image_urls + up to 3 reference videos (each ≤3s).",
+        "Prompt tags match the fal schema."
+      ],
+      "weaknesses": [
+        "No audio ref field on this schema.",
+        "Reference clips must be short (≤3s)."
+      ],
+      "use_cases": [
+        "Identity + motion refs",
+        "Multi-still Gemini clip"
+      ]
+    },
+    {
+      "id": "studio:vid:wan 3.0 reference",
+      "label": "Wan 3.0 R2V",
+      "modalities": [
+        "r2v"
+      ],
+      "tagline": "Best multi-ref lock at 30s / 1080p",
+      "strengths": [
+        "Up to 10 images + 5 videos + 5 audio.",
+        "Cite Image 1 / Image 2 (character vs scene) in the prompt.",
+        "Up to 30s @ 1080p, native audio."
+      ],
+      "weaknesses": [
+        "Ref video/audio total ~15s.",
+        "1080p gets expensive on long takes."
+      ],
+      "use_cases": [
+        "Character + scene lock",
+        "Longer R2V single takes",
+        "Storyboard ref path"
       ]
     },
     {
@@ -3348,27 +3518,6 @@
       ]
     },
     {
-      "id": "studio:vid:flux 3 first last",
-      "label": "FLUX 3 First→Last",
-      "modalities": [
-        "bridge",
-        "i2v"
-      ],
-      "tagline": "Best FLUX 3 connect-shot",
-      "strengths": [
-        "Bridges two stills with native audio.",
-        "Draft→enhance wired."
-      ],
-      "weaknesses": [
-        "Needs both frames.",
-        "20s cap."
-      ],
-      "use_cases": [
-        "Room to room",
-        "Before/after moves"
-      ]
-    },
-    {
       "id": "vision:veo 3.1 bridge",
       "label": "Veo 3.1 First→Last",
       "modalities": [
@@ -3412,7 +3561,8 @@
       "tagline": "Best default clip edit",
       "strengths": [
         "Motion-preserving V2V. Length matches source (3–15s).",
-        "V2 default video edit."
+        "V2 default video edit.",
+        "Elements tray (@ElementN) plus @ImageN refs (max 4 combined)."
       ],
       "weaknesses": [
         "Won't magically lengthen a clip.",
@@ -3431,7 +3581,8 @@
       ],
       "tagline": "Best quality Kling V2V",
       "strengths": [
-        "Higher quality than Standard. 3–15s source."
+        "Higher quality than Standard. 3–15s source.",
+        "Same Elements tray (@ElementN) as Standard."
       ],
       "weaknesses": [
         "Costlier. Same length lock."
@@ -3474,6 +3625,26 @@
       ],
       "use_cases": [
         "Short Grok restyles"
+      ]
+    },
+    {
+      "id": "studio:vid:gemini omni 1.1 edit",
+      "label": "Gemini Omni Flash 1.1 Edit",
+      "modalities": [
+        "v2v"
+      ],
+      "tagline": "Best NL video edit (prompt + source clip)",
+      "strengths": [
+        "Natural-language video edit. video_url + prompt.",
+        "No first/last frame. Optional 360p–4k."
+      ],
+      "weaknesses": [
+        "No duration/aspect on the API — output follows the source.",
+        "Not a retake SKU (use LTX 2.3 Retake for local reshoots)."
+      ],
+      "use_cases": [
+        "Rewrite a take in prose",
+        "Prompt-only V2V"
       ]
     },
     {
@@ -3539,25 +3710,6 @@
       ]
     },
     {
-      "id": "audio:minimax music 2.6",
-      "label": "MiniMax Music 2.6",
-      "modalities": [
-        "music"
-      ],
-      "tagline": "Best default listing underscore",
-      "strengths": [
-        "Instrumental-friendly.",
-        "V2 music default."
-      ],
-      "weaknesses": [
-        "15s and 60s estimates currently match ($0.15) — likely capped.",
-        "Superseded in length by Music 3."
-      ],
-      "use_cases": [
-        "Listing beds"
-      ]
-    },
-    {
       "id": "audio:elevenlabs music",
       "label": "ElevenLabs Music",
       "modalities": [
@@ -3591,24 +3743,6 @@
       ],
       "use_cases": [
         "When you want a Google song, not a timed bed"
-      ]
-    },
-    {
-      "id": "audio:lyria 2",
-      "label": "Google Lyria 2",
-      "modalities": [
-        "music"
-      ],
-      "tagline": "Best short Google mood clip",
-      "strengths": [
-        "~30s ambient / mood.",
-        "Flat per track."
-      ],
-      "weaknesses": [
-        "Not a 3-minute song (that's Lyria 3)."
-      ],
-      "use_cases": [
-        "Instagram-length beds"
       ]
     },
     {
@@ -3684,23 +3818,39 @@
       ]
     },
     {
-      "id": "audio:minimax speech 02 hd",
-      "label": "MiniMax Speech 02 HD",
+      "id": "audio:minimax speech 2.8 hd",
+      "label": "MiniMax Speech 2.8 HD",
       "modalities": [
         "voiceover"
       ],
-      "tagline": "Best default TTS (My Voices)",
+      "tagline": "Best current MiniMax TTS",
       "strengths": [
-        "Emotion + speed.",
-        "V2 voice default."
+        "$0.10 / 1k characters. Emotion + speed.",
+        "Same MiniMax voice list as the hidden 02 HD SKU."
       ],
       "weaknesses": [
-        "Estimate ignores duration (character-based).",
-        "Empty prompt still shows a stub cost."
+        "Per-character estimate needs a script."
       ],
       "use_cases": [
-        "Listing reads",
-        "Avatar scripts"
+        "Listing VO",
+        "My Voices reads"
+      ]
+    },
+    {
+      "id": "audio:minimax speech 2.6 hd",
+      "label": "MiniMax Speech 2.6 HD",
+      "modalities": [
+        "voiceover"
+      ],
+      "tagline": "MiniMax TTS 2.6",
+      "strengths": [
+        "$0.10 / 1k characters. Emotion + speed."
+      ],
+      "weaknesses": [
+        "Prefer 2.8 when you want the current SKU."
+      ],
+      "use_cases": [
+        "VO fallback"
       ]
     },
     {
@@ -3914,21 +4064,6 @@
       ],
       "use_cases": [
         "Fallback SR"
-      ]
-    },
-    {
-      "id": "vision:sync 3 lipsync",
-      "label": "sync-3 Lipsync",
-      "modalities": [
-        "finish"
-      ],
-      "tagline": "Best lipsync",
-      "strengths": [
-        "See Video → Video."
-      ],
-      "weaknesses": [],
-      "use_cases": [
-        "Talking-head VO match"
       ]
     }
   ]
