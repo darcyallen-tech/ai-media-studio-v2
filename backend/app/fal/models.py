@@ -1027,8 +1027,8 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         max_ref_images=10,
         max_num_images=10,
         aspect_ratio_param="aspect_ratio",
-        allowed_aspect_ratios=MUSE_ASPECT_RATIOS,
-        default_aspect_ratio="16:9",
+        allowed_aspect_ratios=("Match source",) + MUSE_ASPECT_RATIOS,
+        default_aspect_ratio="Match source",
         resolution_param=None,
         image_size_param=None,
         allowed_resolutions=(),
@@ -2533,6 +2533,22 @@ def resolve_job_kind(
     return "image"
 
 
+def _is_match_source_aspect(value: Any) -> bool:
+    if value is None:
+        return False
+    low = str(value).strip().lower()
+    if not low:
+        return False
+    if low in ("match source", "match"):
+        return True
+    try:
+        from app.aspect_omit import is_aspect_omit_ui_sentinel
+
+        return is_aspect_omit_ui_sentinel(low)
+    except Exception:
+        return False
+
+
 def _apply_aspect_ratio_arg(
     args: dict[str, Any],
     notes: list[str],
@@ -2548,14 +2564,30 @@ def _apply_aspect_ratio_arg(
     if not param_name:
         return
     raw = str(requested).strip() if requested is not None and requested != "" else ""
+    # "Match source" / empty-with-that-default: omit the field (Muse/Fibo).
+    if _is_match_source_aspect(raw) or (
+        (not raw or raw.lower() in _ASPECT_PLACEHOLDERS)
+        and _is_match_source_aspect(default)
+    ):
+        args.pop(param_name, None)
+        notes.append("aspect_ratio omitted (match source).")
+        return
     if allowed:
+        # Never treat the UI sentinel as an API enum
+        allowed_api = tuple(
+            a for a in allowed if not _is_match_source_aspect(a)
+        )
         ar, note = resolve_enum_aspect_ratio(
             raw or None,
-            allowed=allowed,
-            default=default if default and default.lower() not in _ASPECT_PLACEHOLDERS else "1:1",
+            allowed=allowed_api or allowed,
+            default=default if default and default.lower() not in _ASPECT_PLACEHOLDERS and not _is_match_source_aspect(default) else "1:1",
             source_image=source_image,
             resolution_hint=resolution_hint,
         )
+        if _is_match_source_aspect(ar):
+            args.pop(param_name, None)
+            notes.append("aspect_ratio omitted (match source).")
+            return
         args[param_name] = ar
         if note:
             notes.append(note)
