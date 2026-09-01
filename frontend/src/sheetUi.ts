@@ -1270,6 +1270,20 @@ export function isNanoModel(row: ModelRow | null | undefined): boolean {
   return blob.includes("nano") || blob.includes("banana");
 }
 
+export function isFluxEditModel(row: ModelRow | null | undefined): boolean {
+  const blob = `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+  if (!blob.includes("flux")) return false;
+  if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
+  return (
+    blob.includes("edit") ||
+    blob.includes("r2i") ||
+    blob.includes("/edit") ||
+    blob.includes("studio:img:flux")
+  );
+}
+
+const VIDEO_SIZE_TOKEN = /^(360p|480p|540p|720p|1080p|1440p|2160p)$/i;
+
 export function aspectChoices(row: ModelRow | null | undefined): string[] {
   if (isNanoModel(row)) return [...NANO_ASPECTS];
   return (row?.aspect_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
@@ -1283,11 +1297,14 @@ export function qualityChoices(row: ModelRow | null | undefined): string[] {
 
 export function sizeChoices(row: ModelRow | null | undefined): string[] {
   if (!row) return [];
-  const qualities = qualityChoices(row);
-  const res = (row.resolution_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+  const dropVideo = (s: string) => s && !VIDEO_SIZE_TOKEN.test(s);
+  const qualities = qualityChoices(row).filter(dropVideo);
+  const res = (row.resolution_choices ?? [])
+    .map((s) => String(s).trim())
+    .filter(dropVideo);
   const sizes = res.filter((s) => !qualities.includes(s));
   if (sizes.length) return sizes;
-  const aspects = aspectChoices(row);
+  const aspects = aspectChoices(row).filter(dropVideo);
   if (aspects.length) return aspects;
   return qualities;
 }
@@ -1308,13 +1325,13 @@ function pickPreferredResolution(choices: string[], prefer: string[]): string {
 
 export function pickDefaultResolution(choices: string[]): string {
   return pickPreferredResolution(choices, [
-    "9:16",
+    "auto_2k",
+    "2k",
     "portrait_16_9",
+    "9:16",
     "portrait_4_3",
     "9:16 portrait",
     "3:4 portrait",
-    "auto_2k",
-    "2k",
     "square_hd",
     "1:1 square hd",
     "auto_4k",

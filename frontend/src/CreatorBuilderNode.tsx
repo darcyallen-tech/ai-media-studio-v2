@@ -61,6 +61,7 @@ import {
   composeSceneBrief,
   composeSceneSheetPrompt,
   composeSceneStill,
+  isFluxEditModel,
   pickDefaultResolution,
   pickSheetResolution,
   qualityChoices,
@@ -917,6 +918,9 @@ function CharacterForm({
               </option>
             ))}
           </select>
+          {isFluxEditModel(r2iRow) ? (
+            <span className="hint">Auto only — 2K is not a Flux-edit field.</span>
+          ) : null}
         </label>
         {frontQualities.length ? (
           <label className="param">

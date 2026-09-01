@@ -151,7 +151,7 @@ Interpolate is video-only. Changing duration / factor re-estimates cost.
 
 **Library** (side panel): generated files, uploads, and **From Resolve** when an inbox folder is set. Drag a still or clip onto a Source, Last Frame, Tool, or pin. **Send to Resolve** is on the Library row and on Result nodes.
 
-**Assets:** characters, scenes, props (costumes API is there for sheets). Hub on Storyboard reads these. You can attach stills and reuse them as refs or Kling elements.
+**Assets:** characters, scenes, props (costumes API is there for sheets). Hub on Storyboard reads these. You can attach stills and reuse them as refs or Kling elements. Character angles/sheets clear generating on success; Flux edit uses auto; Seedream/Qwen send real image sizes.
 
 Outputs for the packaged app: `%LOCALAPPDATA%\AI Media Studio V2\outputs\YYYY-MM-DD\`.
 

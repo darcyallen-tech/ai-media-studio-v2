@@ -9,6 +9,8 @@ import {
   EXTRA_SLOTS,
   SLOT_LABEL,
   collectAssetSheetRefs,
+  composeAnglePrompt,
+  composeCharacterIdentity,
   composeCharacterSheetPrompt,
   composeCostumeSheetPrompt,
   pickDefaultResolution,
@@ -150,6 +152,54 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
       toast(msg, true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  function spawnMissingAngle(slot: string) {
+    const frontPath = row.identity?.front || "";
+    if (slot !== "front" && !frontPath) {
+      const msg = "Generate Front first.";
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    const t2iRow = models.t2i.find((m) => m.id === models.t2iId) || models.t2i[0];
+    const r2iRow = models.r2i.find((m) => m.id === models.r2iId) || models.r2i[0];
+    const frontT2i = slot === "front" && !frontPath;
+    const sizeRow = frontT2i ? t2iRow : r2iRow;
+    const sizes = sizeChoices(sizeRow);
+    const quals = qualityChoices(sizeRow);
+    const identText =
+      row.fields?.identity_prompt ||
+      composeCharacterIdentity(row.fields || {}, row.notes || "");
+    try {
+      spawnAngleResult({
+        builderId: `lib-${row.id}`,
+        slot,
+        label: SLOT_LABEL[slot] || slot,
+        prompt: composeAnglePrompt(slot, identText, { hasFront: Boolean(frontPath) }),
+        generating: false,
+        error: null,
+        focus: true,
+        assetId: row.id,
+        sourceStill: slot === "front" ? "" : frontPath,
+        t2iModel: models.t2iId,
+        r2iModel: models.r2iId || models.t2iId,
+        name: row.name,
+        wardrobe: row.fields?.wardrobe || "",
+        fields: row.fields,
+        resolution: pickDefaultResolution(quals.length ? quals : sizes),
+        resolutionChoices: sizes,
+        aspect: pickDefaultResolution(sizes),
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
+      });
+      onClose();
+      onSheetOpened?.();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not open Result node.";
+      setError(msg);
+      toast(msg, true);
     }
   }
 
@@ -319,7 +369,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                 onClick={() => {
                   const slot = addSlot;
                   setAddSlot("");
-                  void regen(slot);
+                  spawnMissingAngle(slot);
                 }}
               >
                 Generate

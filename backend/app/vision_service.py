@@ -446,7 +446,9 @@ def run_vision(
             edit_ep = (edit_spec.endpoint or "").lower()
             # "Match source" / empty → leave aspect to build_edit_arguments (source image)
             if asp and "match" not in asp.lower():
-                params["image_size"] = map_t2i_image_size(asp)
+                mapped_size = map_t2i_image_size(asp)
+                if mapped_size:
+                    params["image_size"] = mapped_size
                 params["aspect_ratio"] = (
                     clamp_nano_aspect(asp)
                     if "nano-banana" in edit_ep

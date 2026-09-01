@@ -1634,6 +1634,7 @@ function StudioCanvas() {
             selected: Boolean(patch.focus),
             dragHandle: ".node-header",
             data: {
+              ...(prev || {}),
               title,
               builderId,
               slot,
@@ -1677,22 +1678,73 @@ function StudioCanvas() {
                     thumb_url: url || "",
                   }
                 : prev?.dragItem ?? null,
-              onPrompt: (prompt) =>
-                upsertSheetAngleRef.current(builderId, slot, { slot, prompt }),
-              onResolution: (resolution) =>
-                upsertSheetAngleRef.current(builderId, slot, {
-                  slot,
-                  resolution,
-                  aspect: resolution,
+              onPrompt:
+                prev?.onPrompt ??
+                ((prompt) =>
+                  upsertSheetAngleRef.current(builderId, slot, { slot, prompt })),
+              onResolution:
+                prev?.onResolution ??
+                ((resolution) =>
+                  upsertSheetAngleRef.current(builderId, slot, {
+                    slot,
+                    resolution,
+                    aspect: resolution,
+                  })),
+              onBusy:
+                prev?.onBusy ??
+                ((busy, error) =>
+                  upsertSheetAngleRef.current(builderId, slot, {
+                    slot,
+                    generating: busy,
+                    error: error === undefined ? null : error,
+                  })),
+              onRegen:
+                prev?.onRegen ??
+                (() => regenSheetAngleRef.current(builderId, slot)),
+              onGenerated:
+                prev?.onGenerated ??
+                ((info) => {
+                  upsertSheetAngleRef.current(builderId, info.slot, {
+                    slot: info.slot,
+                    path: info.path,
+                    url: info.url,
+                    prompt: info.prompt,
+                    cost: info.cost,
+                    resolution: info.resolution,
+                    assetId: info.assetId,
+                    generating: false,
+                    error: null,
+                  });
+                  setBuilderSessions((cur) => {
+                    const prevSess = cur[builderId];
+                    return {
+                      ...cur,
+                      [builderId]: {
+                        assetId: info.assetId || prevSess?.assetId || "",
+                        t2iModel: prevSess?.t2iModel || "",
+                        r2iModel: prevSess?.r2iModel || "",
+                        slots: prevSess?.slots?.length
+                          ? prevSess.slots
+                          : [...CORE_SLOTS, ...EXTRA_SLOTS],
+                        attachSlotId: prevSess?.attachSlotId,
+                        name: prevSess?.name || "Character",
+                        fields: prevSess?.fields,
+                        wardrobe: prevSess?.wardrobe,
+                        notes: prevSess?.notes,
+                        t2iResolution: prevSess?.t2iResolution,
+                        r2iResolution: prevSess?.r2iResolution,
+                        done: {
+                          ...(prevSess?.done || {}),
+                          [info.slot]: info.path,
+                        },
+                      },
+                    };
+                  });
                 }),
-              onBusy: (busy, error) =>
-                upsertSheetAngleRef.current(builderId, slot, {
-                  slot,
-                  generating: busy,
-                  error: error === undefined ? null : error,
-                }),
-              onRegen: () => regenSheetAngleRef.current(builderId, slot),
-              onClose: () => closeNode(angleId),
+              onClose: prev?.onClose ?? (() => closeNode(angleId)),
+              onModel: prev?.onModel,
+              onConfirmSheet: prev?.onConfirmSheet,
+              onCompareSource: prev?.onCompareSource,
             },
           };
           const mapped = existing

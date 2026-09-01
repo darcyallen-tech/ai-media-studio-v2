@@ -1138,13 +1138,17 @@ def _estimate_sheet_cost_inner(
     return {"ok": True, "cost": cost, "usd": total, "count": n, "angles": angles}
 
 
+_VIDEO_SIZE_TOKENS: frozenset[str] = frozenset(
+    {"360p", "480p", "540p", "720p", "1080p", "1440p", "2160p"}
+)
 _PORTRAIT_SIZE_PREFER: tuple[str, ...] = (
+    "auto_2K",
+    "2K",
     "portrait_16_9",
     "portrait_4_3",
     "9:16 portrait",
+    "9:16",
     "3:4 portrait",
-    "auto_2K",
-    "2K",
     "square_hd",
     "1:1 square HD",
     "auto_4K",
@@ -1207,13 +1211,21 @@ def short_generate_error(exc: BaseException | str) -> str:
     return "Generate failed."
 
 
+def _is_video_size_token(value: str) -> bool:
+    return (value or "").strip().lower() in _VIDEO_SIZE_TOKENS
+
+
+def _is_quality_token(value: str) -> bool:
+    return (value or "").strip().lower().replace(" ", "") in _QUALITY_TOKENS
+
+
 def _size_choices_for_entry(entry: Any) -> list[str]:
     if entry is None:
         return []
     choices = [str(x).strip() for x in (getattr(entry, "resolution_choices", ()) or ()) if str(x).strip()]
     if not choices:
         choices = [str(x).strip() for x in (getattr(entry, "aspect_choices", ()) or ()) if str(x).strip()]
-    return choices
+    return [c for c in choices if not _is_video_size_token(c)]
 
 
 def pick_character_resolution(
@@ -1222,12 +1234,18 @@ def pick_character_resolution(
     default: str = "",
     prefer: tuple[str, ...] | None = None,
 ) -> str:
-    opts = [a for a in allowed if a]
+    opts = [a for a in allowed if a and not _is_video_size_token(a)]
     if not opts:
-        return (requested or default or "portrait_16_9").strip()
+        req = (requested or "").strip()
+        if req and not _is_video_size_token(req):
+            return req
+        fallback = (default or "").strip()
+        if fallback and not _is_video_size_token(fallback):
+            return fallback
+        return "portrait_16_9"
     lower = {a.lower(): a for a in opts}
     req = (requested or "").strip()
-    if req.lower() in lower:
+    if req and not _is_video_size_token(req) and req.lower() in lower:
         picked = lower[req.lower()]
         if picked.lower() != "auto" or all(k == "auto" for k in lower):
             return picked
@@ -1282,36 +1300,97 @@ def character_angle_params(
         str(getattr(entry, k, "") or "")
         for k in ("endpoint", "label", "source_key", "id")
     ).lower()
+    endpoint = str(getattr(entry, "endpoint", "") or "").lower()
     is_nano = "nano" in blob or "banana" in blob
-    aspects = [str(x).strip() for x in (getattr(entry, "aspect_choices", ()) or ()) if str(x).strip()]
+    is_flux_edit = "flux" in blob and (
+        "/edit" in endpoint or ("edit" in blob and "t2i" not in blob)
+    )
+    is_qwen = "qwen" in blob
+    aspects = [
+        str(x).strip()
+        for x in (getattr(entry, "aspect_choices", ()) or ())
+        if str(x).strip() and not _is_video_size_token(str(x))
+    ]
     resolutions = [
         str(x).strip()
         for x in (getattr(entry, "resolution_choices", ()) or ())
-        if str(x).strip()
+        if str(x).strip() and not _is_video_size_token(str(x))
     ]
     req = (requested or "").strip()
     req_aspect = (requested_aspect or "").strip()
+    if _is_video_size_token(req):
+        req = ""
+    if _is_video_size_token(req_aspect):
+        req_aspect = ""
     quality = ""
     for token, canon in _QUALITY_TOKENS.items():
         if req.lower().replace(" ", "") == token:
             quality = canon
             req = ""
             break
+    if not quality:
+        for token, canon in _QUALITY_TOKENS.items():
+            if req_aspect.lower().replace(" ", "") == token:
+                quality = canon
+                req_aspect = ""
+                break
+    if is_flux_edit:
+        return "auto", "auto"
     if is_nano:
-        aspect = clamp_nano_aspect(req_aspect or req or ("16:9" if landscape else "9:16"))
-        q_allowed = {r.lower(): r for r in resolutions if r.lower().replace(" ", "") in _QUALITY_TOKENS}
+        framing = req_aspect or req
+        if not framing or _is_quality_token(framing) or _is_video_size_token(framing):
+            framing = "16:9" if landscape else "9:16"
+        aspect = clamp_nano_aspect(framing) or ("16:9" if landscape else "9:16")
+        q_allowed = {
+            r.lower(): r
+            for r in resolutions
+            if r.lower().replace(" ", "") in _QUALITY_TOKENS
+        }
         resolution = ""
         if quality and quality.lower() in q_allowed:
             resolution = q_allowed[quality.lower()]
         elif q_allowed:
-            resolution = q_allowed.get("2k") or q_allowed.get("1k") or next(iter(q_allowed.values()))
+            resolution = (
+                q_allowed.get("2k")
+                or q_allowed.get("1k")
+                or next(iter(q_allowed.values()))
+            )
+        return aspect, resolution
+    if is_qwen:
+        q_allowed = {
+            r.lower(): r
+            for r in resolutions
+            if r.lower().replace(" ", "") in _QUALITY_TOKENS
+        } or {"1k": "1K", "2k": "2K"}
+        resolution = ""
+        if quality and quality.lower() in q_allowed:
+            resolution = q_allowed[quality.lower()]
+        else:
+            resolution = (
+                q_allowed.get("2k")
+                or q_allowed.get("1k")
+                or next(iter(q_allowed.values()))
+            )
+        framing_opts = [
+            a
+            for a in (aspects or resolutions)
+            if not _is_quality_token(a)
+        ] or (["landscape_16_9"] if landscape else ["portrait_16_9"])
+        framing = req_aspect or req
+        if not framing or _is_quality_token(framing):
+            framing = "landscape_16_9" if landscape else "portrait_16_9"
+        aspect = pick_character_resolution(
+            framing_opts,
+            framing,
+            prefer=_SHEET_SIZE_PREFER if landscape else _PORTRAIT_SIZE_PREFER,
+        )
         return aspect, resolution
     # Seedream / Flux image_size or aspect labels
     allowed = resolutions or aspects
     picked = pick_character_resolution(
         allowed,
         req or req_aspect,
-        prefer=_SHEET_SIZE_PREFER if landscape else None,
+        prefer=_SHEET_SIZE_PREFER if landscape else _PORTRAIT_SIZE_PREFER,
     )
     if resolutions:
         return picked, picked
@@ -1400,7 +1479,18 @@ def generate_angle(
         modality = "r2i" if kind in ("character", "costume", "scene", "prop") else "i2i"
     mid = _nv(model_id)
     entry = resolve_model(mid, mode="image", modality=modality) if mid else None
-    if entry is None or (modality not in (entry.modalities or ())):
+    if mid:
+        if entry is None:
+            raise ValueError(f"Unknown model: {mid}.")
+        mods = tuple(entry.modalities or ())
+        if modality not in mods:
+            label = getattr(entry, "label", None) or mid
+            have = "/".join(m.upper() for m in mods) or "T2I"
+            raise ValueError(
+                f"{label} is a {have} model — this {key} angle needs {modality.upper()}. "
+                "Pick an R2I/edit model. The app will not silently switch models."
+            )
+    else:
         fallback = default_model_for("image", modality)
         mid = fallback.id if fallback else mid
         entry = resolve_model(mid, mode="image", modality=modality) if mid else None

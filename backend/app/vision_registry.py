@@ -198,11 +198,34 @@ def qwen_t2i_image_size(size_enum: str, resolution: str | None) -> str | dict[st
     return size_enum
 
 
+_VIDEO_SIZE_TOKENS: frozenset[str] = frozenset(
+    {"360p", "480p", "540p", "720p", "1080p", "1440p", "2160p"}
+)
+_QUALITY_SIZE_TOKENS: frozenset[str] = frozenset({"0.5k", "1k", "2k", "4k"})
+
+# Image-edit ladders (never inherit VisionModelSpec video 720p/1080p defaults)
+FLUX_EDIT_RESOLUTIONS: tuple[str, ...] = ("auto",)
+SEEDREAM_EDIT_RESOLUTIONS: tuple[str, ...] = (
+    "auto_2K",
+    "auto_4K",
+    "square_hd",
+    "landscape_16_9",
+    "portrait_16_9",
+)
+NANO_PRO_EDIT_RESOLUTIONS: tuple[str, ...] = ("1K", "2K")
+
+
 def map_t2i_image_size(aspect_label: str | None) -> str:
     """Map UI aspect label → fal image_size enum (Flux / Seedream)."""
     raw = (aspect_label or "").strip().lower()
     if not raw:
         return "landscape_16_9"
+    compact = raw.replace(" ", "")
+    # Video / quality tokens are not image_size enums — never 720p → landscape_16_9.
+    if compact in _VIDEO_SIZE_TOKENS or compact in _QUALITY_SIZE_TOKENS:
+        return ""
+    if raw in ("match source", "match", "auto", "default"):
+        return ""
     if raw in _T2I_ASPECT_TO_IMAGE_SIZE:
         return _T2I_ASPECT_TO_IMAGE_SIZE[raw]
     # Bare ratios (Scenes / simple pickers) + HD square
@@ -279,8 +302,10 @@ def clamp_nano_aspect(aspect_label: str | None) -> str:
     """Exact Nano Banana aspect_ratio enum — never '9:16 portrait'."""
     allowed = {a.lower(): a for a in T2I_NANO_ASPECT_CHOICES}
     raw = (aspect_label or "").strip()
-    if raw.lower().replace(" ", "") in ("0.5k", "1k", "2k", "4k"):
-        return "9:16"
+    compact = raw.lower().replace(" ", "")
+    # Video / quality tokens are not aspects — caller picks 9:16 vs 16:9.
+    if compact in _VIDEO_SIZE_TOKENS or compact in _QUALITY_SIZE_TOKENS:
+        return ""
     if raw.lower() in allowed:
         return allowed[raw.lower()]
     colon = map_t2i_aspect_colon(raw)
@@ -1770,13 +1795,15 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         cost_estimate_usd=0.03,
         notes=(
             "Build a still from Character / style / prop refs (multi-ref). "
-            "Not plate-edit I2I — freer composition from identity pack. ~$0.03/image."
+            "Not plate-edit I2I — freer composition from identity pack. ~$0.03/image. "
+            "image_size auto only — 2K is not a Flux-edit field."
         ),
         duration_choices=(),
         default_duration="",
-        aspect_choices=I2I_ASPECT_CHOICES,
-        default_aspect="Match source",
-        resolution_choices=(),
+        aspect_choices=("auto",),
+        default_aspect="auto",
+        resolution_choices=FLUX_EDIT_RESOLUTIONS,
+        default_resolution="auto",
         supports_audio=False,
         supports_negative=False,
         max_refs=3,
@@ -1819,11 +1846,16 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         mode="reference_to_image",
         endpoint="fal-ai/flux-2-max/edit",
         cost_estimate_usd=0.07,
-        notes="Highest-quality multi-ref still from character/style refs.",
+        notes=(
+            "Highest-quality multi-ref still from character/style refs. "
+            "image_size auto only — 2K is not a Flux-edit field."
+        ),
         duration_choices=(),
         default_duration="",
-        aspect_choices=I2I_ASPECT_CHOICES,
-        default_aspect="Match source",
+        aspect_choices=("auto",),
+        default_aspect="auto",
+        resolution_choices=FLUX_EDIT_RESOLUTIONS,
+        default_resolution="auto",
         supports_audio=False,
         max_refs=3,
         image_field="image_urls",
@@ -1836,11 +1868,13 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         mode="reference_to_image",
         endpoint="fal-ai/nano-banana-pro/edit",
         cost_estimate_usd=0.08,
-        notes="Creative multi-ref still from identity/style refs.",
+        notes="Creative multi-ref still from identity/style refs. Colon aspect + 1K/2K (edit max 2K).",
         duration_choices=(),
         default_duration="",
-        aspect_choices=I2I_ASPECT_CHOICES,
-        default_aspect="Match source",
+        aspect_choices=("Match source",) + T2I_NANO_ASPECT_CHOICES,
+        default_aspect="9:16",
+        resolution_choices=NANO_PRO_EDIT_RESOLUTIONS,
+        default_resolution="2K",
         supports_audio=False,
         max_refs=3,
         image_field="image_urls",
@@ -1853,11 +1887,16 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         mode="reference_to_image",
         endpoint="bytedance/seedream/v5/pro/edit",
         cost_estimate_usd=0.07,
-        notes="Grounded multi-ref still from character/style refs.",
+        notes=(
+            "Grounded multi-ref still from character/style refs. "
+            "auto_2K / portrait_16_9 / landscape_16_9 — never 720p."
+        ),
         duration_choices=(),
         default_duration="",
-        aspect_choices=I2I_ASPECT_CHOICES,
-        default_aspect="Match source",
+        aspect_choices=I2I_ASPECT_CHOICES + ("Auto 2K", "Auto 4K"),
+        default_aspect="Auto 2K",
+        resolution_choices=SEEDREAM_EDIT_RESOLUTIONS,
+        default_resolution="auto_2K",
         supports_audio=False,
         max_refs=3,
         image_field="image_urls",
@@ -2995,6 +3034,8 @@ def build_vision_arguments(
     if spec.mode == "text_to_image":
         ep = spec.endpoint.lower()
         size = map_t2i_image_size(aspect_ratio or spec.default_aspect)
+        if not size:
+            size = map_t2i_image_size(spec.default_aspect) or "landscape_16_9"
         colon_ar = map_t2i_aspect_colon(aspect_ratio or spec.default_aspect)
         res = (resolution or spec.default_resolution or "").strip()
         # Batch size for this API call (caller may loop for sequential variants)
@@ -3013,7 +3054,11 @@ def build_vision_arguments(
             args.setdefault("quality", "medium")
         elif "nano-banana" in ep:
             # Nano Banana / 2 / Pro: exact colon enum only (never "9:16 portrait")
-            args["aspect_ratio"] = clamp_nano_aspect(aspect_ratio or colon_ar)
+            args["aspect_ratio"] = (
+                clamp_nano_aspect(aspect_ratio or colon_ar)
+                or spec.default_aspect
+                or "16:9"
+            )
             if spec.resolution_choices:
                 # Map loose UI value to API enum (0.5K, 1K, 2K, 4K)
                 picked = None

@@ -9,6 +9,7 @@ import ResizableMedia from "./ResizableMedia";
 import { sendToResolve, toast } from "./toast";
 import {
   modelCostLabel,
+  isFluxEditModel,
   pickSheetResolution,
   qualityChoices,
   sheetR2iRefCap,
@@ -50,11 +51,17 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     sheetModels.find((m) => m.id === modelId) ||
     sheetModels.find((m) => m.id === (data.r2iModel || data.t2iModel)) ||
     sheetModels[0];
+  const angleModel =
+    selectedModel ||
+    models.r2i.find((m) => m.id === data.r2iModel) ||
+    models.t2i.find((m) => m.id === data.t2iModel);
   const liveSizes = isSheet ? sizeChoices(selectedModel) : [];
   const liveQuals = isSheet ? qualityChoices(selectedModel) : [];
+  const dropVideoSize = (s: string) =>
+    Boolean(s) && !/^(360p|480p|540p|720p|1080p|1440p|2160p)$/i.test(s);
   const sizeChoicesList = (
     isSheet && liveSizes.length ? liveSizes : Array.isArray(data.resolutionChoices) ? data.resolutionChoices : []
-  ).filter(Boolean);
+  ).filter(dropVideoSize);
   const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
   const [size, setSize] = useState(
     data.aspect ||
@@ -258,6 +265,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     data.onBusy?.(true, null);
     const pickedAspect = size || data.aspect || "";
     const pickedQuality = quality || "";
+    let failMsg: string | null = null;
     try {
       let assetId = data.assetId || "";
       if (!assetId && data.sheetKind === "dress") {
@@ -349,12 +357,12 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         resolution: size || data.resolution,
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Generate failed.";
+      failMsg = err instanceof Error ? err.message : "Generate failed.";
       console.error("Angle generate failed", err);
-      setLocalError(msg);
-      data.onBusy?.(false, msg);
+      setLocalError(failMsg);
     } finally {
       setBusy(false);
+      data.onBusy?.(false, failMsg);
     }
   }
 
@@ -490,6 +498,9 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                     </option>
                   ))}
                 </select>
+                {!isSheet && isFluxEditModel(angleModel) ? (
+                  <span className="hint">Auto only — 2K is not a Flux-edit field.</span>
+                ) : null}
               </label>
             ) : null}
             {qualityOpts.length ? (

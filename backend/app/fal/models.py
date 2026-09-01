@@ -649,7 +649,10 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         aspect_ratio_param=None,
         default_output_format="jpeg",
         cost_per_image=0.03,
-        notes="Default. FLUX.2 Pro multi-ref edit (~$0.03 first MP). Strong for staging.",
+        notes=(
+            "Default. FLUX.2 Pro multi-ref edit (~$0.03 first MP). Strong for staging. "
+            "image_size auto only — 2K is not a Flux-edit field."
+        ),
     ),
     "flux 2 max": ImageEditModelSpec(
         key="flux 2 max",
@@ -668,7 +671,8 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         cost_per_image=0.07,
         notes=(
             "FLUX.2 Max edit — highest quality Flux edit. "
-            "Est. $0.07 first processed MP, +$0.03 each additional MP (input counted)."
+            "Est. $0.07 first processed MP, +$0.03 each additional MP (input counted). "
+            "image_size auto only — 2K is not a Flux-edit field."
         ),
     ),
     "mai image 2.5 pro": ImageEditModelSpec(
@@ -778,7 +782,10 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         aspect_ratio_param=None,
         default_output_format="jpeg",
         cost_per_image=0.04,
-        notes="FLUX.2 Flex multi-ref edit — flexible style control.",
+        notes=(
+            "FLUX.2 Flex multi-ref edit — flexible style control. "
+            "image_size auto only — 2K is not a Flux-edit field."
+        ),
     ),
     "flux kontext pro": ImageEditModelSpec(
         key="flux kontext pro",
@@ -938,7 +945,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         max_ref_images=3,
         max_num_images=4,
         resolution_param=None,
-        image_size_param=None,
+        image_size_param="image_size",
         allowed_resolutions=("1K", "2K"),
         default_resolution="1K",
         max_resolution="2K",
@@ -2805,35 +2812,60 @@ def build_edit_arguments(
             args[spec.resolution_param] = res
 
     if spec.image_size_param:
-        size = (
-            params.get("image_size")
-            or other.get("image_size")
-            or params.get("resolution")
-            or ""
-        )
-        clamped = spec.clamp_resolution(str(size) if size else None)
-        allowed = {str(a).lower(): str(a) for a in (spec.allowed_resolutions or ())}
-        if clamped and allowed and str(clamped).lower() not in allowed:
-            fallback = spec.default_resolution
-            if fallback and str(fallback).lower() in allowed:
-                clamped = allowed[str(fallback).lower()]
-            elif allowed:
-                # never send bare "auto" unless the model lists it
-                prefer = (
-                    "portrait_16_9",
-                    "portrait_4_3",
-                    "auto_2K",
-                    "2K",
-                    "square_hd",
-                    "auto_4K",
-                    "4K",
-                    "1K",
-                )
-                clamped = next(
-                    (allowed[p] for p in prefer if p in allowed),
-                    next(iter(allowed.values())),
-                )
-        args[spec.image_size_param] = str(clamped or spec.default_resolution or "auto_2K")
+        ep = (spec.endpoint or "").lower()
+        if "qwen-image-3" in ep:
+            from app.vision_registry import map_t2i_image_size, qwen_t2i_image_size
+
+            asp = str(
+                params.get("aspect_ratio")
+                or other.get("aspect_ratio")
+                or params.get("image_size")
+                or other.get("image_size")
+                or ""
+            )
+            res = str(
+                params.get("resolution")
+                or other.get("resolution")
+                or spec.default_resolution
+                or "1K"
+            )
+            enum = map_t2i_image_size(asp) if asp else ""
+            if not enum:
+                enum = "portrait_16_9"
+            args[spec.image_size_param] = qwen_t2i_image_size(enum, res)
+        else:
+            size = (
+                params.get("image_size")
+                or other.get("image_size")
+                or params.get("resolution")
+                or ""
+            )
+            clamped = spec.clamp_resolution(str(size) if size else None)
+            allowed = {str(a).lower(): str(a) for a in (spec.allowed_resolutions or ())}
+            if clamped and allowed and str(clamped).lower() not in allowed:
+                fallback = spec.default_resolution
+                if fallback and str(fallback).lower() in allowed:
+                    clamped = allowed[str(fallback).lower()]
+                elif allowed:
+                    # never send bare "auto" unless the model lists it
+                    prefer = (
+                        "auto",
+                        "auto_2K",
+                        "portrait_16_9",
+                        "portrait_4_3",
+                        "2K",
+                        "square_hd",
+                        "auto_4K",
+                        "4K",
+                        "1K",
+                    )
+                    clamped = next(
+                        (allowed[p.lower()] for p in prefer if p.lower() in allowed),
+                        next(iter(allowed.values())),
+                    )
+            args[spec.image_size_param] = str(
+                clamped or spec.default_resolution or "auto_2K"
+            )
 
     if spec.output_format_param:
         fmt = (
