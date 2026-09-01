@@ -105,6 +105,8 @@ MODEL_OPTIONS: list[str] = [""] + [
     # video edit
     "kling o3 standard edit",
     "kling o3 pro edit",
+    "kling o3 4k edit",
+    "kling o3 4k reference",
     "ltx retake",
     "grok imagine edit video",
     "gemini omni 1.1 edit",
@@ -123,6 +125,7 @@ MODEL_OPTIONS: list[str] = [""] + [
     "minimax h3 i2v",
     "minimax h3 max i2v",
     "minimax h3 reference",
+    "minimax h3 max reference",
     "gemini omni 1.1 i2v",
     "gemini omni 1.1 reference",
     "wan 3.0 i2v",

@@ -60,8 +60,8 @@ Default image model: Flux 2 Pro (edit). For listing staging / furniture pop-in, 
 |------|----------------|-------------------|
 | **T2V** | Text to a clip | Veo 3.1 / Fast, Luma Ray 3.2, MiniMax H3, **MiniMax H3 Max**, Grok Imagine 1.5, FLUX 3 (draft available), Seedance 2.5, **Wan 3.0** (up to 30s @ 1080p, native audio), LTX 2.5 Pro / Fast, Kling 3.0 Pro / Standard (native multi-shot), Kling O3 Pro / Standard, Mirage Avatar X, **Gemini Omni Flash 1.1** |
 | **I2V** | Animate a start still (optional last frame on flagged models) | Grok Imagine 1.5, Kling O3 Standard / Pro, Kling 3.0 Standard / Pro (elements + multi-shot + last frame), Seedance 2.5 (last frame), **Wan 3.0** (last frame, 30s @ 1080p), FLUX 3 I2V (draft), FLUX 3 First→Last, MiniMax H3, **MiniMax H3 Max**, Veo 3.1 Fast / 3.1, LTX 2.5 Pro / Fast, **Gemini Omni Flash 1.1** |
-| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), Seedance 2.5, **Wan 3.0** (10 image refs + video/audio, cite Image 1 / Image 2), Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X, **Gemini Omni Flash 1.1** (cite `<IMAGE_REF_0>` / `<VIDEO_REF_0>`) |
-| **V2V** | Edit or retake an existing clip | Kling O3 Standard / Pro edit (elements), LTX 2.3 Retake, Grok Imagine Edit Video, FLUX 3 Extend (draft), sync-3 lipsync (needs dialogue audio; prompt unused), **Gemini Omni Flash 1.1 Edit** (NL prompt + source clip) |
+| **R2V** | Refs (stills, and on some models video/audio) | MiniMax H3 Omni (default), **H3 Max R2V**, Seedance 2.5, **Wan 3.0** (10 image refs + video/audio, cite Image 1 / Image 2), Grok Imagine 1.5, Veo 3.1 reference pack, FLUX 3 identity ref (draft), Mirage Avatar X, **Gemini Omni Flash 1.1** (cite `<IMAGE_REF_0>` / `<VIDEO_REF_0>`) |
+| **V2V** | Edit or retake an existing clip | Kling O3 Standard / Pro edit (elements), **Kling O3 4K Edit**, **Kling O3 4K Reference**, LTX 2.3 Retake, Grok Imagine Edit Video, FLUX 3 Extend (draft), sync-3 lipsync (needs dialogue audio; prompt unused), **Gemini Omni Flash 1.1 Edit** (NL prompt + source clip) |
 | **Bridge** | First still → last still | Veo 3.1 Fast / 3.1, Kling O3 Pro / Standard, FLUX 3, Seedance 2.5, MiniMax H3, Wan 3.0 (I2V last frame) |
 | **Extend** | Continue a clip | FLUX 3 Extend |
 
@@ -71,6 +71,9 @@ Default video model: Kling O3 Standard V2V edit.
 
 - Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3 / H3 Max, LTX 2.5, Wan 3.0, Gemini Omni Flash 1.1, and the dedicated Bridge / First→Last rows.
 - **MiniMax H3 Max** sits beside H3 (does not replace it). T2V + I2V. 5–15s · 480P/768P. Launch promo ~$0.025/s @480P · ~$0.04/s @768P until 1 Sep 2026; catalog after that $0.05 / $0.08.
+- **H3 Max R2V** (`minimax/h3-max/reference-to-video`) is a separate cheaper Max stack for multi-ref characters/scenes (Image 1 / Video 1 / Audio 1). Est. $0.08/s output; extra refs after 4096 included tokens. Not an alias of H3 Max I2V.
+- **Kling O3 4K Edit** — NL edit of a real clip, native 4K, listing-grade, spendy ($0.42/s). Source mp4/mov 3–15s, max 200MB.
+- **Kling O3 4K Reference** — keep camera/motion from the clip, swap subject/look with @ElementN / @ImageN, native 4K ($0.42/s).
 - **Gemini Omni Flash 1.1** T2V / I2V / R2V / V2V edit. V2V is NL video edit (prompt + source clip; no first/last frame). R2V cites `<IMAGE_REF_0>` / `<VIDEO_REF_0>`. Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k.
 - **Wan 3.0** (T2V / I2V / R2V): up to 30s @ 1080p, native audio, cost scales with seconds × resolution. R2V locks character/scene from up to 10 stills (cite Image 1 / Image 2 in the prompt).
 - Kling 3.0 I2V can lock characters with **Elements** (`@Element1` …) and cut a board with **native multi-shot**.

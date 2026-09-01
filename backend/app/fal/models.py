@@ -1088,6 +1088,63 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Elements (@ElementN) + optional @ImageN refs (max 4 combined)."
         ),
     ),
+    "kling o3 4k edit": VideoModelSpec(
+        key="kling o3 4k edit",
+        label="Video · Kling O3 4K Edit",
+        endpoint="fal-ai/kling-video/o3/4k/video-to-video/edit",
+        task="video_edit",
+        video_field="video_url",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=4,
+        keep_audio_param="keep_audio",
+        default_keep_audio=True,
+        duration_param=None,
+        min_duration_seconds=3.0,
+        max_duration_seconds=15.0,
+        allowed_durations=tuple(str(i) for i in range(3, 16)),
+        cost_per_second=0.42,
+        supports_elements=True,
+        max_elements=4,
+        element_allows_video=False,
+        notes=(
+            "Kling O3 4K V2V edit — native 4K NL edit of a source clip (@Video1). "
+            "Optional @ImageN / @ElementN (max 4 combined). "
+            "Source: mp4/mov, 3–15s, 720–3840px, max 200MB. Length follows source. "
+            "Est. $0.42/s (audio on or off)."
+        ),
+    ),
+    "kling o3 4k reference": VideoModelSpec(
+        key="kling o3 4k reference",
+        label="Video · Kling O3 4K Reference",
+        endpoint="fal-ai/kling-video/o3/4k/video-to-video/reference",
+        task="video_edit",
+        video_field="video_url",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=4,
+        keep_audio_param="keep_audio",
+        default_keep_audio=True,
+        duration_param="duration",
+        duration_as_int=False,
+        default_duration="5",
+        min_duration_seconds=3.0,
+        max_duration_seconds=15.0,
+        allowed_durations=tuple(str(i) for i in range(3, 16)),
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=("auto", "16:9", "9:16", "1:1"),
+        default_aspect_ratio="auto",
+        cost_per_second=0.42,
+        supports_elements=True,
+        max_elements=4,
+        element_allows_video=False,
+        notes=(
+            "Kling O3 4K V2V reference — keep camera/motion from the source clip (@Video1), "
+            "swap subject/look with @ElementN / @ImageN (max 4 combined). Native 4K. "
+            "Source: mp4/mov, 3–15s, 720–3840px, max 200MB. Duration 3–15s · aspect auto|16:9|9:16|1:1. "
+            "Est. $0.42/s (audio on or off)."
+        ),
+    ),
     "kling o1 standard edit": VideoModelSpec(
         key="kling o1 standard edit",
         label="Video · Kling O1 Standard – V2V Edit",
@@ -1987,6 +2044,52 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Est. ~$0.26/s @2K (+ ref image/video surcharges per fal)."
         ),
     ),
+    "minimax h3 max reference": VideoModelSpec(
+        key="minimax h3 max reference",
+        label="Video · H3 Max R2V",
+        endpoint="minimax/h3-max/reference-to-video",
+        task="image_to_video",
+        image_field="reference_image_urls",
+        i2v_image_field="reference_image_urls",
+        multi_image=True,
+        max_ref_images=9,
+        max_ref_videos=3,
+        max_ref_audios=3,
+        max_total_refs=12,
+        ref_image_field="reference_image_urls",
+        ref_video_field="reference_video_urls",
+        ref_audio_field="reference_audio_urls",
+        prompt_citation_style="plain",
+        keep_audio_param=None,
+        generate_audio_param=None,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=15.0,
+        allowed_durations=H3MAX_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=H3MAX_RESOLUTIONS,
+        default_resolution="768P",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=(
+            "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16",
+        ),
+        default_aspect_ratio="adaptive",
+        auto_image_refs_in_prompt=True,
+        cost_per_second=0.08,
+        cost_per_second_by_resolution={"480p": 0.08, "768p": 0.08},
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+        notes=(
+            "MiniMax H3 Max R2V — cheaper Max stack, multi-ref characters/scenes. "
+            "Cite Image 1 / Video 1 / Audio 1. Up to 9 images + 3 videos + 3 audio (≤12 files). "
+            "5–15s · 480P/768P · aspect adaptive|ratios. "
+            "Est. $0.08/s output; first 4096 ref tokens included, then $0.02 / 1k tokens."
+        ),
+    ),
     # --- Alibaba Wan 3.0 (fal) — 2–30s, 1080p, native audio ---
     "wan 3.0 i2v": VideoModelSpec(
         key="wan 3.0 i2v",
@@ -2138,6 +2241,15 @@ _ALIASES: dict[str, str] = {
     "kling o3 pro – v2v edit": "kling o3 pro edit",
     "video · kling o3 pro – v2v edit": "kling o3 pro edit",
     "fal-ai/kling-video/o3/pro/video-to-video/edit": "kling o3 pro edit",
+    "kling o3 4k edit": "kling o3 4k edit",
+    "kling o3 4k v2v": "kling o3 4k edit",
+    "kling o3 4k v2v edit": "kling o3 4k edit",
+    "video · kling o3 4k edit": "kling o3 4k edit",
+    "fal-ai/kling-video/o3/4k/video-to-video/edit": "kling o3 4k edit",
+    "kling o3 4k reference": "kling o3 4k reference",
+    "kling o3 4k v2v reference": "kling o3 4k reference",
+    "video · kling o3 4k reference": "kling o3 4k reference",
+    "fal-ai/kling-video/o3/4k/video-to-video/reference": "kling o3 4k reference",
     "kling o1": "kling o1 standard edit",
     "kling o1 edit": "kling o1 standard edit",
     "kling o1 standard edit": "kling o1 standard edit",
@@ -2286,6 +2398,12 @@ _ALIASES: dict[str, str] = {
     "minimax h3 max image-to-video": "minimax h3 max i2v",
     "video · minimax h3 max – image-to-video": "minimax h3 max i2v",
     "minimax/h3-max/image-to-video": "minimax h3 max i2v",
+    "minimax h3 max reference": "minimax h3 max reference",
+    "minimax h3 max r2v": "minimax h3 max reference",
+    "h3 max r2v": "minimax h3 max reference",
+    "video · h3 max r2v": "minimax h3 max reference",
+    "video · minimax h3 max – r2v": "minimax h3 max reference",
+    "minimax/h3-max/reference-to-video": "minimax h3 max reference",
     "gemini omni 1.1 i2v": "gemini omni 1.1 i2v",
     "gemini omni flash 1.1 i2v": "gemini omni 1.1 i2v",
     "gemini omni 1.1 image-to-video": "gemini omni 1.1 i2v",
@@ -2359,6 +2477,8 @@ def model_dropdown_choices() -> list[str]:
     for key in (
         "kling o3 standard edit",
         "kling o3 pro edit",
+        "kling o3 4k edit",
+        "kling o3 4k reference",
         "flux 3 extend",
         "ltx retake",
         "grok imagine edit video",
@@ -2382,6 +2502,7 @@ def model_dropdown_choices() -> list[str]:
         "minimax h3 i2v",
         "minimax h3 max i2v",
         "minimax h3 reference",
+        "minimax h3 max reference",
         "gemini omni 1.1 i2v",
         "gemini omni 1.1 reference",
         "wan 3.0 i2v",

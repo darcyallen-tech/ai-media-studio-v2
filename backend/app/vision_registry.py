@@ -1927,6 +1927,42 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         native_stereo_audio=True,
         prompt_citation_style="plain",
     ),
+    "minimax h3 max omni": VisionModelSpec(
+        key="minimax h3 max omni",
+        label="MiniMax H3 Max · R2V",
+        mode="reference_to_video",
+        endpoint="minimax/h3-max/reference-to-video",
+        cost_estimate_usd=0.40,
+        cost_per_second=0.08,
+        cost_per_second_by_resolution={"480p": 0.08, "768p": 0.08},
+        notes=(
+            "H3 Max R2V — cheaper Max stack, multi-ref characters/scenes. "
+            "Cite Image 1 / Video 1 / Audio 1. Up to 9 images + 3 videos + 3 audio (≤12). "
+            "5–15s · 480P/768P. Est. $0.08/s output; first 4096 ref tokens included, "
+            "then $0.02 / 1k tokens. Also Studio Video → R2V."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=(
+            "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16",
+        ),
+        default_aspect="adaptive",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=9,
+        max_ref_videos=3,
+        max_ref_audios=3,
+        max_total_refs=12,
+        omni_reference=True,
+        duration_as_int=True,
+        prompt_citation_style="plain",
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+    ),
     "gemini omni 1.1 reference": VisionModelSpec(
         key="gemini omni 1.1 reference",
         label="Gemini Omni Flash 1.1 · Reference→Video",

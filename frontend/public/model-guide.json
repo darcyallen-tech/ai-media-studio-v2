@@ -1401,6 +1401,27 @@
           ]
         },
         {
+          "id": "studio:vid:minimax h3 max reference",
+          "label": "H3 Max R2V",
+          "modalities": [
+            "r2v"
+          ],
+          "tagline": "Cheaper Max stack, multi-ref characters/scenes",
+          "strengths": [
+            "Same Image 1 / Video 1 / Audio 1 citations as H3 Omni.",
+            "5–15s · 480P/768P. Est. $0.08/s output.",
+            "First 4096 ref tokens included."
+          ],
+          "weaknesses": [
+            "Not 2K like H3 Omni.",
+            "Extra refs after the allowance bill at $0.02 / 1k tokens."
+          ],
+          "use_cases": [
+            "Budget multi-ref identity",
+            "Character + scene packs"
+          ]
+        },
+        {
           "id": "studio:vid:gemini omni 1.1 reference",
           "label": "Gemini Omni Flash 1.1 R2V",
           "modalities": [
@@ -1626,6 +1647,48 @@
           ],
           "use_cases": [
             "Final V2V pass"
+          ]
+        },
+        {
+          "id": "studio:vid:kling o3 4k edit",
+          "label": "Kling O3 4K Edit",
+          "modalities": [
+            "v2v"
+          ],
+          "tagline": "NL edit of a real clip, native 4K, listing-grade, spendy",
+          "strengths": [
+            "Native 4K out — no upscale pass.",
+            "@Video1 + optional @ElementN / @ImageN (max 4 combined).",
+            "Source 3–15s mp4/mov, 720–3840px, max 200MB."
+          ],
+          "weaknesses": [
+            "Est. $0.42/s — do not copy Standard $0.126/s.",
+            "Length follows the source; not a 30s model."
+          ],
+          "use_cases": [
+            "Listing-grade clip restyle",
+            "Native 4K NL edit"
+          ]
+        },
+        {
+          "id": "studio:vid:kling o3 4k reference",
+          "label": "Kling O3 4K Reference",
+          "modalities": [
+            "v2v"
+          ],
+          "tagline": "Keep camera/motion, swap subject/look, native 4K",
+          "strengths": [
+            "Motion and camera from the source clip (@Video1).",
+            "Swap subject/look with @ElementN / @ImageN.",
+            "Native 4K. Duration 3–15s · aspect auto|16:9|9:16|1:1."
+          ],
+          "weaknesses": [
+            "Est. $0.42/s.",
+            "Same 4 combined element+image cap as O3 V2V."
+          ],
+          "use_cases": [
+            "Keep the take, change the talent",
+            "4K look swap"
           ]
         },
         {
