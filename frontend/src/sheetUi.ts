@@ -1369,21 +1369,45 @@ export function isMuseEditModel(row: ModelRow | null | undefined): boolean {
   );
 }
 
+function modelBlob(row: ModelRow | null | undefined): string {
+  return `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+}
+
+function modelRefCap(row: ModelRow | null | undefined): number {
+  return (
+    Number(row?.size_limits?.max_ref_images ?? row?.size_limits?.max_refs ?? 0) || 0
+  );
+}
+
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
-  const blob = `${row.id || ""} ${row.label || ""}`.toLowerCase();
-  return (
+  const blob = modelBlob(row);
+  if (
     blob.includes("flux") ||
     blob.includes("seedream") ||
     blob.includes("nano") ||
     blob.includes("qwen") ||
     blob.includes("recraft")
-  );
+  ) {
+    return true;
+  }
+  // Muse Image Edit (not Muse T2I) — Character Sheet + extra-angle R2I list.
+  return isMuseEditModel(row);
 }
 
-/** Character Sheet compose picker — sheetModel plus Muse Edit (not Front T2I / extra-angles). */
+/** Character Sheet compose picker: name allowlist, Muse Edit, or any R2I/edit with ≥4 refs. */
 export function sheetComposeModel(row: ModelRow | null | undefined) {
-  return sheetModel(row) || isMuseEditModel(row);
+  if (!row || typeof row !== "object") return false;
+  if (sheetModel(row) || isMuseEditModel(row)) return true;
+  const blob = modelBlob(row);
+  if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
+  const modalities = Array.isArray(row.modalities) ? row.modalities : [];
+  const isEdit =
+    blob.includes("edit") ||
+    blob.includes("r2i") ||
+    modalities.includes("r2i") ||
+    modalities.includes("i2i");
+  return isEdit && modelRefCap(row) >= 4;
 }
 
 function asModelRows(raw: unknown): ModelRow[] {

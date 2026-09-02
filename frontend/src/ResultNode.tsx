@@ -13,6 +13,7 @@ import {
   isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
+  sheetComposeModel,
   sheetR2iRefCap,
   SHEET_NO_TEXT,
   sizeChoices,
@@ -36,27 +37,44 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     data.sheetKind === "scene" ||
     data.sheetKind === "prop";
   const models = useSheetModels();
-  const isCharacterSheet =
-    isSheet &&
-    (data.sheetKind === "character" || (!data.sheetKind && data.slot === "sheet"));
+  const [liveCompose, setLiveCompose] = useState<typeof models.r2i>([]);
+  useEffect(() => {
+    if (!isSheet) return;
+    const ac = new AbortController();
+    fetch("/models?mode=image&modality=r2i", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : { models: [] }))
+      .then((body: { models?: typeof models.r2i }) => {
+        const rows = Array.isArray(body.models) ? body.models.filter((m) => m?.id) : [];
+        setLiveCompose(rows.filter(sheetComposeModel));
+      })
+      .catch((err: unknown) => {
+        console.error("Sheet compose catalog load failed", err);
+      });
+    return () => ac.abort();
+  }, [isSheet]);
   const sheetModels = useMemo(() => {
-    const r2iSrc = isCharacterSheet ? models.composeR2i || models.r2i : models.r2i;
-    const r2i = Array.isArray(r2iSrc) ? r2iSrc.filter((m) => m?.id) : [];
+    const compose =
+      liveCompose.length > 0
+        ? liveCompose
+        : Array.isArray(models.composeR2i) && models.composeR2i.length > 0
+          ? models.composeR2i
+          : models.r2i;
+    const r2i = (Array.isArray(compose) ? compose : []).filter((m) => m?.id);
     const t2i = Array.isArray(models.t2i) ? models.t2i.filter((m) => m?.id) : [];
     const out: typeof r2i = [];
     for (const m of r2i) {
       if (!isMuseEditModel(m)) out.push(m);
     }
-    for (const m of t2i) {
-      if (!out.some((x) => x.id === m.id)) out.push(m);
-    }
-    if (isCharacterSheet) {
-      for (const m of r2i) {
-        if (isMuseEditModel(m) && !out.some((x) => x.id === m.id)) out.push(m);
+    if (isSheet) {
+      for (const m of t2i) {
+        if (!out.some((x) => x.id === m.id)) out.push(m);
       }
     }
+    for (const m of r2i) {
+      if (isMuseEditModel(m) && !out.some((x) => x.id === m.id)) out.push(m);
+    }
     return out;
-  }, [isCharacterSheet, models.composeR2i, models.r2i, models.t2i]);
+  }, [isSheet, liveCompose, models.composeR2i, models.r2i, models.t2i]);
   const [modelId, setModelId] = useState(
     data.modelId || data.r2iModel || data.t2iModel || "",
   );
