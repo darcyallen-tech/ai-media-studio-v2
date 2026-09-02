@@ -235,17 +235,11 @@ def run_vision(
             )
             image_url = upload_file(ip, on_progress=progress)
             from app.fal.models import max_extra_ref_images_for_choice
-            from app.vision_registry import I2I_MAX_EXTRA_REFS
 
             edit_key = (getattr(spec, "edit_model_key", None) or "").strip() or (
                 getattr(spec, "label", None) or ""
             )
-            model_extra = max(0, int(max_extra_ref_images_for_choice(edit_key)))
-            # Muse Character Sheet / R2I keeps the real 10-still cap; generic I2I stays at 3 extras.
-            if "muse" in (edit_key or "").lower():
-                extra_cap = model_extra
-            else:
-                extra_cap = min(I2I_MAX_EXTRA_REFS, model_extra)
+            extra_cap = max(0, int(max_extra_ref_images_for_choice(edit_key)))
             for rp in (ref_paths or [])[: max(extra_cap + 1, 8)]:
                 try:
                     p = Path(rp)

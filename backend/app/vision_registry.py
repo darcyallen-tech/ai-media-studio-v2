@@ -702,8 +702,7 @@ I2I_ASPECT_CHOICES: tuple[str, ...] = (
 )
 
 # I2I multi-ref: max_refs = max *extra* reference stills (primary is separate).
-# Cap extras at 3 in UI even when the edit model allows more inputs.
-I2I_MAX_EXTRA_REFS = 3
+# Total stills = IMAGE_EDIT_MODELS.max_ref_images; extras = that minus 1.
 
 I2I_MODELS: dict[str, VisionModelSpec] = {
     "flux 2 pro i2i": VisionModelSpec(
@@ -713,7 +712,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         endpoint="fal-ai/flux-2-pro/edit",
         cost_estimate_usd=0.03,
         notes=(
-            "Default. Creative edit via Flux 2 Pro. Multi-ref: primary + up to 3 refs "
+            "Default. Creative edit via Flux 2 Pro. Multi-ref: up to 9 refs "
             "(identity / material / furniture). ~$0.03/image."
         ),
         duration_choices=(),
@@ -724,7 +723,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         default_resolution="",
         supports_audio=False,
         supports_negative=False,
-        max_refs=3,
+        max_refs=8,
         image_field="image_urls",
         edit_model_key="flux 2 pro",
         supports_strength=True,
@@ -737,7 +736,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         endpoint="fal-ai/flux-2-max/edit",
         cost_estimate_usd=0.07,
         notes=(
-            "Highest quality Flux edit. Multi-ref supported (primary + up to 3). "
+            "Highest quality Flux edit. Multi-ref up to 8 refs. "
             "~$0.07 first MP."
         ),
         duration_choices=(),
@@ -748,7 +747,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         default_resolution="",
         supports_audio=False,
         supports_negative=False,
-        max_refs=3,
+        max_refs=7,
         image_field="image_urls",
         edit_model_key="flux 2 max",
         supports_strength=True,
@@ -760,7 +759,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         mode="image_to_image",
         endpoint="fal-ai/flux-2-flex/edit",
         cost_estimate_usd=0.04,
-        notes="Flux 2 Flex edit. Multi-ref (primary + up to 3). ~$0.04/image.",
+        notes="Flux 2 Flex edit. Multi-ref up to 10 refs. ~$0.04/image.",
         duration_choices=(),
         default_duration="",
         aspect_choices=I2I_ASPECT_CHOICES,
@@ -769,7 +768,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         default_resolution="",
         supports_audio=False,
         supports_negative=False,
-        max_refs=3,
+        max_refs=9,
         image_field="image_urls",
         edit_model_key="flux 2 flex",
         supports_strength=True,
@@ -806,7 +805,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         endpoint="fal-ai/nano-banana-pro/edit",
         cost_estimate_usd=0.15,
         notes=(
-            "Nano Banana Pro edit — multi-ref (primary + up to 3). "
+            "Nano Banana Pro edit — multi-ref up to 14 refs. "
             "Excellent prompt adherence. 1K/2K/4K."
         ),
         duration_choices=(),
@@ -817,7 +816,7 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         default_resolution="1K",
         supports_audio=False,
         supports_negative=False,
-        max_refs=3,
+        max_refs=13,
         image_field="image_urls",
         edit_model_key="nano banana pro",
         supports_strength=False,
@@ -1806,7 +1805,7 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         default_resolution="auto",
         supports_audio=False,
         supports_negative=False,
-        max_refs=3,
+        max_refs=9,
         image_field="image_urls",
         edit_model_key="flux 2 pro",
         supports_strength=False,
@@ -1857,7 +1856,7 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         resolution_choices=FLUX_EDIT_RESOLUTIONS,
         default_resolution="auto",
         supports_audio=False,
-        max_refs=3,
+        max_refs=8,
         image_field="image_urls",
         edit_model_key="flux 2 max",
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
@@ -1876,7 +1875,7 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         resolution_choices=NANO_PRO_EDIT_RESOLUTIONS,
         default_resolution="2K",
         supports_audio=False,
-        max_refs=3,
+        max_refs=14,
         image_field="image_urls",
         edit_model_key="nano banana pro",
         extra_defaults={"num_images": 1},

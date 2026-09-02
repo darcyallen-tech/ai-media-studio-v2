@@ -640,7 +640,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         endpoint="fal-ai/flux-2-pro/edit",
         image_field="image_urls",
         multi_image=True,
-        max_ref_images=4,
+        max_ref_images=9,
         max_num_images=1,
         resolution_param=None,
         image_size_param="image_size",
@@ -651,7 +651,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         cost_per_image=0.03,
         notes=(
             "Default. FLUX.2 Pro multi-ref edit (~$0.03 first MP). Strong for staging. "
-            "image_size auto only — 2K is not a Flux-edit field."
+            "Up to 9 refs (fal product page). image_size auto only — 2K is not a Flux-edit field."
         ),
     ),
     "flux 2 max": ImageEditModelSpec(
@@ -660,7 +660,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         endpoint="fal-ai/flux-2-max/edit",
         image_field="image_urls",
         multi_image=True,
-        max_ref_images=4,
+        max_ref_images=8,
         max_num_images=1,
         resolution_param=None,
         image_size_param="image_size",
@@ -672,7 +672,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         notes=(
             "FLUX.2 Max edit — highest quality Flux edit. "
             "Est. $0.07 first processed MP, +$0.03 each additional MP (input counted). "
-            "image_size auto only — 2K is not a Flux-edit field."
+            "Up to 8 refs (fal product page). image_size auto only — 2K is not a Flux-edit field."
         ),
     ),
     "mai image 2.5 pro": ImageEditModelSpec(
@@ -720,13 +720,13 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         label="Image · Nano Banana Pro (edit)",
         endpoint="fal-ai/nano-banana-pro/edit",
         multi_image=True,
-        max_ref_images=4,
+        max_ref_images=14,
         max_num_images=4,
         max_resolution="2K",
         allowed_resolutions=("1K", "2K", "4K"),
         cost_per_image=0.15,
         resolution_cost_mult={"1K": 1.0, "2K": 1.0, "4K": 2.0},
-        notes="Google Gemini image edit on fal — excellent prompt adherence. Up to 4 refs.",
+        notes="Google Gemini image edit on fal — excellent prompt adherence. Up to 14 refs (fal product page).",
     ),
     "nano banana 2": ImageEditModelSpec(
         key="nano banana 2",
@@ -773,7 +773,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         endpoint="fal-ai/flux-2-flex/edit",
         image_field="image_urls",
         multi_image=True,
-        max_ref_images=4,
+        max_ref_images=10,
         max_num_images=1,
         resolution_param=None,
         image_size_param="image_size",
@@ -784,7 +784,7 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         cost_per_image=0.04,
         notes=(
             "FLUX.2 Flex multi-ref edit — flexible style control. "
-            "image_size auto only — 2K is not a Flux-edit field."
+            "Up to 10 refs (fal product page). image_size auto only — 2K is not a Flux-edit field."
         ),
     ),
     "flux kontext pro": ImageEditModelSpec(

@@ -1173,18 +1173,12 @@ export function composeDressPrompt(
 
 /** Catalog max_ref_images for sheet / extra-angle R2I. Never clamp Seedream to 3. */
 export function sheetR2iRefCap(model?: ModelRow | null): number {
-  const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
   const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
+  if (raw > 0) return raw;
+  const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
   if (blob.includes("muse") || blob.includes("seedream")) return 10;
-  if (blob.includes("qwen")) return raw > 0 ? raw : 3;
-  if (
-    blob.includes("nano") ||
-    blob.includes("flux") ||
-    blob.includes("fibo")
-  ) {
-    return raw > 0 ? raw : 4;
-  }
-  return raw > 0 ? raw : 4;
+  if (blob.includes("qwen")) return 3;
+  return 4;
 }
 
 export function sheetPrimaryPath(
