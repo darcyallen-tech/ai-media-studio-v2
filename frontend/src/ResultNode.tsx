@@ -106,6 +106,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const [enhancingDraft, setEnhancingDraft] = useState(false);
   const [noLabels, setNoLabels] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [estimate, setEstimate] = useState("");
   const cap = isSheet ? sheetR2iRefCap(selectedModel) : Number(data.maxRefs) || 0;
   useEffect(() => {
     setAnglePrompt(data.prompt || "");
@@ -129,6 +130,37 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   useEffect(() => {
     if (!data.generating) setBusy(false);
   }, [data.generating]);
+  useEffect(() => {
+    if (!isSheet || !selectedModel?.id) {
+      setEstimate("");
+      return;
+    }
+    const ac = new AbortController();
+    const qs = new URLSearchParams({
+      mode: "image",
+      modality: "r2i",
+      model_id: selectedModel.id,
+      num_images: "1",
+    });
+    const aspect = size || data.aspect || "";
+    const resolution = quality || data.resolution || "";
+    if (aspect) qs.set("aspect", aspect);
+    if (resolution) qs.set("resolution", resolution);
+    fetch(`/estimate?${qs}`, { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { ok?: boolean; cost?: string } | null) => {
+        if (body?.cost && String(body.cost).includes("$")) {
+          setEstimate(body.cost);
+          return;
+        }
+        setEstimate("");
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setEstimate("");
+      });
+    return () => ac.abort();
+  }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution]);
 
   const result = data.result;
   const paths = (result.result_paths ?? []).length
@@ -414,7 +446,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               (data.generating
                 ? "Generating…"
                 : isSheet
-                  ? modelCostLabel(selectedModel)
+                  ? estimate || modelCostLabel(selectedModel)
                   : "Cost: —")}
           </span>
           {result.duration_sec ? (
@@ -489,7 +521,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   </div>
                 ))}
                 <span className="hint">
-                  {packedRefCount()} / {cap || data.maxRefs || "—"} refs
+                  {Math.min(packedRefCount(), cap || packedRefCount())} / {cap || "—"} refs
                 </span>
               </div>
             ) : null}
@@ -574,7 +606,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : null}
             <p className="estimate">
               {isSheet
-                ? `${modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
+                ? `${estimate || modelCostLabel(selectedModel)} · ${Math.min(packedRefCount(), cap || packedRefCount())} / ${cap || "—"} refs`
                 : result.cost || "Est. cost: —"}
             </p>
             <label className="builder-field">

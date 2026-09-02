@@ -1104,14 +1104,20 @@ export function composeDressPrompt(
   return lines.join("\n\n");
 }
 
-/** Catalog max_ref_images for sheet / extra-angle R2I (Create R2I caps). */
+/** Catalog max_ref_images for sheet / extra-angle R2I. Never clamp Seedream to 3. */
 export function sheetR2iRefCap(model?: ModelRow | null): number {
-  const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
-  if (raw > 0) return raw;
   const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
+  const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
   if (blob.includes("muse") || blob.includes("seedream")) return 10;
-  if (blob.includes("qwen")) return 3;
-  return 4;
+  if (blob.includes("qwen")) return raw > 0 ? raw : 3;
+  if (
+    blob.includes("nano") ||
+    blob.includes("flux") ||
+    blob.includes("fibo")
+  ) {
+    return raw > 0 ? raw : 4;
+  }
+  return raw > 0 ? raw : 4;
 }
 
 export function sheetPrimaryPath(
@@ -1396,12 +1402,20 @@ export function sheetModel(row: ModelRow | null | undefined) {
   return isMuseEditModel(row);
 }
 
-/** Character Sheet compose picker: name allowlist, Muse Edit, or any R2I/edit with ≥4 refs. */
+/** Character Sheet compose picker: R2I/edit only. Always includes Muse Edit. Never T2I. */
 export function sheetComposeModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = modelBlob(row);
-  if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
-  if (sheetModel(row) || isMuseEditModel(row)) return true;
+  const id = String(row.id || "").toLowerCase();
+  const endpoint = String(row.endpoint || "").toLowerCase();
+  if (blob.includes("t2i") || blob.includes("text-to-image") || endpoint.includes("text-to-image")) {
+    return false;
+  }
+  if (isMuseEditModel(row)) return true;
+  if (id.includes("studio:img:muse image edit") || endpoint.includes("muse-image/edit")) {
+    return true;
+  }
+  if (sheetModel(row)) return true;
   const modalities = Array.isArray(row.modalities) ? row.modalities : [];
   const isEdit =
     blob.includes("edit") ||
