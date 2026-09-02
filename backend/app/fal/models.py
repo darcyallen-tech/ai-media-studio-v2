@@ -1042,11 +1042,12 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
         output_format_param="output_format",
         default_output_format="jpeg",
         cost_per_image=0.01,
-        extra_defaults={"output_format": "jpeg"},
+        extra_defaults={"output_format": "jpeg", "num_images": 1},
         supports_mask=False,
         notes=(
             "Meta Muse Image edit — precise “change only what I asked.” "
             "1–10 stills (I2I / R2I). No mask_url on this schema. ~$0.01/image. "
+            "Character Sheet compose can attach all angle stills (max 10). "
             "Strength: instruction + typography."
         ),
     ),

@@ -1912,7 +1912,8 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         cost_estimate_usd=0.01,
         notes=(
             "Meta Muse multi-ref stills — precise instruction edits. "
-            "Up to 10 images. No mask. ~$0.01/image."
+            "Up to 10 images. No mask. ~$0.01/image. "
+            "Character Sheet compose can attach all angle stills (max 10)."
         ),
         duration_choices=(),
         default_duration="",
@@ -1922,7 +1923,7 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         ),
         default_aspect="Match source",
         supports_audio=False,
-        max_refs=9,
+        max_refs=10,
         image_field="image_urls",
         edit_model_key="muse image edit",
         supports_mask=False,

@@ -943,7 +943,7 @@ def prop_prompt(fields: dict[str, Any] | None) -> str:
 
 
 def _sheet_r2i_ref_cap(entry: Any | None) -> int:
-    """Max stills this R2I model accepts. Seedream edit is treated as 3."""
+    """Max stills this R2I model accepts. Seedream edit is treated as 3. Muse is 10."""
     limits = getattr(entry, "size_limits", None) or {}
     n = 0
     if isinstance(limits, dict):
@@ -955,6 +955,8 @@ def _sheet_r2i_ref_cap(entry: Any | None) -> int:
         str(getattr(entry, key, "") or "")
         for key in ("id", "label", "endpoint", "source_key")
     ).lower()
+    if "muse" in blob:
+        return n if n > 0 else 10
     if "seedream" in blob:
         return min(n, 3) if n > 0 else 3
     return n if n > 0 else 3
@@ -1306,6 +1308,7 @@ def character_angle_params(
         "/edit" in endpoint or ("edit" in blob and "t2i" not in blob)
     )
     is_qwen = "qwen" in blob
+    is_muse = "muse" in blob
     aspects = [
         str(x).strip()
         for x in (getattr(entry, "aspect_choices", ()) or ())
@@ -1336,6 +1339,19 @@ def character_angle_params(
                 break
     if is_flux_edit:
         return "auto", "auto"
+    if is_muse:
+        framing = (req_aspect or req).strip()
+        low = framing.lower()
+        if (
+            not framing
+            or "match" in low
+            or "follow" in low
+            or low in ("auto", "default")
+        ):
+            return "Match source", ""
+        if landscape:
+            return "16:9", ""
+        return framing if framing in aspects else (aspects[0] if aspects else "9:16"), ""
     if is_nano:
         framing = req_aspect or req
         if not framing or _is_quality_token(framing) or _is_video_size_token(framing):
@@ -1447,20 +1463,17 @@ def generate_angle(
         p = _nv(raw)
         if p and Path(p).is_file() and p not in refs:
             refs.append(p)
-    if key == SHEET_SLOT and not refs:
+    if key == SHEET_SLOT:
         ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
-        for slot in (
-            "front",
-            "side",
-            "back",
-            "closeup",
-            "threequarter_front",
-            "threequarter_back",
-            "top",
-        ):
-            p = _nv(ident.get(slot))
-            if p and Path(p).is_file() and p not in refs:
-                refs.append(p)
+        ordered: list[str] = []
+        for angle in CORE_SLOTS + EXTRA_SLOTS:
+            p = _nv(ident.get(angle))
+            if p and Path(p).is_file() and p not in ordered:
+                ordered.append(p)
+        for p in refs:
+            if p and p not in ordered:
+                ordered.append(p)
+        refs = ordered
         if not refs:
             raise ValueError("Generate at least one angle before the sheet.")
 

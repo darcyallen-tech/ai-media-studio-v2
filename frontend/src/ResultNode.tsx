@@ -10,6 +10,7 @@ import { sendToResolve, toast } from "./toast";
 import {
   modelCostLabel,
   isFluxEditModel,
+  isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
   sheetR2iRefCap,
@@ -35,21 +36,37 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     data.sheetKind === "scene" ||
     data.sheetKind === "prop";
   const models = useSheetModels();
+  const isCharacterSheet =
+    isSheet &&
+    (data.sheetKind === "character" || (!data.sheetKind && data.slot === "sheet"));
   const sheetModels = useMemo(() => {
-    const r2i = Array.isArray(models.r2i) ? models.r2i.filter((m) => m?.id) : [];
+    const r2iSrc = isCharacterSheet ? models.composeR2i || models.r2i : models.r2i;
+    const r2i = Array.isArray(r2iSrc) ? r2iSrc.filter((m) => m?.id) : [];
     const t2i = Array.isArray(models.t2i) ? models.t2i.filter((m) => m?.id) : [];
-    const out = [...r2i];
+    const out: typeof r2i = [];
+    for (const m of r2i) {
+      if (!isMuseEditModel(m)) out.push(m);
+    }
     for (const m of t2i) {
       if (!out.some((x) => x.id === m.id)) out.push(m);
     }
+    if (isCharacterSheet) {
+      for (const m of r2i) {
+        if (isMuseEditModel(m) && !out.some((x) => x.id === m.id)) out.push(m);
+      }
+    }
     return out;
-  }, [models.r2i, models.t2i]);
+  }, [isCharacterSheet, models.composeR2i, models.r2i, models.t2i]);
   const [modelId, setModelId] = useState(
     data.modelId || data.r2iModel || data.t2iModel || "",
   );
   const selectedModel =
     sheetModels.find((m) => m.id === modelId) ||
     sheetModels.find((m) => m.id === (data.r2iModel || data.t2iModel)) ||
+    sheetModels.find((m) => {
+      const blob = `${m.id} ${m.label || ""}`.toLowerCase();
+      return blob.includes("nano banana pro") && !blob.includes("t2i");
+    }) ||
     sheetModels[0];
   const angleModel =
     selectedModel ||
@@ -90,7 +107,15 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   }, [data.aspect]);
   useEffect(() => {
     if (!isSheet || !liveSizes.length) return;
-    setSize((cur) => (liveSizes.includes(cur) ? cur : pickSheetResolution(liveSizes)));
+    setSize((cur) => {
+      if (isMuseEditModel(selectedModel)) {
+        const match = liveSizes.find((s) => /match|follow/i.test(s));
+        if (/match|follow/i.test(cur) && liveSizes.includes(cur)) return cur;
+        if (cur === "16:9" && liveSizes.includes("16:9")) return "16:9";
+        return match || pickSheetResolution(liveSizes);
+      }
+      return liveSizes.includes(cur) ? cur : pickSheetResolution(liveSizes);
+    });
     setQuality((cur) => (liveQuals.includes(cur) ? cur : liveQuals[0] || ""));
   }, [selectedModel?.id]);
   useEffect(() => {
@@ -500,6 +525,12 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 </select>
                 {!isSheet && isFluxEditModel(angleModel) ? (
                   <span className="hint">Auto only — 2K is not a Flux-edit field.</span>
+                ) : null}
+                {isSheet && isMuseEditModel(selectedModel) ? (
+                  <span className="hint">
+                    Match source follows layout (omits aspect_ratio); otherwise 16:9.
+                    Up to 10 angle stills.
+                  </span>
                 ) : null}
               </label>
             ) : null}

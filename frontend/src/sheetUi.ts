@@ -1104,10 +1104,11 @@ export function composeDressPrompt(
   return lines.join("\n\n");
 }
 
-/** Sheet-first Dress Front refs. Seedream R2I is treated as max 3. */
+/** Sheet-first Dress Front refs. Seedream R2I is treated as max 3. Muse edit is 10. */
 export function sheetR2iRefCap(model?: ModelRow | null): number {
   const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
   const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
+  if (blob.includes("muse")) return raw > 0 ? raw : 10;
   if (blob.includes("seedream")) return raw > 0 ? Math.min(raw, 3) : 3;
   return raw > 0 ? raw : 3;
 }
@@ -1343,6 +1344,7 @@ export function pickDefaultResolution(choices: string[]): string {
 
 export function pickSheetResolution(choices: string[]): string {
   return pickPreferredResolution(choices, [
+    "match source",
     "landscape_16_9",
     "16:9",
     "auto_2k",
@@ -1356,6 +1358,17 @@ export function pickSheetResolution(choices: string[]): string {
   ]);
 }
 
+export function isMuseEditModel(row: ModelRow | null | undefined): boolean {
+  const blob = `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+  if (!blob.includes("muse")) return false;
+  if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
+  return (
+    blob.includes("edit") ||
+    blob.includes("r2i") ||
+    blob.includes("muse-image/edit")
+  );
+}
+
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = `${row.id || ""} ${row.label || ""}`.toLowerCase();
@@ -1366,6 +1379,11 @@ export function sheetModel(row: ModelRow | null | undefined) {
     blob.includes("qwen") ||
     blob.includes("recraft")
   );
+}
+
+/** Character Sheet compose picker — sheetModel plus Muse Edit (not Front T2I / extra-angles). */
+export function sheetComposeModel(row: ModelRow | null | undefined) {
+  return sheetModel(row) || isMuseEditModel(row);
 }
 
 function asModelRows(raw: unknown): ModelRow[] {
@@ -1382,6 +1400,7 @@ function pickModelId(cur: string, preferred: string | undefined, rows: ModelRow[
 export function useSheetModels() {
   const [t2i, setT2i] = useState<ModelRow[]>([]);
   const [r2i, setR2i] = useState<ModelRow[]>([]);
+  const [composeR2i, setComposeR2i] = useState<ModelRow[]>([]);
   const [t2iId, setT2iIdRaw] = useState("");
   const [r2iId, setR2iIdRaw] = useState("");
   useEffect(() => {
@@ -1399,8 +1418,11 @@ export function useSheetModels() {
     fetch("/models?mode=image&modality=r2i", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : { models: [] }))
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const rows = asModelRows(body.models).filter(sheetModel);
+        const all = asModelRows(body.models);
+        const rows = all.filter(sheetModel);
+        const compose = all.filter(sheetComposeModel);
         setR2i(rows);
+        setComposeR2i(compose);
         setR2iIdRaw((cur) => pickModelId(cur, body.default_id, rows));
       })
       .catch((err: unknown) => {
@@ -1413,6 +1435,7 @@ export function useSheetModels() {
   return {
     t2i,
     r2i,
+    composeR2i,
     t2iId: t2iSafe,
     r2iId: r2iSafe,
     setT2iId: (id: string) =>

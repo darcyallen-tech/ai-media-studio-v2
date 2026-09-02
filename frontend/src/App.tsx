@@ -1742,7 +1742,10 @@ function StudioCanvas() {
                   });
                 }),
               onClose: prev?.onClose ?? (() => closeNode(angleId)),
-              onModel: prev?.onModel,
+              onModel:
+                prev?.onModel ??
+                ((id) =>
+                  upsertSheetAngleRef.current(builderId, slot, { slot, modelId: id })),
               onConfirmSheet: prev?.onConfirmSheet,
               onCompareSource: prev?.onCompareSource,
             },
@@ -3052,6 +3055,8 @@ function StudioCanvas() {
                     error: error === undefined ? null : error,
                   }),
                 onRegen: () => void regenSheetAngle(builderId, slot),
+                onModel: (id) =>
+                  upsertSheetAngle(builderId, slot, { slot, modelId: id }),
                 onGenerated: (info) => {
                   upsertSheetAngle(builderId, info.slot, {
                     slot: info.slot,
