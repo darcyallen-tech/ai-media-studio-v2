@@ -72,9 +72,9 @@ PROFILE_VIEWS: dict[str, str] = {
         "entire figure visible including feet, standing straight, neutral pose"
     ),
     "top": (
-        "direct top-down view, camera directly above looking straight down, "
-        "bird's-eye, full body visible including head and feet, subject centered, "
-        "no three-quarter tilt"
+        "direct overhead / top-down, camera above the crown, "
+        "subject does not look up at camera, full body visible including head and feet, "
+        "subject centered, no three-quarter tilt"
     ),
 }
 

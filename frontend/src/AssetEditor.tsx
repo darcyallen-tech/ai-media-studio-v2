@@ -10,6 +10,7 @@ import {
   SLOT_LABEL,
   collectAssetSheetRefs,
   composeAnglePrompt,
+  extraAngleR2iRow,
   composeCharacterIdentity,
   composeCharacterSheetPrompt,
   composeCostumeSheetPrompt,
@@ -168,7 +169,9 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     const t2iRow = models.t2i.find((m) => m.id === models.t2iId) || models.t2i[0];
     const r2iRow = models.r2i.find((m) => m.id === models.r2iId) || models.r2i[0];
     const frontT2i = slot === "front" && !frontPath;
-    const sizeRow = frontT2i ? t2iRow : r2iRow;
+    const spawnR2i =
+      isChar && !frontT2i ? extraAngleR2iRow(slot, models.r2i, r2iRow) : r2iRow;
+    const sizeRow = frontT2i ? t2iRow : spawnR2i;
     const sizes = sizeChoices(sizeRow);
     const quals = qualityChoices(sizeRow);
     const identText =
@@ -186,7 +189,10 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         assetId: row.id,
         sourceStill: slot === "front" ? "" : frontPath,
         t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
+        r2iModel: frontT2i
+          ? models.r2iId || models.t2iId
+          : spawnR2i?.id || models.r2iId || models.t2iId,
+        modelId: frontT2i ? undefined : spawnR2i?.id || models.r2iId || models.t2iId,
         name: row.name,
         wardrobe: row.fields?.wardrobe || "",
         fields: row.fields,

@@ -45,6 +45,7 @@ import {
   WARDROBE_F,
   WARDROBE_M,
   composeAnglePrompt,
+  extraAngleR2iRow,
   composeCharacterIdentity,
   composeCostumeBrief,
   collectDressFrontRefs,
@@ -458,6 +459,18 @@ function CharacterForm({
             ? refStill
             : ""
           : data.doneSlots?.front || "";
+      const spawnR2i = extraAngleR2iRow(slot, models.r2i, r2iRow);
+      const spawnR2iId = spawnR2i?.id || models.r2iId || models.t2iId;
+      const extraSizes = sizeChoices(spawnR2i);
+      const extraQuals = qualityChoices(spawnR2i);
+      const extraRes =
+        spawnR2i?.id && spawnR2i.id !== r2iRow?.id
+          ? pickDefaultResolution(extraSizes)
+          : angleRes;
+      const extraQuality =
+        spawnR2i?.id && spawnR2i.id !== r2iRow?.id
+          ? pickDefaultResolution(extraQuals)
+          : angleQuality;
       const patch = {
         slot,
         label: SLOT_LABEL[slot] || slot,
@@ -466,16 +479,17 @@ function CharacterForm({
         error: null as string | null,
         cost: estimate,
         focus: true,
-        resolution: slot === "front" ? frontQuality || frontRes : angleQuality || angleRes,
-        resolutionChoices: slot === "front" ? frontSizes : angleSizes,
-        aspect: slot === "front" ? frontRes : angleRes,
-        quality: slot === "front" ? frontQuality : angleQuality,
-        qualityChoices: slot === "front" ? frontQualities : angleQualities,
+        resolution: slot === "front" ? frontQuality || frontRes : extraQuality || extraRes,
+        resolutionChoices: slot === "front" ? frontSizes : extraSizes,
+        aspect: slot === "front" ? frontRes : extraRes,
+        quality: slot === "front" ? frontQuality : extraQuality,
+        qualityChoices: slot === "front" ? frontQualities : extraQuals,
         t2iModel: models.t2iId,
-        r2iModel: models.r2iId || models.t2iId,
+        r2iModel: spawnR2iId,
+        modelId: slot === "front" ? undefined : spawnR2iId,
         assetId: data.sessionAssetId || "",
         sourceStill,
-        maxRefs: slot === "front" && !sourceStill ? undefined : sheetR2iRefCap(r2iRow),
+        maxRefs: slot === "front" && !sourceStill ? undefined : sheetR2iRefCap(spawnR2i),
         wardrobe: identityFields.wardrobe,
         name: label,
       };
@@ -484,7 +498,7 @@ function CharacterForm({
         builderId,
         ...patch,
         t2iModel: session.t2iModel,
-        r2iModel: session.r2iModel,
+        r2iModel: patch.r2iModel,
         name: session.name,
         fields: session.fields,
         wardrobe: session.wardrobe,

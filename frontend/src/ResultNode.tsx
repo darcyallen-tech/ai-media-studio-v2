@@ -550,7 +550,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ? selectedModel?.id || data.r2iModel || data.t2iModel || ""
             : slot === "front" && !data.sourceStill
               ? data.t2iModel || ""
-              : data.r2iModel || data.t2iModel || "",
+              : data.modelId || data.r2iModel || data.t2iModel || "",
           prompt: noLabels && isSheet && !prompt.includes("No text, no labels")
             ? `${prompt} ${SHEET_NO_TEXT}`
             : prompt,

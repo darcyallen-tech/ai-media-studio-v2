@@ -713,7 +713,7 @@ export const PROFILE_VIEWS: Record<string, string> = {
   threequarter_back:
     "full body three-quarter back view (about 45° from behind), entire figure visible including feet, standing straight",
   top:
-    "direct top-down view, camera directly above looking straight down, bird's-eye, full body visible including head and feet, subject centered, no three-quarter tilt",
+    "direct overhead / top-down, camera above the crown, subject does not look up at camera, full body visible including head and feet, subject centered, no three-quarter tilt",
 };
 
 export const SLOT_LABEL: Record<string, string> = {
@@ -1314,6 +1314,44 @@ export function collectDressFrontRefs(opts: {
     }
   }
   return out;
+}
+
+/** Character extra-angle Result defaults (not Front, Close-up, or sheet compose). */
+export const QWEN_DEFAULT_ANGLE_SLOTS = [
+  "side",
+  "back",
+  "threequarter_front",
+  "threequarter_back",
+  "top",
+] as const;
+
+export function isQwenDefaultAngleSlot(slot: string): boolean {
+  return (QWEN_DEFAULT_ANGLE_SLOTS as readonly string[]).includes(slot);
+}
+
+/** Qwen Image 3 edit/R2I row if present in the list. */
+export function pickQwenImage3(
+  rows: ModelRow[] | undefined | null,
+): ModelRow | undefined {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.find((m) => {
+    const blob = `${m.id || ""} ${m.label || ""} ${m.endpoint || ""}`.toLowerCase();
+    if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
+    return blob.includes("qwen image 3") || blob.includes("qwen-image-3");
+  });
+}
+
+/** Extra-angle R2I: Qwen Image 3 when listed, else the builder fallback. */
+export function extraAngleR2iRow(
+  slot: string,
+  rows: ModelRow[] | undefined | null,
+  fallback?: ModelRow | null,
+): ModelRow | undefined {
+  if (isQwenDefaultAngleSlot(slot)) {
+    const qwen = pickQwenImage3(rows);
+    if (qwen) return qwen;
+  }
+  return fallback || undefined;
 }
 
 export function composeAnglePrompt(
