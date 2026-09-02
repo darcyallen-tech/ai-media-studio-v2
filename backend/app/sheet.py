@@ -1176,17 +1176,28 @@ _SHEET_SIZE_PREFER: tuple[str, ...] = (
 )
 
 
-def short_generate_error(exc: BaseException | str) -> str:
+def short_generate_error(
+    exc: BaseException | str,
+    *,
+    image_size: str = "",
+) -> str:
     """One-line user error — no traceback / pydantic dump."""
     text = str(exc or "").strip()
     if not text:
         return "Generate failed."
     low = text.lower()
     compact = low.replace("_", "").replace("-", "").replace(" ", "")
+    sent = (image_size or "").strip().lower()
+    sent_auto = sent in ("", "auto", "default")
     if "imagesize" in compact and (
         "auto" in low or "enum" in low or "input should be" in low
     ):
-        return "This model rejected image_size. Pick a listed resolution (not Auto)."
+        if sent_auto:
+            pass
+        elif "should be" in low and "auto" in low:
+            return "This model only accepts Auto for image_size."
+        else:
+            return "This model rejected image_size. Pick a listed resolution (not Auto)."
     if "aspect" in low and (
         "enum" in low or "input should be" in low or "invalid" in low
     ):
@@ -1552,12 +1563,13 @@ def generate_angle(
     try:
         result = generate(state)
     except Exception as exc:
-        raise RuntimeError(short_generate_error(exc)) from exc
+        raise RuntimeError(short_generate_error(exc, image_size=size or aspect)) from exc
     if not result.ok:
         raise RuntimeError(
             short_generate_error(
                 (result.status or "")
-                or (result.errors[0] if result.errors else "Generate failed.")
+                or (result.errors[0] if result.errors else "Generate failed."),
+                image_size=size or aspect,
             )
         )
     still = _pick_result_still(result)

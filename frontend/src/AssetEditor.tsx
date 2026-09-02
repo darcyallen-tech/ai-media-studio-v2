@@ -260,6 +260,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         qualityChoices: quals,
         name: row.name,
         wardrobe: row.fields?.wardrobe || "",
+        fields: row.fields,
         sheetKind: kind,
       });
       onClose();

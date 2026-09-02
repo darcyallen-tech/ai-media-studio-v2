@@ -1018,21 +1018,38 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
   cursor: zoom-out;
 }
 
 .lightbox-frame {
-  max-width: min(96vw, 1400px);
-  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  margin: 0 auto;
   cursor: default;
 }
 
 .lightbox-frame img,
 .lightbox-frame video {
-  max-width: 96vw;
-  max-height: 88vh;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  width: auto;
+  height: auto;
   border-radius: 10px;
   background: #111;
+}
+
+.lightbox-frame:has(.lightbox-title) img,
+.lightbox-frame:has(.lightbox-title) video {
+  max-height: calc(100vh - 48px - 2.5rem);
 }
 
 .lightbox-title {
@@ -1040,6 +1057,8 @@
   text-align: center;
   margin: 8px 0 0;
   font-size: 0.85rem;
+  flex-shrink: 0;
+  max-width: calc(100vw - 48px);
 }
 
 .library.drop-hot {

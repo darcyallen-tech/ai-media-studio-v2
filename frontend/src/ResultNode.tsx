@@ -10,7 +10,7 @@ import { sendToResolve, toast } from "./toast";
 import {
   defaultSheetRefSlots,
   modelCostLabel,
-  isFluxEditModel,
+  isFlux2EditModel,
   isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
@@ -18,7 +18,9 @@ import {
   sheetComposeModel,
   sheetR2iRefCap,
   sheetSlotPhrase,
+  sheetStatFooter,
   SHEET_FULL_BODY_RULE,
+  SHEET_NO_PANEL_TEXT,
   SHEET_NO_TEXT,
   SHEET_REF_PACK,
   sizeChoices,
@@ -89,29 +91,48 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     models.t2i.find((m) => m.id === data.t2iModel);
   const liveSizes = isSheet ? sizeChoices(selectedModel) : [];
   const liveQuals = isSheet ? qualityChoices(selectedModel) : [];
+  const fluxEdit = isFlux2EditModel(isSheet ? selectedModel : angleModel);
   const dropVideoSize = (s: string) =>
     Boolean(s) && !/^(360p|480p|540p|720p|1080p|1440p|2160p)$/i.test(s);
   const sizeChoicesList = (
-    isSheet && liveSizes.length ? liveSizes : Array.isArray(data.resolutionChoices) ? data.resolutionChoices : []
+    fluxEdit
+      ? ["auto"]
+      : isSheet && liveSizes.length
+        ? liveSizes
+        : Array.isArray(data.resolutionChoices)
+          ? data.resolutionChoices
+          : []
   ).filter(dropVideoSize);
   const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
   const [size, setSize] = useState(
-    data.aspect ||
-      (sizeChoicesList.includes(data.resolution || "") ? data.resolution : "") ||
-      (isSheet ? pickSheetResolution(sizeChoicesList) : sizeChoicesList[0]) ||
-      "",
+    fluxEdit
+      ? "auto"
+      : data.aspect ||
+        (sizeChoicesList.includes(data.resolution || "") ? data.resolution : "") ||
+        (isSheet ? pickSheetResolution(sizeChoicesList) : sizeChoicesList[0]) ||
+        "",
   );
   const qualityOpts = (
-    isSheet && liveQuals.length ? liveQuals : Array.isArray(data.qualityChoices) ? data.qualityChoices : []
+    fluxEdit
+      ? []
+      : isSheet && liveQuals.length
+        ? liveQuals
+        : Array.isArray(data.qualityChoices)
+          ? data.qualityChoices
+          : []
   ).filter(Boolean);
   const [quality, setQuality] = useState(
-    data.quality || qualityOpts[0] || "",
+    fluxEdit ? "" : data.quality || qualityOpts[0] || "",
   );
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localUrl, setLocalUrl] = useState("");
   const [enhancingDraft, setEnhancingDraft] = useState(false);
   const [noLabels, setNoLabels] = useState(false);
+  const [statFooter, setStatFooter] = useState(true);
+  const [sheetFields, setSheetFields] = useState<Record<string, string>>(
+    data.fields && typeof data.fields === "object" ? data.fields : {},
+  );
   const [confirmed, setConfirmed] = useState(false);
   const [estimate, setEstimate] = useState("");
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
@@ -129,9 +150,32 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
   useEffect(() => {
-    if (data.aspect && data.aspect !== size) setSize(data.aspect);
-  }, [data.aspect]);
+    if (data.fields && typeof data.fields === "object") setSheetFields(data.fields);
+  }, [data.fields]);
   useEffect(() => {
+    if (!isCharacterSheet || !data.assetId || Object.keys(sheetFields).length) return;
+    const ac = new AbortController();
+    fetch(`/assets/${data.assetId}`, { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { item?: { fields?: Record<string, string>; name?: string } } | null) => {
+        const next = body?.item?.fields;
+        if (next && typeof next === "object") setSheetFields(next);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+      });
+    return () => ac.abort();
+  }, [isCharacterSheet, data.assetId]);
+  useEffect(() => {
+    if (fluxEdit) return;
+    if (data.aspect && data.aspect !== size) setSize(data.aspect);
+  }, [data.aspect, fluxEdit]);
+  useEffect(() => {
+    if (fluxEdit) {
+      setSize("auto");
+      setQuality("");
+      return;
+    }
     if (!isSheet || !liveSizes.length) return;
     setSize((cur) => {
       if (isMuseEditModel(selectedModel)) {
@@ -143,7 +187,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       return liveSizes.includes(cur) ? cur : pickSheetResolution(liveSizes);
     });
     setQuality((cur) => (liveQuals.includes(cur) ? cur : liveQuals[0] || ""));
-  }, [selectedModel?.id]);
+  }, [selectedModel?.id, fluxEdit]);
   useEffect(() => {
     if (!data.generating) setBusy(false);
   }, [data.generating]);
@@ -159,8 +203,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       model_id: selectedModel.id,
       num_images: "1",
     });
-    const aspect = size || data.aspect || "";
-    const resolution = quality || data.resolution || "";
+    const aspect = fluxEdit ? "auto" : size || data.aspect || "";
+    const resolution = fluxEdit ? "auto" : quality || data.resolution || "";
     if (aspect) qs.set("aspect", aspect);
     if (resolution) qs.set("resolution", resolution);
     fetch(`/estimate?${qs}`, { signal: ac.signal })
@@ -177,7 +221,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         setEstimate("");
       });
     return () => ac.abort();
-  }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution]);
+  }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution, fluxEdit]);
   useEffect(() => {
     if (!isCharacterSheet) {
       setAngleChips([]);
@@ -495,8 +539,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     setBusy(true);
     setLocalError(null);
     data.onBusy?.(true, null);
-    const pickedAspect = size || data.aspect || "";
-    const pickedQuality = quality || "";
+    const pickedAspect = fluxEdit ? "auto" : size || data.aspect || "";
+    const pickedQuality = fluxEdit ? "" : quality || "";
     let failMsg: string | null = null;
     try {
       let assetId = data.assetId || "";
@@ -551,9 +595,23 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             : slot === "front" && !data.sourceStill
               ? data.t2iModel || ""
               : data.modelId || data.r2iModel || data.t2iModel || "",
-          prompt: noLabels && isSheet && !prompt.includes("No text, no labels")
-            ? `${prompt} ${SHEET_NO_TEXT}`
-            : prompt,
+          prompt: (() => {
+            let send = prompt;
+            if (!isSheet) return send;
+            const footer =
+              isCharacterSheet && statFooter
+                ? sheetStatFooter(data.name, sheetFields)
+                : "";
+            if (noLabels && !footer && !send.includes("No text, no labels")) {
+              send = `${send} ${SHEET_NO_TEXT}`;
+            } else if (noLabels && footer) {
+              send = `${send} ${SHEET_NO_PANEL_TEXT}`;
+            }
+            if (footer) {
+              send = `${send}\n\nFooter caption only (small clean text along the bottom of the sheet, not inside pose panels): ${footer}.`;
+            }
+            return send;
+          })(),
           source_still: sendRefs[0] || data.sourceStill || "",
           extra_refs: sendRefs.slice(1),
           wardrobe: data.wardrobe || "",
@@ -590,6 +648,13 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       });
     } catch (err: unknown) {
       failMsg = err instanceof Error ? err.message : "Generate failed.";
+      if (
+        fluxEdit &&
+        /rejected image_size/i.test(failMsg) &&
+        /not Auto/i.test(failMsg)
+      ) {
+        failMsg = "Generate failed.";
+      }
       console.error("Angle generate failed", err);
       setLocalError(failMsg);
     } finally {
@@ -746,25 +811,22 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : null}
             {sizeChoicesList.length ? (
               <label className="builder-field">
-                <span className="field-label">Aspect / size</span>
+                <span className="field-label">{fluxEdit ? "Size" : "Aspect / size"}</span>
                 <select
                   className="model"
                   value={sizeChoicesList.includes(size) ? size : sizeChoicesList[0]}
-                  disabled={data.generating || busy}
+                  disabled={data.generating || busy || fluxEdit}
                   onChange={(e) => {
                     setSize(e.target.value);
                     data.onResolution?.(e.target.value);
                   }}
                 >
                   {sizeChoicesList.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
+                    <option key={s.toLowerCase()} value={s}>
+                      {s.toLowerCase() === "auto" ? "Auto" : s}
                     </option>
                   ))}
                 </select>
-                {!isSheet && isFluxEditModel(angleModel) ? (
-                  <span className="hint">Auto only — 2K is not a Flux-edit field.</span>
-                ) : null}
                 {isSheet && isMuseEditModel(selectedModel) ? (
                   <span className="hint">
                     Match source follows layout (omits aspect_ratio); otherwise 16:9.
@@ -800,6 +862,25 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                     onChange={(e) => setNoLabels(e.target.checked)}
                   />{" "}
                   No text / labels
+                </span>
+              </label>
+            ) : null}
+            {isCharacterSheet ? (
+              <label className="param">
+                <span>
+                  <input
+                    type="checkbox"
+                    checked={statFooter}
+                    disabled={data.generating || busy}
+                    onChange={(e) => setStatFooter(e.target.checked)}
+                  />{" "}
+                  Stat footer
+                  {statFooter && sheetStatFooter(data.name, sheetFields) ? (
+                    <span className="hint">
+                      {" "}
+                      {sheetStatFooter(data.name, sheetFields)}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             ) : null}

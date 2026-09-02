@@ -1071,6 +1071,29 @@ export function composeDressSheetPrompt(identity: string, outfit: string, extra 
 export const SHEET_NO_TEXT =
   "No text, no labels, no lettering, no captions anywhere on the image.";
 
+export const SHEET_NO_PANEL_TEXT =
+  "No text or labels inside the pose panels.";
+
+/** Footer line from filled character fields only — never invent empty stats. */
+export function sheetStatFooter(
+  name?: string | null,
+  fields?: Record<string, string> | null,
+): string {
+  const f = fields || {};
+  const hair = [bit(f.hair_length), bit(f.hair_style), bit(f.hair_color)]
+    .filter(Boolean)
+    .join(" ");
+  const parts = [
+    bit(name) || bit(f.name),
+    bit(f.age),
+    bit(f.height),
+    hair,
+    bit(f.eye_color) || bit(f.eyes),
+    bit(f.build) || bit(f.weight) || bit(f.body),
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 export function collectSheetAngleRefs(
   identity?: Record<string, string> | null,
   kind: "character" | "costume" = "character",
@@ -1389,26 +1412,65 @@ export function isFluxEditModel(row: ModelRow | null | undefined): boolean {
   );
 }
 
+/** Flux 2 Pro / Max / Flex edit — image_size is auto-only. */
+export function isFlux2EditModel(row: ModelRow | null | undefined): boolean {
+  const blob = `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+  if (blob.includes("t2i") || blob.includes("text-to-image") || blob.includes("kontext")) {
+    return false;
+  }
+  const family =
+    blob.includes("flux-2") || blob.includes("flux 2") || blob.includes("flux2");
+  if (!family) return false;
+  const which =
+    blob.includes("pro") || blob.includes("max") || blob.includes("flex");
+  if (!which) return false;
+  return (
+    blob.includes("edit") ||
+    blob.includes("r2i") ||
+    blob.includes("/edit") ||
+    blob.includes("studio:img:flux 2")
+  );
+}
+
 const VIDEO_SIZE_TOKEN = /^(360p|480p|540p|720p|1080p|1440p|2160p)$/i;
 
+function uniqueChoices(list: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of list) {
+    const s = String(raw || "").trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 export function aspectChoices(row: ModelRow | null | undefined): string[] {
+  if (isFlux2EditModel(row)) return ["auto"];
   if (isNanoModel(row)) return [...NANO_ASPECTS];
-  return (row?.aspect_choices ?? []).map((s) => String(s).trim()).filter(Boolean);
+  return uniqueChoices((row?.aspect_choices ?? []).map((s) => String(s).trim()));
 }
 
 export function qualityChoices(row: ModelRow | null | undefined): string[] {
-  return (row?.resolution_choices ?? [])
-    .map((s) => String(s).trim())
-    .filter((s) => /^(0\.5K|1K|2K|4K)$/i.test(s));
+  if (isFlux2EditModel(row)) return [];
+  return uniqueChoices(
+    (row?.resolution_choices ?? [])
+      .map((s) => String(s).trim())
+      .filter((s) => /^(0\.5K|1K|2K|4K)$/i.test(s)),
+  );
 }
 
 export function sizeChoices(row: ModelRow | null | undefined): string[] {
   if (!row) return [];
-  const dropVideo = (s: string) => s && !VIDEO_SIZE_TOKEN.test(s);
+  if (isFlux2EditModel(row)) return ["auto"];
+  const dropVideo = (s: string) => Boolean(s) && !VIDEO_SIZE_TOKEN.test(s);
   const qualities = qualityChoices(row).filter(dropVideo);
-  const res = (row.resolution_choices ?? [])
-    .map((s) => String(s).trim())
-    .filter(dropVideo);
+  const res = uniqueChoices(
+    (row.resolution_choices ?? []).map((s) => String(s).trim()).filter(dropVideo),
+  );
   const sizes = res.filter((s) => !qualities.includes(s));
   if (sizes.length) return sizes;
   const aspects = aspectChoices(row).filter(dropVideo);

@@ -573,6 +573,7 @@ function CharacterForm({
         })),
         wardrobe: identityFields.wardrobe,
         name: label,
+        fields: identityFields,
         sheetKind: "character",
       });
       setError(null);

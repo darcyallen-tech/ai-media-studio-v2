@@ -1617,6 +1617,7 @@ function StudioCanvas() {
                   characterId: patch.characterId ?? n.data.characterId,
                   costumeId: patch.costumeId ?? n.data.costumeId,
                   refPreviews: patch.refPreviews ?? n.data.refPreviews,
+                  fields: patch.fields ?? n.data.fields,
                   nodeKey: key,
                   assetId: patch.assetId || n.data.assetId,
                   error: patch.error === undefined ? n.data.error ?? null : patch.error,
@@ -1659,6 +1660,7 @@ function StudioCanvas() {
               nodeKey: key,
               wardrobe: patch.wardrobe ?? prev?.wardrobe,
               name: patch.name ?? prev?.name,
+              fields: patch.fields ?? prev?.fields,
               generating: patch.generating ?? prev?.generating ?? false,
               error: patch.error === undefined ? prev?.error ?? null : patch.error,
               result: {

@@ -308,6 +308,7 @@ export type ResultNodeData = {
   modelId?: string;
   wardrobe?: string;
   name?: string;
+  fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   characterId?: string;
   costumeId?: string;
@@ -452,6 +453,7 @@ export type SheetAnglePatch = {
   modelId?: string;
   wardrobe?: string;
   name?: string;
+  fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   characterId?: string;
   costumeId?: string;
