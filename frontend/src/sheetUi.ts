@@ -967,6 +967,72 @@ export function composePropSheetPrompt(brief: string, extra = ""): string {
 const SHEET_NO_GARBLED =
   "No gibberish text, no watermarks, no logos, no random letters or captions.";
 
+export const SHEET_FULL_BODY_RULE =
+  "Every FULL BODY panel is head-to-toe with feet in frame — no crop at shins or knees. Close-up and top-down are the only allowed crops.";
+
+/** Default-select order for sheet refs: Front, Side, Back, Close-up, then ¾, then top. */
+export const SHEET_REF_PACK = [
+  "front",
+  "side",
+  "back",
+  "closeup",
+  "threequarter_front",
+  "threequarter_back",
+  "top",
+] as const;
+
+export type SheetAngleChip = {
+  slot: string;
+  label: string;
+  path: string;
+  url: string;
+};
+
+export function sheetSlotPhrase(slot: string): string {
+  switch (slot) {
+    case "front":
+      return "full-body front";
+    case "side":
+      return "full-body side";
+    case "back":
+      return "full-body back";
+    case "closeup":
+      return "close-up";
+    case "top":
+      return "top-down";
+    case "threequarter_front":
+      return "full-body ¾ front";
+    case "threequarter_back":
+      return "full-body ¾ back";
+    default:
+      return SLOT_LABEL[slot] || slot;
+  }
+}
+
+export function defaultSheetRefSlots(available: string[], cap: number): string[] {
+  const pack = SHEET_REF_PACK.filter((s) => available.includes(s));
+  if (cap <= 0 || pack.length <= cap) return pack;
+  return pack.slice(0, cap);
+}
+
+export function sheetAnglesFromIdentity(
+  identity?: Record<string, string> | null,
+  urls?: Record<string, string> | null,
+): SheetAngleChip[] {
+  const out: SheetAngleChip[] = [];
+  for (const slot of SHEET_REF_PACK) {
+    const path = String(identity?.[slot] || "").trim();
+    if (!path) continue;
+    out.push({
+      slot,
+      label: SLOT_LABEL[slot] || slot,
+      path,
+      url: String(urls?.[slot] || "").trim(),
+    });
+  }
+  return out;
+}
+
 export function composeCostumeSheetPrompt(outfit: string, extra = ""): string {
   const bits = [
     `Single costume reference SHEET of: ${bit(outfit) || "the described costume"}. One image only.`,
@@ -983,7 +1049,8 @@ export function composeCharacterSheetPrompt(name: string, extra = ""): string {
   const bits = [
     `Production character SHEET of ${who}. One image only.`,
     "Clean studio grid built from the attached angle stills (front, side, back, close-up, and any extra views).",
-    "Same person in every panel — identity, face, hair, body, and wardrobe consistent. Isolated on a clean plate. Photoreal. Optional small clean labels only.",
+    SHEET_FULL_BODY_RULE,
+    "Same person in every panel — identity, face, hair, body, and wardrobe locked to the attached stills. Isolated on a clean plate. Photoreal. Optional small clean labels only.",
     SHEET_NO_GARBLED,
   ];
   if (bit(extra)) bits.push(bit(extra));

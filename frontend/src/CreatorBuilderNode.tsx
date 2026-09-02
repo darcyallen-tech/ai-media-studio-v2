@@ -552,6 +552,11 @@ function CharacterForm({
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
         maxRefs: sheetR2iRefCap(r2iRow),
+        refPreviews: ANGLE_ACTIONS.filter((s) => data.doneSlots?.[s]).map((s) => ({
+          id: s,
+          label: SLOT_LABEL[s] || s,
+          path: data.doneSlots?.[s] || "",
+        })),
         wardrobe: identityFields.wardrobe,
         name: label,
         sheetKind: "character",

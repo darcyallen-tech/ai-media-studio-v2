@@ -726,7 +726,9 @@ def character_sheet_prompt(name: str, extra: str = "") -> str:
         f"Production character SHEET of {who}. One image only. "
         "Clean studio grid built from the attached angle stills "
         "(front, side, back, close-up, and any extra views). "
-        "Same person in every panel — identity, face, hair, body, and wardrobe consistent. "
+        "Every FULL BODY panel is head-to-toe with feet in frame — no crop at shins or knees. "
+        "Close-up and top-down are the only allowed crops. "
+        "Same person in every panel — identity, face, hair, body, and wardrobe locked to the attached stills. "
         "Isolated on a clean plate. Photoreal. Optional small clean labels only. "
         + SHEET_NO_GARBLED
     )
@@ -1465,19 +1467,19 @@ def generate_angle(
         p = _nv(raw)
         if p and Path(p).is_file() and p not in refs:
             refs.append(p)
-    if key == SHEET_SLOT:
+    client_sent = bool(prior) or bool(extra_refs)
+    if key == SHEET_SLOT and not client_sent:
         ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
         ordered: list[str] = []
         for angle in CORE_SLOTS + EXTRA_SLOTS:
             p = _nv(ident.get(angle))
             if p and Path(p).is_file() and p not in ordered:
                 ordered.append(p)
-        for p in refs:
-            if p and p not in ordered:
-                ordered.append(p)
         refs = ordered
         if not refs:
             raise ValueError("Generate at least one angle before the sheet.")
+    elif key == SHEET_SLOT and not refs:
+        raise ValueError("Generate at least one angle before the sheet.")
 
     text = _nv(prompt) or compose_angle_prompt(
         kind=kind,
@@ -1513,9 +1515,11 @@ def generate_angle(
         raise ValueError(f"No {modality} model available for this sheet angle.")
 
     cap = _sheet_r2i_ref_cap(entry)
-    if key == SHEET_SLOT and cap > 0 and len(refs) > cap:
-        refs = refs[:cap]
-    if refs and cap > 0 and len(refs) > cap:
+    if cap > 0 and len(refs) > cap:
+        if key == SHEET_SLOT:
+            raise ValueError(
+                f"This model allows {cap} refs — deselect extras (got {len(refs)})."
+            )
         label = getattr(entry, "label", None) or getattr(entry, "id", None) or "This model"
         raise ValueError(
             f"{label} allows at most {cap} reference images (got {len(refs)}). "

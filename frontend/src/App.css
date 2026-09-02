@@ -1317,6 +1317,26 @@
   font-weight: 650;
 }
 
+.ref-chip.pickable {
+  cursor: pointer;
+  border: 1px solid transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.ref-chip.pick-on {
+  box-shadow: 0 0 0 2px #3d7ea6;
+}
+
+.ref-chip.pick-off {
+  opacity: 0.42;
+}
+
+.ref-chip.pickable input {
+  margin: 0;
+  pointer-events: none;
+}
+
 .ref-chip img,
 .ref-chip .sheet-angle-empty {
   width: 36px;
@@ -1328,6 +1348,10 @@
 
 html[data-theme="night"] .ref-chip {
   background: #2a3442;
+}
+
+html[data-theme="night"] .ref-chip.pick-on {
+  box-shadow: 0 0 0 2px #7eb0d4;
 }
 
 .sheet-progress {

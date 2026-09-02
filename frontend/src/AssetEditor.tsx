@@ -237,6 +237,12 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         assetId: row.id,
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
+        refPreviews: ALL.filter((s) => row.identity?.[s]).map((s) => ({
+          id: s,
+          label: SLOT_LABEL[s] || s,
+          path: row.identity?.[s] || "",
+          url: ident[s] || "",
+        })),
         t2iModel: models.t2iId,
         r2iModel: r2iId,
         modelId: r2iId,

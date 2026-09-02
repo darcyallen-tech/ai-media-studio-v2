@@ -151,7 +151,7 @@ Interpolate is video-only. Changing duration / factor re-estimates cost.
 
 **Library** (side panel): generated files, uploads, and **From Resolve** when an inbox folder is set. Drag a still or clip onto a Source, Last Frame, Tool, or pin. **Send to Resolve** is on the Library row and on Result nodes.
 
-**Assets:** characters, scenes, props (costumes API is there for sheets). Hub on Storyboard reads these. You can attach stills and reuse them as refs or Kling elements. Character angles/sheets clear generating on success; Flux edit uses auto; Seedream/Qwen send real image sizes. Sheet compose ref caps follow the catalog (Seedream/Muse 10, Nano/Flux 4, Qwen 3); the Character Sheet model list is R2I/edit first (Nano, Flux, Seedream, Qwen, Muse, Fibo 1.5) with Muse visible, default Nano Banana Pro (edit).
+**Assets:** characters, scenes, props (costumes API is there for sheets). Hub on Storyboard reads these. You can attach stills and reuse them as refs or Kling elements. Character angles/sheets clear generating on success; Flux edit uses auto; Seedream/Qwen send real image sizes. Sheet compose ref caps follow the catalog (Seedream/Muse 10, Nano/Flux 4, Qwen 3); the Character Sheet model list is R2I/edit first (Nano, Flux, Seedream, Qwen, Muse, Fibo 1.5) with Muse visible, default Nano Banana Pro (edit). Character Sheet compose: full-body head-to-toe panels (close-up/top-down the only crops); pick which angle stills to send; Enhance rewrites the sheet prompt using selected slot names.
 
 Outputs for the packaged app: `%LOCALAPPDATA%\AI Media Studio V2\outputs\YYYY-MM-DD\`.
 

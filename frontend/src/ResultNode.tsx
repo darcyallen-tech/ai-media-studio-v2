@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { errorFromBody, readJson } from "./http";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
@@ -8,17 +8,24 @@ import { openLightbox } from "./lightbox";
 import ResizableMedia from "./ResizableMedia";
 import { sendToResolve, toast } from "./toast";
 import {
+  defaultSheetRefSlots,
   modelCostLabel,
   isFluxEditModel,
   isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
+  sheetAnglesFromIdentity,
   sheetComposeModel,
   sheetR2iRefCap,
+  sheetSlotPhrase,
+  SHEET_FULL_BODY_RULE,
   SHEET_NO_TEXT,
+  SHEET_REF_PACK,
   sizeChoices,
+  SLOT_LABEL,
   sortSheetComposeModels,
   useSheetModels,
+  type SheetAngleChip,
 } from "./sheetUi";
 import {
   writeLibraryPayload,
@@ -107,7 +114,17 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const [noLabels, setNoLabels] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [estimate, setEstimate] = useState("");
+  const [enhancingPrompt, setEnhancingPrompt] = useState(false);
+  const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
+  const [pickedSlots, setPickedSlots] = useState<string[]>([]);
+  const pickedManualRef = useRef(false);
   const cap = isSheet ? sheetR2iRefCap(selectedModel) : Number(data.maxRefs) || 0;
+  const isCharacterSheet =
+    isSheet &&
+    (data.sheetKind === "character" || (!data.sheetKind && data.slot === "sheet"));
+  useEffect(() => {
+    pickedManualRef.current = false;
+  }, [data.assetId]);
   useEffect(() => {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
@@ -161,6 +178,79 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       });
     return () => ac.abort();
   }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution]);
+  useEffect(() => {
+    if (!isCharacterSheet) {
+      setAngleChips([]);
+      return;
+    }
+    const previews = Array.isArray(data.refPreviews) ? data.refPreviews : [];
+    const fromPreview: SheetAngleChip[] = previews
+      .filter((c) => c.path)
+      .map((c) => {
+        const id = String(c.id || "").trim();
+        const slot =
+          SHEET_REF_PACK.find((s) => s === id) ||
+          (Object.keys(SLOT_LABEL).find((s) => SLOT_LABEL[s] === c.label) || "");
+        return {
+          slot: slot || id || "front",
+          label: c.label || SLOT_LABEL[slot] || slot || "Ref",
+          path: c.path,
+          url: c.url || "",
+        };
+      });
+    let cancelled = false;
+    const assetId = data.assetId || "";
+    if (!assetId) {
+      const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
+      const paths = [data.sourceStill || "", ...extras].filter(Boolean);
+      const fallback: SheetAngleChip[] = paths.map((path, i) => ({
+        slot: SHEET_REF_PACK[i] || `ref_${i + 1}`,
+        label: SLOT_LABEL[SHEET_REF_PACK[i] || ""] || `Ref ${i + 1}`,
+        path,
+        url: "",
+      }));
+      setAngleChips(fromPreview.length ? fromPreview : fallback);
+      return;
+    }
+    fetch(`/assets/${assetId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { item?: { identity?: Record<string, string>; identity_urls?: Record<string, string> } } | null) => {
+        if (cancelled) return;
+        const item = body?.item;
+        const fromIdent = sheetAnglesFromIdentity(item?.identity, item?.identity_urls);
+        if (fromIdent.length) {
+          setAngleChips(fromIdent);
+          return;
+        }
+        const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
+        const paths = [data.sourceStill || "", ...extras].filter(Boolean);
+        setAngleChips(
+          fromPreview.length
+            ? fromPreview
+            : paths.map((path, i) => ({
+                slot: SHEET_REF_PACK[i] || `ref_${i + 1}`,
+                label: SLOT_LABEL[SHEET_REF_PACK[i] || ""] || `Ref ${i + 1}`,
+                path,
+                url: "",
+              })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setAngleChips(fromPreview);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCharacterSheet, data.assetId, data.sourceStill, data.extraRefs, data.refPreviews]);
+  useEffect(() => {
+    if (!isCharacterSheet || !angleChips.length) return;
+    const avail = angleChips.map((c) => c.slot);
+    const def = defaultSheetRefSlots(avail, cap);
+    setPickedSlots((cur) => {
+      if (!pickedManualRef.current) return def;
+      return cur.filter((s) => avail.includes(s));
+    });
+  }, [isCharacterSheet, cap, angleChips]);
 
   const result = data.result;
   const paths = (result.result_paths ?? []).length
@@ -265,12 +355,72 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   }
 
   function packedRefCount() {
+    if (isCharacterSheet && angleChips.length) {
+      return pickedSlots.filter((s) => angleChips.some((c) => c.slot === s)).length;
+    }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
     const packed: string[] = [];
     for (const p of [data.sourceStill || "", ...extras]) {
       if (p && !packed.includes(p)) packed.push(p);
     }
     return packed.length;
+  }
+
+  function toggleSheetRef(slot: string) {
+    pickedManualRef.current = true;
+    setPickedSlots((cur) =>
+      cur.includes(slot) ? cur.filter((s) => s !== slot) : [...cur, slot],
+    );
+    setLocalError(null);
+  }
+
+  async function enhanceSheetPrompt() {
+    const prompt = anglePrompt.trim();
+    if (!prompt) {
+      setLocalError("Sheet prompt is empty.");
+      return;
+    }
+    const selected = angleChips.filter((c) => pickedSlots.includes(c.slot));
+    const names = selected.map((c) => sheetSlotPhrase(c.slot)).join(" / ");
+    setEnhancingPrompt(true);
+    setLocalError(null);
+    try {
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: [
+            prompt,
+            "",
+            "[Rewrite this character-sheet prompt only.]",
+            names
+              ? `Panels to include (name each once, do not repeat a slot): ${names}.`
+              : "",
+            SHEET_FULL_BODY_RULE,
+            "Keep identity and wardrobe lock. No gibberish labels.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          model_id: selectedModel?.id || data.r2iModel || "",
+          modality: "r2i",
+          mode: "image",
+        }),
+      });
+      const body = await readJson(res);
+      const rewritten = String((body as { prompt?: string }).prompt || "").trim();
+      if (!res.ok || !rewritten) {
+        throw new Error(errorFromBody(body, "Enhance returned an empty reply."));
+      }
+      setAnglePrompt(rewritten);
+      data.onPrompt?.(rewritten);
+      toast("Sheet prompt enhanced.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Enhance failed.";
+      setLocalError(msg);
+      toast(msg, true);
+    } finally {
+      setEnhancingPrompt(false);
+    }
   }
 
   async function confirmSheet() {
@@ -314,14 +464,31 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
     const packed: string[] = [];
-    for (const p of [data.sourceStill || "", ...extras]) {
-      if (p && !packed.includes(p)) packed.push(p);
+    if (isCharacterSheet && angleChips.length) {
+      const selected = angleChips.filter((c) => pickedSlots.includes(c.slot));
+      if (cap > 0 && selected.length > cap) {
+        setLocalError(`This model allows ${cap} refs — deselect extras`);
+        return;
+      }
+      if (!selected.length) {
+        setLocalError("Select at least one angle still.");
+        return;
+      }
+      for (const c of selected) {
+        if (c.path && !packed.includes(c.path)) packed.push(c.path);
+      }
+    } else {
+      for (const p of [data.sourceStill || "", ...extras]) {
+        if (p && !packed.includes(p)) packed.push(p);
+      }
     }
     const refCap = isSheet ? cap : Number(data.maxRefs) || 0;
-    const sendRefs = isSheet && refCap > 0 ? packed.slice(0, refCap) : packed;
-    if (!isSheet && refCap > 0 && sendRefs.length > refCap) {
+    const sendRefs = packed;
+    if (refCap > 0 && sendRefs.length > refCap) {
       setLocalError(
-        `This model allows at most ${refCap} reference images (got ${sendRefs.length}).`,
+        isSheet
+          ? `This model allows ${refCap} refs — deselect extras`
+          : `This model allows at most ${refCap} reference images (got ${sendRefs.length}).`,
       );
       return;
     }
@@ -512,7 +679,35 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         </div>
         {isAngle ? (
           <>
-            {Array.isArray(data.refPreviews) && data.refPreviews.length ? (
+            {isCharacterSheet && angleChips.length ? (
+              <div className="ref-chip-row sheet-ref-picker">
+                {angleChips.map((chip) => {
+                  const on = pickedSlots.includes(chip.slot);
+                  const src =
+                    chip.url ||
+                    (data.assetId
+                      ? `/assets/${data.assetId}/still?slot=${chip.slot}`
+                      : "");
+                  return (
+                    <button
+                      key={`${chip.slot}-${chip.path}`}
+                      type="button"
+                      className={`ref-chip pickable ${on ? "pick-on" : "pick-off"}`}
+                      disabled={data.generating || busy}
+                      onClick={() => toggleSheetRef(chip.slot)}
+                      title={on ? `Exclude ${chip.label}` : `Include ${chip.label}`}
+                    >
+                      <input type="checkbox" readOnly checked={on} tabIndex={-1} />
+                      {src ? <img src={src} alt="" /> : <span className="sheet-angle-empty" />}
+                      <span>{chip.label}</span>
+                    </button>
+                  );
+                })}
+                <span className={packedRefCount() > (cap || 0) && cap > 0 ? "hint warn" : "hint"}>
+                  {packedRefCount()} / {cap || "—"} refs
+                </span>
+              </div>
+            ) : Array.isArray(data.refPreviews) && data.refPreviews.length ? (
               <div className="ref-chip-row">
                 {data.refPreviews.map((chip) => (
                   <div key={`${chip.label}-${chip.path}`} className="ref-chip">
@@ -521,9 +716,13 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   </div>
                 ))}
                 <span className="hint">
-                  {Math.min(packedRefCount(), cap || packedRefCount())} / {cap || "—"} refs
+                  {packedRefCount()} / {cap || "—"} refs
                 </span>
               </div>
+            ) : isSheet ? (
+              <p className="hint">
+                {packedRefCount()} / {cap || "—"} refs
+              </p>
             ) : null}
             {isSheet && sheetModels.length ? (
               <label className="builder-field">
@@ -606,7 +805,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : null}
             <p className="estimate">
               {isSheet
-                ? `${estimate || modelCostLabel(selectedModel)} · ${Math.min(packedRefCount(), cap || packedRefCount())} / ${cap || "—"} refs`
+                ? `${estimate || modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
                 : result.cost || "Est. cost: —"}
             </p>
             <label className="builder-field">
@@ -623,10 +822,25 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               />
             </label>
             <div className="prompt-actions">
+              {isCharacterSheet ? (
+                <button
+                  type="button"
+                  className="ghost nodrag enhance"
+                  disabled={busy || data.generating || enhancingPrompt || !anglePrompt.trim()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => void enhanceSheetPrompt()}
+                >
+                  {enhancingPrompt ? "Enhancing…" : "Enhance"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="generate nodrag"
-                disabled={busy || data.generating}
+                disabled={
+                  busy ||
+                  data.generating ||
+                  (isCharacterSheet && cap > 0 && packedRefCount() > cap)
+                }
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => void runAngleJob(e)}
               >
