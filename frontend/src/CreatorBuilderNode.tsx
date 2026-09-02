@@ -475,6 +475,7 @@ function CharacterForm({
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
         sourceStill,
+        maxRefs: slot === "front" && !sourceStill ? undefined : sheetR2iRefCap(r2iRow),
         wardrobe: identityFields.wardrobe,
         name: label,
       };
@@ -1331,6 +1332,7 @@ function CostumeForm({
           r2iModel: models.r2iId || models.t2iId,
           assetId: id,
           sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+          maxRefs: slot === "front" ? undefined : sheetR2iRefCap(r2iRow),
           wardrobe: outfit,
           name: label,
         });
@@ -2297,6 +2299,7 @@ function SceneForm({
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
         sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        maxRefs: slot === "front" ? undefined : sheetR2iRefCap(r2iRow),
         name: name.trim() || "Scene",
         sheetKind: undefined,
       });
@@ -2780,6 +2783,7 @@ function PropForm({
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
         sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+        maxRefs: slot === "front" ? undefined : sheetR2iRefCap(r2iRow),
         name: name.trim() || "Prop",
       });
       setError(null);

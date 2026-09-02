@@ -17,6 +17,7 @@ import {
   sheetR2iRefCap,
   SHEET_NO_TEXT,
   sizeChoices,
+  sortSheetComposeModels,
   useSheetModels,
 } from "./sheetUi";
 import {
@@ -59,22 +60,11 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         : Array.isArray(models.composeR2i) && models.composeR2i.length > 0
           ? models.composeR2i
           : models.r2i;
-    const r2i = (Array.isArray(compose) ? compose : []).filter((m) => m?.id);
-    const t2i = Array.isArray(models.t2i) ? models.t2i.filter((m) => m?.id) : [];
-    const out: typeof r2i = [];
-    for (const m of r2i) {
-      if (!isMuseEditModel(m)) out.push(m);
-    }
-    if (isSheet) {
-      for (const m of t2i) {
-        if (!out.some((x) => x.id === m.id)) out.push(m);
-      }
-    }
-    for (const m of r2i) {
-      if (isMuseEditModel(m) && !out.some((x) => x.id === m.id)) out.push(m);
-    }
-    return out;
-  }, [isSheet, liveCompose, models.composeR2i, models.r2i, models.t2i]);
+    const r2i = (Array.isArray(compose) ? compose : []).filter(
+      (m) => m?.id && sheetComposeModel(m),
+    );
+    return sortSheetComposeModels(r2i);
+  }, [liveCompose, models.composeR2i, models.r2i]);
   const [modelId, setModelId] = useState(
     data.modelId || data.r2iModel || data.t2iModel || "",
   );
@@ -499,13 +489,13 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   </div>
                 ))}
                 <span className="hint">
-                  {packedRefCount()}/{cap || data.maxRefs || packedRefCount()} refs
+                  {packedRefCount()} / {cap || data.maxRefs || "—"} refs
                 </span>
               </div>
             ) : null}
             {isSheet && sheetModels.length ? (
               <label className="builder-field">
-                <span className="field-label">Model (T2I / multi-ref)</span>
+                <span className="field-label">Model (multi-ref edit)</span>
                 <select
                   className="model"
                   value={selectedModel?.id || ""}
@@ -584,10 +574,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : null}
             <p className="estimate">
               {isSheet
-                ? `${modelCostLabel(selectedModel)} · ${Math.min(
-                    packedRefCount(),
-                    cap || packedRefCount(),
-                  )} / ${cap || "—"} refs`
+                ? `${modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
                 : result.cost || "Est. cost: —"}
             </p>
             <label className="builder-field">

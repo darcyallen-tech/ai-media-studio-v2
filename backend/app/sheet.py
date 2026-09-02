@@ -943,7 +943,7 @@ def prop_prompt(fields: dict[str, Any] | None) -> str:
 
 
 def _sheet_r2i_ref_cap(entry: Any | None) -> int:
-    """Max stills this R2I model accepts. Seedream edit is treated as 3. Muse is 10."""
+    """Catalog max_ref_images for sheet compose / extra-angle R2I (Create R2I caps)."""
     limits = getattr(entry, "size_limits", None) or {}
     n = 0
     if isinstance(limits, dict):
@@ -951,15 +951,17 @@ def _sheet_r2i_ref_cap(entry: Any | None) -> int:
             n = int(limits.get("max_ref_images") or limits.get("max_refs") or 0)
         except (TypeError, ValueError):
             n = 0
+    if n > 0:
+        return n
     blob = " ".join(
         str(getattr(entry, key, "") or "")
         for key in ("id", "label", "endpoint", "source_key")
     ).lower()
-    if "muse" in blob:
-        return n if n > 0 else 10
-    if "seedream" in blob:
-        return min(n, 3) if n > 0 else 3
-    return n if n > 0 else 3
+    if "muse" in blob or "seedream" in blob:
+        return 10
+    if "qwen" in blob:
+        return 3
+    return 4
 
 
 def _pick_result_still(result: Any) -> str:

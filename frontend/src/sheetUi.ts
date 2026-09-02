@@ -1104,13 +1104,14 @@ export function composeDressPrompt(
   return lines.join("\n\n");
 }
 
-/** Sheet-first Dress Front refs. Seedream R2I is treated as max 3. Muse edit is 10. */
+/** Catalog max_ref_images for sheet / extra-angle R2I (Create R2I caps). */
 export function sheetR2iRefCap(model?: ModelRow | null): number {
   const raw = Number(model?.size_limits?.max_ref_images ?? model?.size_limits?.max_refs ?? 0) || 0;
+  if (raw > 0) return raw;
   const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
-  if (blob.includes("muse")) return raw > 0 ? raw : 10;
-  if (blob.includes("seedream")) return raw > 0 ? Math.min(raw, 3) : 3;
-  return raw > 0 ? raw : 3;
+  if (blob.includes("muse") || blob.includes("seedream")) return 10;
+  if (blob.includes("qwen")) return 3;
+  return 4;
 }
 
 export function sheetPrimaryPath(
@@ -1398,9 +1399,9 @@ export function sheetModel(row: ModelRow | null | undefined) {
 /** Character Sheet compose picker: name allowlist, Muse Edit, or any R2I/edit with ≥4 refs. */
 export function sheetComposeModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
-  if (sheetModel(row) || isMuseEditModel(row)) return true;
   const blob = modelBlob(row);
   if (blob.includes("t2i") || blob.includes("text-to-image")) return false;
+  if (sheetModel(row) || isMuseEditModel(row)) return true;
   const modalities = Array.isArray(row.modalities) ? row.modalities : [];
   const isEdit =
     blob.includes("edit") ||
@@ -1408,6 +1409,25 @@ export function sheetComposeModel(row: ModelRow | null | undefined) {
     modalities.includes("r2i") ||
     modalities.includes("i2i");
   return isEdit && modelRefCap(row) >= 4;
+}
+
+/** Nano, Flux, Seedream, Qwen, Muse, Fibo — T2I omitted (compose is multi-ref edit). */
+export function sortSheetComposeModels(rows: ModelRow[]): ModelRow[] {
+  const rank = (row: ModelRow): number => {
+    const blob = modelBlob(row);
+    if (blob.includes("t2i") || blob.includes("text-to-image")) return 90;
+    if (blob.includes("nano banana pro")) return 0;
+    if (blob.includes("nano")) return 1;
+    if (blob.includes("flux 2 pro")) return 2;
+    if (blob.includes("flux 2 max")) return 3;
+    if (blob.includes("flux")) return 4;
+    if (blob.includes("seedream")) return 5;
+    if (blob.includes("qwen")) return 6;
+    if (blob.includes("muse")) return 7;
+    if (blob.includes("fibo")) return 8;
+    return 50;
+  };
+  return [...rows].sort((a, b) => rank(a) - rank(b) || (a.label || a.id).localeCompare(b.label || b.id));
 }
 
 function asModelRows(raw: unknown): ModelRow[] {

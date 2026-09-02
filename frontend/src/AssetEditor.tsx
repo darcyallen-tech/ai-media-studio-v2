@@ -14,7 +14,9 @@ import {
   composeCharacterSheetPrompt,
   composeCostumeSheetPrompt,
   pickDefaultResolution,
+  pickSheetResolution,
   qualityChoices,
+  sheetR2iRefCap,
   sizeChoices,
   useSheetModels,
 } from "./sheetUi";
@@ -193,6 +195,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         aspect: pickDefaultResolution(sizes),
         quality: pickDefaultResolution(quals),
         qualityChoices: quals,
+        maxRefs: sheetR2iRefCap(sizeRow),
       });
       onClose();
       onSheetOpened?.();
@@ -210,6 +213,15 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
       setError("Generate at least one angle first.");
       return;
     }
+    const r2iRow =
+      models.composeR2i.find((m) => m.id === models.r2iId) ||
+      models.r2i.find((m) => m.id === models.r2iId) ||
+      models.composeR2i[0] ||
+      models.r2i[0];
+    const r2iId = r2iRow?.id || models.r2iId || "";
+    const cap = sheetR2iRefCap(r2iRow);
+    const sizes = sizeChoices(r2iRow);
+    const quals = qualityChoices(r2iRow);
     try {
       spawnAngleResult({
         builderId: `lib-${row.id}`,
@@ -225,6 +237,15 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         assetId: row.id,
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
+        t2iModel: models.t2iId,
+        r2iModel: r2iId,
+        modelId: r2iId,
+        maxRefs: cap,
+        resolution: pickDefaultResolution(quals) || pickSheetResolution(sizes),
+        resolutionChoices: sizes,
+        aspect: pickSheetResolution(sizes),
+        quality: pickDefaultResolution(quals),
+        qualityChoices: quals,
         name: row.name,
         wardrobe: row.fields?.wardrobe || "",
         sheetKind: kind,
