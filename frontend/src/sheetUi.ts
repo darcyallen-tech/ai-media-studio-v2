@@ -945,6 +945,23 @@ export function composePropBrief(
   return head;
 }
 
+export const SCENE_PHOTOREAL_LOCK =
+  "photoreal photograph, real materials and daylight/practicals, not concept art, not matte painting, not illustration.";
+
+export function wantsScenePhotoreal(text: string): boolean {
+  return /photo\s*-?\s*real|photograph|photo\s*realistic/i.test(text || "");
+}
+
+export function ensureScenePhotoreal(text: string, force = false): string {
+  const t = (text || "").trim();
+  if (!t && !force) return t;
+  if (/photoreal photograph, real materials and daylight\/practicals/i.test(t)) {
+    return t;
+  }
+  if (!force && !wantsScenePhotoreal(t)) return t;
+  return t ? `${t} ${SCENE_PHOTOREAL_LOCK}` : SCENE_PHOTOREAL_LOCK;
+}
+
 export function composeSceneStill(
   brief: string,
   opts?: { slot?: string; camera?: string; detail?: boolean },
@@ -956,11 +973,15 @@ export function composeSceneStill(
     const cam = bit(opts?.camera);
     framing = cam ? `Camera: ${cam}.` : SCENE_VIEWS.hero;
   }
-  return [
-    `Location still of ${head}.`,
-    framing,
-    "Empty of prominent people. Photoreal. No text, no logo, no watermark.",
-  ].join(" ");
+  return ensureScenePhotoreal(
+    [
+      `Location still of ${head}.`,
+      framing,
+      "Empty of prominent people. No text, no logo, no watermark.",
+      SCENE_PHOTOREAL_LOCK,
+    ].join(" "),
+    true,
+  );
 }
 
 export function composePropStill(brief: string, opts?: { detail?: boolean }): string {
@@ -989,7 +1010,8 @@ export function composeSceneSheetPrompt(
   const bits = [
     `Production location SHEET of ${bit(brief) || "this place"}. One image only.`,
     panels,
-    "Empty of prominent people. Photoreal. Optional small clean labels only.",
+    "Empty of prominent people. Optional small clean labels only.",
+    SCENE_PHOTOREAL_LOCK,
     SHEET_NO_GARBLED,
   ];
   if (bit(extra)) bits.push(bit(extra));
@@ -1560,6 +1582,38 @@ function pickPreferredResolution(choices: string[], prefer: string[]): string {
   }
   const nonAuto = opts.find((c) => c.toLowerCase() !== "auto");
   return nonAuto || opts[0] || "";
+}
+
+export function pickSceneAspect(choices: string[]): string {
+  return pickPreferredResolution(choices, [
+    "16:9 landscape",
+    "landscape_16_9",
+    "16:9",
+    "4:3 landscape",
+    "landscape_4_3",
+    "4:3",
+    "auto_2k",
+    "2k",
+    "square_hd",
+    "1:1 square hd",
+    "auto_4k",
+    "4k",
+    "1k",
+    "auto",
+  ]);
+}
+
+export function sceneSizeChoices(row: ModelRow | null | undefined): string[] {
+  if (isFlux2EditModel(row)) return ["16:9", "4:3"];
+  const raw = sizeChoices(row);
+  const extras = ["16:9", "4:3"];
+  const out = [...raw];
+  for (const extra of extras) {
+    if (!out.some((s) => s.toLowerCase().replace(/\s+/g, "") === extra)) {
+      out.push(extra);
+    }
+  }
+  return out;
 }
 
 export function pickDefaultResolution(choices: string[]): string {

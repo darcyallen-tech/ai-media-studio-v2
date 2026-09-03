@@ -31,6 +31,10 @@ Rules:
   visible (sky, house, smoke, people, furniture, lighting). Then rewrite the
   user's prompt for the selected edit model, keeping their intent, grounded
   in that same frame. Do not invent a different scene.
+- For Scene stills, keep this sentence verbatim when the source is photoreal /
+  photo realistic / photograph: "photoreal photograph, real materials and
+  daylight/practicals, not concept art, not matte painting, not illustration."
+  Fantasy lighting (torch, magic) is allowed; do not drop "photograph".
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -198,6 +202,19 @@ def enhance_prompt_text(
             "error": "Enhance returned an empty or incomplete reply. Try again.",
             "vision": vision_used,
         }
+    from app.sheet import SCENE_PHOTOREAL_LOCK, ensure_scene_photoreal
+
+    sceneish = (
+        "photoreal photograph, real materials and daylight/practicals" in original.lower()
+        or "keep photoreal photograph lock" in original.lower()
+        or "location still" in original.lower()
+        or "location-sheet" in original.lower()
+        or "production location sheet" in original.lower()
+    )
+    if sceneish:
+        rewritten = ensure_scene_photoreal(rewritten, True)
+        if SCENE_PHOTOREAL_LOCK.lower() not in rewritten.lower():
+            rewritten = f"{rewritten.rstrip()} {SCENE_PHOTOREAL_LOCK}"
     return {
         "ok": True,
         "prompt": rewritten,

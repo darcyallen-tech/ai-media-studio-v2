@@ -320,6 +320,7 @@ export type ResultNodeData = {
   onConfirmSheet?: () => void;
   onRegen?: () => void;
   onResolution?: (resolution: string) => void;
+  onQuality?: (quality: string) => void;
   onBusy?: (busy: boolean, error?: string | null) => void;
   onGenerated?: (info: {
     slot: string;

@@ -67,7 +67,10 @@ import {
   SCENE_SHEET_SLOT,
   isFluxEditModel,
   pickDefaultResolution,
+  pickSceneAspect,
   pickSheetResolution,
+  sceneSizeChoices,
+  ensureScenePhotoreal,
   qualityChoices,
   sheetR2iRefCap,
   sizeChoices,
@@ -2208,16 +2211,23 @@ function SceneForm({
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sceneAspect, setSceneAspect] = useState("");
   const models = useSheetModels();
   const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
   const r2iRow = models.r2i.find((m) => m.id === models.r2iId);
-  const frontSizes = sizeChoices(t2iRow);
-  const angleSizes = sizeChoices(r2iRow);
+  const frontSizes = sceneSizeChoices(t2iRow);
+  const angleSizes = sceneSizeChoices(r2iRow);
   const frontQuals = qualityChoices(t2iRow);
   const angleQuals = qualityChoices(r2iRow);
   const slots = [...SCENE_SLOTS];
   const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, ["hero"], models);
   const haveHero = Boolean(data.doneSlots?.hero);
+  const sceneSizeKey = frontSizes.join("|");
+  useEffect(() => {
+    setSceneAspect((cur) =>
+      frontSizes.includes(cur) ? cur : pickSceneAspect(frontSizes),
+    );
+  }, [models.t2iId, sceneSizeKey]);
   const haveSceneAngle = Boolean(
     data.doneSlots &&
       Object.entries(data.doneSlots).some(
@@ -2312,7 +2322,10 @@ function SceneForm({
     }
     const sizes = isHero ? frontSizes : angleSizes;
     const quals = isHero ? frontQuals : angleQuals;
-    const sheetSize = pickDefaultResolution(sizes);
+    const sheetSize =
+      (isHero && sceneAspect && sizes.includes(sceneAspect)
+        ? sceneAspect
+        : pickSceneAspect(sizes)) || pickSceneAspect(sizes);
     const label = SCENE_SLOT_LABEL[slot] || slot;
     const prompt = composeSceneStill(sceneText(), {
       slot,
@@ -2390,7 +2403,7 @@ function SceneForm({
     }
     const sizes = angleSizes.length ? angleSizes : frontSizes;
     const quals = angleQuals.length ? angleQuals : frontQuals;
-    const sheetSize = pickSheetResolution(sizes);
+    const sheetSize = pickSceneAspect(sizes);
     const label = name.trim() || "Scene";
     try {
       const assetId = await ensureDraft();
@@ -2621,9 +2634,12 @@ function SceneForm({
           onClick={() => {
             setEnhancing(true);
             setError(null);
-            void enhancePrompt(sceneText(), models.t2iId)
+            void enhancePrompt(sceneText(), models.t2iId, {
+              scene: true,
+              notes: notes.trim(),
+            })
               .then((text) => {
-                setScenePrompt(text);
+                setScenePrompt(ensureScenePhotoreal(text, true));
                 toast("Scene enhanced.");
               })
               .catch((err: unknown) => {
@@ -2648,6 +2664,22 @@ function SceneForm({
         />
       </label>
       <ModelPickers models={models} />
+      {frontSizes.length ? (
+        <label className="param">
+          <span>Aspect</span>
+          <select
+            className="model"
+            value={frontSizes.includes(sceneAspect) ? sceneAspect : pickSceneAspect(frontSizes)}
+            onChange={(e) => setSceneAspect(e.target.value)}
+          >
+            {frontSizes.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
         <button
@@ -3132,14 +3164,22 @@ function PropForm({
   );
 }
 
-async function enhancePrompt(text: string, modelId: string): Promise<string> {
+async function enhancePrompt(
+  text: string,
+  modelId: string,
+  opts?: { scene?: boolean; notes?: string },
+): Promise<string> {
   const raw = text.trim();
   if (!raw) throw new Error("Apply selection first so Enhance has text to rewrite.");
   const res = await fetch("/enhance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      prompt: raw,
+      prompt: opts?.scene
+        ? `${raw}\n\n[Keep photoreal photograph lock. Fantasy lighting (torch, magic) is allowed; do not drop photograph.]${
+            opts.notes ? `\nNotes: ${opts.notes}` : ""
+          }`
+        : raw,
       model_id: modelId,
       modality: "t2i",
       mode: "image",

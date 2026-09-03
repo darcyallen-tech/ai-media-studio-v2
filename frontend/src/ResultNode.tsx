@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { errorFromBody, readJson } from "./http";
 import { beginLibraryDrag, endLibraryDrag } from "./libraryDrag";
 import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
-import ResizableMedia from "./ResizableMedia";
 import { sendToResolve, toast } from "./toast";
 import {
   defaultSheetRefSlots,
@@ -25,8 +24,11 @@ import {
   SHEET_REF_PACK,
   SCENE_SLOTS,
   SCENE_SLOT_LABEL,
+  sceneSizeChoices,
   sizeChoices,
   SLOT_LABEL,
+  ensureScenePhotoreal,
+  pickSceneAspect,
   sortSheetComposeModels,
   useSheetModels,
   type SheetAngleChip,
@@ -40,7 +42,7 @@ import {
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
-export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
+export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>) {
   const isSheet =
     data.slot === "sheet" ||
     data.sheetKind === "dress" ||
@@ -87,23 +89,43 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       return blob.includes("nano banana pro") && !blob.includes("t2i");
     }) ||
     sheetModels[0];
-  const angleModel =
-    selectedModel ||
-    models.r2i.find((m) => m.id === data.r2iModel) ||
-    models.t2i.find((m) => m.id === data.t2iModel);
-  const liveSizes = isSheet ? sizeChoices(selectedModel) : [];
-  const liveQuals = isSheet ? qualityChoices(selectedModel) : [];
-  const fluxEdit = isFlux2EditModel(isSheet ? selectedModel : angleModel);
+  const isSceneAngle = (SCENE_SLOTS as readonly string[]).includes(data.slot || "");
+  const isHeroT2i = isSceneAngle && data.slot === "hero" && !data.sourceStill;
+  const sceneModel = isHeroT2i
+    ? models.t2i.find((m) => m.id === (data.t2iModel || data.modelId)) ||
+      models.t2i[0]
+    : isSceneAngle
+      ? models.r2i.find((m) => m.id === (data.modelId || data.r2iModel)) ||
+        models.r2i[0]
+      : null;
+  const angleModel = isSceneAngle
+    ? sceneModel
+    : selectedModel ||
+      models.r2i.find((m) => m.id === data.r2iModel) ||
+      models.t2i.find((m) => m.id === data.t2iModel);
+  const liveSizes = isSheet
+    ? sizeChoices(selectedModel)
+    : isSceneAngle
+      ? sceneSizeChoices(angleModel)
+      : [];
+  const liveQuals = isSheet
+    ? qualityChoices(selectedModel)
+    : isSceneAngle
+      ? qualityChoices(angleModel)
+      : [];
+  const fluxEdit = isFlux2EditModel(isSheet ? selectedModel : angleModel) && !isSceneAngle;
   const dropVideoSize = (s: string) =>
     Boolean(s) && !/^(360p|480p|540p|720p|1080p|1440p|2160p)$/i.test(s);
   const sizeChoicesList = (
     fluxEdit
       ? ["auto"]
-      : isSheet && liveSizes.length
+      : isSceneAngle && liveSizes.length
         ? liveSizes
-        : Array.isArray(data.resolutionChoices)
-          ? data.resolutionChoices
-          : []
+        : isSheet && liveSizes.length
+          ? liveSizes
+          : Array.isArray(data.resolutionChoices)
+            ? data.resolutionChoices
+            : []
   ).filter(dropVideoSize);
   const [anglePrompt, setAnglePrompt] = useState(data.prompt || "");
   const [size, setSize] = useState(
@@ -111,13 +133,17 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       ? "auto"
       : data.aspect ||
         (sizeChoicesList.includes(data.resolution || "") ? data.resolution : "") ||
-        (isSheet ? pickSheetResolution(sizeChoicesList) : sizeChoicesList[0]) ||
+        (isSceneAngle
+          ? pickSceneAspect(sizeChoicesList)
+          : isSheet
+            ? pickSheetResolution(sizeChoicesList)
+            : sizeChoicesList[0]) ||
         "",
   );
   const qualityOpts = (
     fluxEdit
       ? []
-      : isSheet && liveQuals.length
+      : (isSheet || isSceneAngle) && liveQuals.length
         ? liveQuals
         : Array.isArray(data.qualityChoices)
           ? data.qualityChoices
@@ -137,6 +163,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   );
   const [confirmed, setConfirmed] = useState(false);
   const [estimate, setEstimate] = useState("");
+  const [estimateBusy, setEstimateBusy] = useState(isSheet || isSceneAngle);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
   const [pickedSlots, setPickedSlots] = useState<string[]>([]);
@@ -182,6 +209,15 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       setQuality("");
       return;
     }
+    if (isSceneAngle && liveSizes.length) {
+      setSize((cur) =>
+        liveSizes.includes(cur) ? cur : pickSceneAspect(liveSizes),
+      );
+      setQuality((cur) =>
+        liveQuals.includes(cur) ? cur : liveQuals[0] || "",
+      );
+      return;
+    }
     if (!isSheet || !liveSizes.length) return;
     setSize((cur) => {
       if (isMuseEditModel(selectedModel)) {
@@ -198,36 +234,62 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     if (!data.generating) setBusy(false);
   }, [data.generating]);
   useEffect(() => {
-    if (!isSheet || !selectedModel?.id) {
+    const costModel = isSheet ? selectedModel : isSceneAngle ? angleModel : null;
+    if (!costModel?.id || !(isSheet || isSceneAngle)) {
       setEstimate("");
+      setEstimateBusy(false);
       return;
     }
     const ac = new AbortController();
+    setEstimateBusy(true);
+    setEstimate("");
     const qs = new URLSearchParams({
       mode: "image",
-      modality: "r2i",
-      model_id: selectedModel.id,
+      modality: isSheet || !isHeroT2i ? "r2i" : "t2i",
+      model_id: costModel.id,
       num_images: "1",
     });
     const aspect = fluxEdit ? "auto" : size || data.aspect || "";
-    const resolution = fluxEdit ? "auto" : quality || data.resolution || "";
+    const resolution = fluxEdit
+      ? "auto"
+      : quality || (isSceneAngle ? "" : data.resolution) || "";
     if (aspect) qs.set("aspect", aspect);
     if (resolution) qs.set("resolution", resolution);
     fetch(`/estimate?${qs}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body: { ok?: boolean; cost?: string } | null) => {
+        if (ac.signal.aborted) return;
         if (body?.cost && String(body.cost).includes("$")) {
           setEstimate(body.cost);
-          return;
+        } else {
+          setEstimate(modelCostLabel(costModel));
         }
-        setEstimate("");
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
-        setEstimate("");
+        setEstimate(modelCostLabel(costModel));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setEstimateBusy(false);
       });
     return () => ac.abort();
-  }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution, fluxEdit]);
+  }, [
+    isSheet,
+    isSceneAngle,
+    selectedModel?.id,
+    size,
+    quality,
+    data.aspect,
+    data.resolution,
+    data.slot,
+    data.sourceStill,
+    data.t2iModel,
+    data.r2iModel,
+    data.modelId,
+    fluxEdit,
+    isHeroT2i,
+    angleModel?.id,
+  ]);
   useEffect(() => {
     if (!isSheetPicker) {
       setAngleChips([]);
@@ -471,8 +533,9 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       if (!res.ok || !rewritten) {
         throw new Error(errorFromBody(body, "Enhance returned an empty reply."));
       }
-      setAnglePrompt(rewritten);
-      data.onPrompt?.(rewritten);
+      const kept = isSceneSheet ? ensureScenePhotoreal(rewritten, true) : rewritten;
+      setAnglePrompt(kept);
+      data.onPrompt?.(kept);
       toast("Sheet prompt enhanced.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Enhance failed.";
@@ -631,11 +694,12 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           slot,
           model_id: isSheet
             ? selectedModel?.id || data.r2iModel || data.t2iModel || ""
-            : (slot === "front" || slot === "hero") && !data.sourceStill
+            : isHeroT2i || (slot === "front" && !data.sourceStill)
               ? data.t2iModel || ""
               : data.modelId || data.r2iModel || data.t2iModel || "",
           prompt: (() => {
             let send = prompt;
+            if (isSceneAngle || isSceneSheet) send = ensureScenePhotoreal(send, true);
             if (!isSheet) return send;
             const footer =
               isCharacterSheet && statFooter
@@ -702,8 +766,21 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     }
   }
 
+  const costLine = estimateBusy
+    ? "—"
+    : estimate ||
+      result.cost ||
+      (isSheet || isSceneAngle ? modelCostLabel(angleModel) : "");
+
   return (
     <div className="studio-node result-node">
+      <NodeResizer
+        minWidth={320}
+        minHeight={320}
+        isVisible={Boolean(selected)}
+        lineClassName="node-resize-line"
+        handleClassName="node-resize-handle"
+      />
       <Handle type="target" position={Position.Left} className="node-handle" />
       <Handle type="source" position={Position.Right} className="node-handle" />
       <div className="node-header">
@@ -713,12 +790,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       <div className="node-body nodrag">
         <p className="meta">
           <span>
-            {result.cost ||
-              (data.generating
-                ? "Generating…"
-                : isSheet
-                  ? estimate || modelCostLabel(selectedModel)
-                  : "Cost: —")}
+            {data.generating ? "Generating…" : costLine || "—"}
           </span>
           {result.duration_sec ? (
             <span>{formatDuration(result.duration_sec)}</span>
@@ -727,8 +799,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         <div className="media" onDoubleClick={enlarge}>
           {paths.map((src) =>
             isVideoPath(src) ? (
-              <ResizableMedia key={src} id={`result-vid-${src}`} minHeight={140} defaultHeight={220} locked={busy || data.generating}>
               <video
+                key={src}
                 src={src}
                 controls
                 playsInline
@@ -737,7 +809,6 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   openLightbox({ src, kind: "video", title });
                 }}
               />
-              </ResizableMedia>
             ) : isAudioPath(src) ? (
               <audio key={src} src={src} controls />
             ) : (
@@ -757,7 +828,6 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 }}
                 onDragEnd={() => endLibraryDrag()}
               >
-              <ResizableMedia id={`result-img-${src}`} minHeight={120} defaultHeight={220} locked={busy || data.generating}>
               <img
                 src={src}
                 alt="Generated result"
@@ -767,7 +837,6 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   openLightbox({ src, kind: "image", title });
                 }}
               />
-              </ResizableMedia>
               </div>
             ),
           )}
@@ -854,7 +923,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 <select
                   className="model"
                   value={sizeChoicesList.includes(size) ? size : sizeChoicesList[0]}
-                  disabled={data.generating || busy || fluxEdit}
+                  disabled={data.generating || busy || (fluxEdit && !isSceneAngle)}
                   onChange={(e) => {
                     setSize(e.target.value);
                     data.onResolution?.(e.target.value);
@@ -881,7 +950,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                   className="model"
                   value={qualityOpts.includes(quality) ? quality : qualityOpts[0]}
                   disabled={data.generating || busy}
-                  onChange={(e) => setQuality(e.target.value)}
+                  onChange={(e) => {
+                    setQuality(e.target.value);
+                    data.onQuality?.(e.target.value);
+                  }}
                 >
                   {qualityOpts.map((s) => (
                     <option key={s} value={s}>
@@ -925,8 +997,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
             ) : null}
             <p className="estimate">
               {isSheet
-                ? `${estimate || modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
-                : result.cost || "Est. cost: —"}
+                ? `${estimateBusy ? "—" : estimate || modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
+                : estimateBusy
+                  ? "—"
+                  : estimate || result.cost || modelCostLabel(angleModel)}
             </p>
             <label className="builder-field">
               <span className="field-label">{isSheet ? "Sheet prompt" : "Angle prompt"}</span>

@@ -52,6 +52,33 @@ SCENE_SLOT_LABELS: dict[str, str] = {
     "sheet": "Scene sheet",
 }
 
+SCENE_PHOTOREAL_LOCK = (
+    "photoreal photograph, real materials and daylight/practicals, "
+    "not concept art, not matte painting, not illustration."
+)
+
+
+def ensure_scene_photoreal(text: str, force: bool = False) -> str:
+    t = (text or "").strip()
+    if not t and not force:
+        return t
+    if "photoreal photograph, real materials and daylight/practicals" in t.lower():
+        return t
+    blob = t.lower()
+    wants = force or any(
+        tok in blob
+        for tok in (
+            "photoreal",
+            "photo real",
+            "photo-real",
+            "photograph",
+            "photo realistic",
+        )
+    )
+    if not wants:
+        return t
+    return f"{t} {SCENE_PHOTOREAL_LOCK}" if t else SCENE_PHOTOREAL_LOCK
+
 SCENE_VIEWS: dict[str, str] = {
     "hero": "Walk-in wide of the space — enter the location as a visitor would.",
     "opposite": "Opposite view of the same space, looking back from the far side.",
@@ -861,8 +888,9 @@ def scene_sheet_prompt(
     body = (
         f"Production location SHEET of {brief}. One image only. "
         f"{panels} "
-        "Empty of prominent people. Photoreal. Optional small clean labels only. "
-        "No gibberish text, no watermarks, no logos."
+        "Empty of prominent people. Optional small clean labels only. "
+        + SCENE_PHOTOREAL_LOCK
+        + " No gibberish text, no watermarks, no logos."
     )
     if _nv(extra):
         body += f" {_nv(extra)}"
@@ -941,7 +969,10 @@ def scene_prompt(
         view = f"Camera: {cam}." if cam else SCENE_VIEWS["hero"]
     else:
         view = SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
-    out = f"{head}. {view} Empty of prominent people. Photoreal. No text, no logo, no watermark."
+    out = (
+        f"{head}. {view} Empty of prominent people. No text, no logo, no watermark. "
+        + SCENE_PHOTOREAL_LOCK
+    )
     if notes and notes not in out:
         out = f"{out} {notes}"
     return out
@@ -1206,8 +1237,12 @@ _PORTRAIT_SIZE_PREFER: tuple[str, ...] = (
     "auto",
 )
 _SHEET_SIZE_PREFER: tuple[str, ...] = (
+    "16:9 landscape",
     "landscape_16_9",
     "16:9",
+    "4:3 landscape",
+    "landscape_4_3",
+    "4:3",
     "auto_2K",
     "2K",
     "square_hd",
@@ -1309,6 +1344,13 @@ def pick_character_resolution(
         picked = lower[req.lower()]
         if picked.lower() != "auto" or all(k == "auto" for k in lower):
             return picked
+    req_compact = req.lower().replace(" ", "")
+    if req_compact and not _is_video_size_token(req):
+        for a in opts:
+            ac = a.lower().replace(" ", "")
+            if req_compact == ac or req_compact in ac or ac in req_compact:
+                if a.lower() != "auto" or all(k == "auto" for k in lower):
+                    return a
     for pref in prefer or _PORTRAIT_SIZE_PREFER:
         if pref.lower() in lower:
             return lower[pref.lower()]
@@ -1396,6 +1438,10 @@ def character_angle_params(
                 req_aspect = ""
                 break
     if is_flux_edit:
+        if landscape:
+            framing = (req_aspect or req).strip().lower().replace(" ", "")
+            aspect = "4:3" if "4:3" in framing and "16:9" not in framing else "16:9"
+            return aspect, "auto"
         return "auto", "auto"
     if is_muse:
         framing = (req_aspect or req).strip()
@@ -1545,6 +1591,8 @@ def generate_angle(
         wardrobe=outfit,
         extra=extra,
     )
+    if kind == "scene" or key in SCENE_SLOTS:
+        text = ensure_scene_photoreal(text, True)
 
     modality = "t2i"
     if refs:
@@ -1589,7 +1637,7 @@ def generate_angle(
         modality,
         requested=resolution,
         requested_aspect=aspect,
-        landscape=key == SHEET_SLOT,
+        landscape=key == SHEET_SLOT or key in SCENE_SLOTS,
     )
     state = CreateState(
         mode="image",

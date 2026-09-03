@@ -305,7 +305,46 @@
 }
 
 .result-node {
-  width: 400px;
+  width: 100%;
+  height: 100%;
+  min-width: 320px;
+  min-height: 320px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.result-node .node-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-node .media {
+  flex: 1 1 140px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.result-node .media .result-drag {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-node .prompt-actions,
+.result-node .result-tools,
+.result-node .result-actions {
+  flex-shrink: 0;
 }
 
 .compare-node {
@@ -1207,8 +1246,21 @@
 
 .creator-builder-node.costume-builder,
 .creator-builder-node.wide-builder {
-  width: 620px;
+  width: 100%;
+  height: 100%;
   min-width: 560px;
+  min-height: 240px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wide-builder .node-body,
+.costume-builder .node-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .wide-builder .costume-row-3 {
@@ -1430,6 +1482,7 @@ html[data-theme="night"] .ref-chip.pick-on {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-shrink: 0;
   padding: 8px 10px 8px 14px;
   background: #c5d0dc;
   border-bottom: 1px solid #b4c2d2;

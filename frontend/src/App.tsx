@@ -213,6 +213,12 @@ const SOURCE_ID = "source";
 const FIRST_ID = "first";
 const LAST_ID = "last";
 const RESULT_ID = "result";
+const RESULT_NODE_BOX = {
+  width: 400,
+  height: 520,
+  minWidth: 320,
+  minHeight: 320,
+};
 const MASK_ID = "mask";
 function compareIdFor(resultId: string) {
   return `compare-${resultId}`;
@@ -693,6 +699,9 @@ function StudioCanvas() {
           type: "result",
           position,
           dragHandle: ".node-header",
+          style: existing?.style ?? { ...RESULT_NODE_BOX },
+          width: existing?.width,
+          height: existing?.height,
           data: {
             result,
             compareSource,
@@ -771,6 +780,9 @@ function StudioCanvas() {
             y: parent?.position.y ?? PROMPT_POS.y,
           },
           dragHandle: ".node-header",
+          style: existing?.style ?? { ...RESULT_NODE_BOX },
+          width: existing?.width,
+          height: existing?.height,
           data: {
             result,
             onClose: () => closeNode(PIN_EDIT_RESULT),
@@ -990,6 +1002,7 @@ function StudioCanvas() {
             y: parent?.position.y ?? PROMPT_POS.y,
           },
           dragHandle: ".node-header",
+          style: { ...RESULT_NODE_BOX },
           data: {
             result,
             compareSource,
@@ -1551,7 +1564,7 @@ function StudioCanvas() {
           dragHandle: ".node-header",
           style:
             safeKind === "costume" || safeKind === "scene" || safeKind === "prop"
-              ? { width: 620, minWidth: 560 }
+              ? { width: 620, minWidth: 560, minHeight: 240 }
               : undefined,
           data: {
             kind: safeKind,
@@ -1611,12 +1624,23 @@ function StudioCanvas() {
           const builder = current.find((n) => n.id === builderId);
           const promptNode = current.find((n) => n.id === "prompt");
           const existing = current.find((n) => n.id === angleId);
+          const sceneAngle = ["hero", "opposite", "feature", "detail", "overview"].includes(
+            slot,
+          );
+          const builderW =
+            Number(builder?.measured?.width) ||
+            Number((builder?.style as { width?: number } | undefined)?.width) ||
+            620;
           const position = existing?.position ?? {
-            x: Math.max(
-              (builder?.position.x ?? PROMPT_POS.x) + (sheetish ? 460 : 400),
-              (promptNode?.position.x ?? PROMPT_POS.x) + 520,
-            ),
-            y: (builder?.position.y ?? PROMPT_POS.y) + (sheetish ? 36 : idx * 270),
+            x: sceneAngle
+              ? (builder?.position.x ?? PROMPT_POS.x) + builderW + 28
+              : Math.max(
+                  (builder?.position.x ?? PROMPT_POS.x) + (sheetish ? 460 : 400),
+                  (promptNode?.position.x ?? PROMPT_POS.x) + 520,
+                ),
+            y: sceneAngle
+              ? (builder?.position.y ?? PROMPT_POS.y)
+              : (builder?.position.y ?? PROMPT_POS.y) + (sheetish ? 36 : idx * 270),
           };
           if (panTo) panTo = position;
           const prev = existing?.type === "result" ? existing.data : null;
@@ -1667,6 +1691,9 @@ function StudioCanvas() {
             position,
             selected: Boolean(patch.focus),
             dragHandle: ".node-header",
+            style: existing?.style ?? { ...RESULT_NODE_BOX },
+            width: existing?.width,
+            height: existing?.height,
             data: {
               ...(prev || {}),
               title,
@@ -1725,6 +1752,10 @@ function StudioCanvas() {
                     resolution,
                     aspect: resolution,
                   })),
+              onQuality:
+                prev?.onQuality ??
+                ((quality) =>
+                  upsertSheetAngleRef.current(builderId, slot, { slot, quality })),
               onBusy:
                 prev?.onBusy ??
                 ((busy, error) =>
@@ -3127,6 +3158,8 @@ function StudioCanvas() {
                     resolution,
                     aspect: resolution,
                   }),
+                onQuality: (quality) =>
+                  upsertSheetAngle(builderId, slot, { slot, quality }),
                 onBusy: (busy, error) =>
                   upsertSheetAngle(builderId, slot, {
                     slot,
