@@ -546,6 +546,13 @@ def generate(
     )
     if entry is None:
         return _fail(f"Unknown model: {state.model_id}", model=state.model_id)
+    from app.storyboard import max_prompt_chars
+
+    cap = max_prompt_chars(entry)
+    n = len(state.prompt or "")
+    if cap > 0 and n > cap:
+        msg = f"prompt {n} / {cap} — Enhance compact or trim shots"
+        return _fail(msg, [msg], model=state.model_id)
     if _use_vision(state, entry):
         return _dispatch_vision(state, entry, on_progress)
     return _dispatch_studio(state, entry, on_progress)

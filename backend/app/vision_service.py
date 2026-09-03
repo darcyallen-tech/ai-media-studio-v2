@@ -303,7 +303,12 @@ def run_vision(
             # R2V identity pack: image_path is first bound ref (Character sheet/Front).
             # Do not treat it as a layout-locked start frame. Deduped against ref_paths.
             if image_path and Path(image_path).is_file():
-                source_still_path = Path(image_path)
+                source_still_path = _prepare_vision_still(
+                    image_path,
+                    output_dir=output_dir,
+                    label="identity/ref",
+                    on_progress=progress,
+                )
                 progress(f"Bound Image 1 ← {source_still_path.name}")
                 progress(f"Uploading identity/ref: {source_still_path.name}")
                 image_url = upload_file(source_still_path, on_progress=progress)
@@ -360,6 +365,15 @@ def run_vision(
                             source_still_path.resolve()
                         ):
                             continue
+                        if mode == "reference_to_video" or _endpoint_needs_still_proxy(
+                            spec.endpoint
+                        ):
+                            p = _prepare_vision_still(
+                                p,
+                                output_dir=output_dir,
+                                label=f"ref still {img_n + 1}",
+                                on_progress=progress,
+                            )
                         img_n += 1
                         progress(f"Bound Image {img_n} ← {p.name}")
                         progress(f"Uploading ref still: {p.name}")

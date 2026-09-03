@@ -13,6 +13,23 @@ from app.create_catalog import default_model_for, list_models_for_ui
 PRIMARY_STORYBOARD_HINT = "minimax h3"
 PRIMARY_STORYBOARD_LABEL = "MiniMax H3 Omni Reference (R2V)"
 
+GROK_IMAGINE_15_R2V_PROMPT_CAP = 4096
+
+
+def max_prompt_chars(entry: Any | None) -> int:
+    """Known prompt caps. Not a catalog field — do not invent extras."""
+    if entry is None:
+        return 0
+    blob = " ".join(
+        str(getattr(entry, key, "") or "")
+        for key in ("id", "label", "endpoint", "source_key")
+    ).lower()
+    if "grok-imagine-video/v1.5/reference-to-video" in blob:
+        return GROK_IMAGINE_15_R2V_PROMPT_CAP
+    if "grok imagine 1.5" in blob and "reference" in blob:
+        return GROK_IMAGINE_15_R2V_PROMPT_CAP
+    return 0
+
 
 def list_storyboard_models() -> dict[str, Any]:
     rows = list_models_for_ui("video", "r2v")

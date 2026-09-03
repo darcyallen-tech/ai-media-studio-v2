@@ -24,8 +24,11 @@ import {
 import {
   allocatedSeconds,
   composeStoryboardEnhanceBrief,
+  composeStoryboardEnhanceCompact,
   composeStoryboardPrompt,
   distributeShotSeconds,
+  maxPromptChars,
+  promptCapMessage,
   evenSplitSeconds,
   formatHold,
   parseSeconds,
@@ -266,6 +269,19 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     const { allocated } = allocatedSeconds(storyShots);
     if (budget > 0 && allocated > budget + 0.05) {
       missing.push(`Duration over budget (${allocated}s / ${budget}s)`);
+    }
+    const promptCap = maxPromptChars(selectedModel);
+    if (promptCap > 0) {
+      const composedLen = composeStoryboardPrompt(
+        data.hubTitle || "",
+        prompt.trim(),
+        storyAssets,
+        storyShots,
+        distributeShotSeconds(storyShots, duration || storyboardDurationChoices(selectedModel)[0] || ""),
+      ).length;
+      if (composedLen > promptCap) {
+        missing.push(promptCapMessage(composedLen, promptCap));
+      }
     }
   }
   if (showElements) {
@@ -591,6 +607,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       if (maskSuffix && composed && !composed.includes(maskSuffix)) {
         composed = `${composed.trim()}\n\n${maskSuffix}`;
       }
+      if (isStoryboard && !klingMp) {
+        const cap = maxPromptChars(selectedModel);
+        if (cap > 0 && composed.length > cap) {
+          const msg = promptCapMessage(composed.length, cap);
+          setError(msg);
+          toast(msg, true);
+          return;
+        }
+      }
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
@@ -739,15 +764,25 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     try {
       const sbDuration =
         duration || storyboardDurationChoices(selectedModel)[0] || "";
+      const promptCap = isStoryboard ? maxPromptChars(selectedModel) : 0;
       const boardBrief = isStoryboard
-        ? composeStoryboardEnhanceBrief(
-            data.hubTitle || "",
-            prompt.trim(),
-            storyAssets,
-            storyShots,
-            distributeShotSeconds(storyShots, sbDuration),
-            data.hubNotes,
-          )
+        ? promptCap > 0
+          ? composeStoryboardEnhanceCompact(
+              data.hubTitle || "",
+              prompt.trim(),
+              storyAssets,
+              storyShots,
+              promptCap,
+              distributeShotSeconds(storyShots, sbDuration),
+            )
+          : composeStoryboardEnhanceBrief(
+              data.hubTitle || "",
+              prompt.trim(),
+              storyAssets,
+              storyShots,
+              distributeShotSeconds(storyShots, sbDuration),
+              data.hubNotes,
+            )
         : "";
       const res = await fetch("/enhance", {
         method: "POST",
@@ -775,6 +810,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           image_urls: isStoryboard
             ? storyRefs.map((item) => item.path).slice(0, 3)
             : enhanceImagePaths(data),
+          max_prompt: promptCap > 0 ? promptCap : undefined,
         }),
       });
       const body = (await readJson(res)) as {
@@ -1468,8 +1504,6 @@ function StoryboardPrompt({
   if (!klingMp && maxRefs > 0 && refs.length > maxRefs) {
     missing.push(`Too many refs (${refs.length} / ${maxRefs})`);
   }
-  const canGo =
-    Boolean(modelId) && !loading && !enhancing && missing.length === 0;
   const durs = storyboardDurationChoices(selectedModel);
   const aspects = selectedModel?.aspect_choices ?? [];
   const resolutions = resolutionOptions(selectedModel);
@@ -1478,6 +1512,21 @@ function StoryboardPrompt({
   const over = budget > 0 && allocated > budget + 0.05;
   const exact = budget > 0 && empty === 0 && Math.abs(allocated - budget) < 0.05;
   if (over) missing.push(`Duration over budget (${allocated}s / ${budget}s)`);
+  const promptCap = klingMp ? 0 : maxPromptChars(selectedModel);
+  const composedLen =
+    promptCap > 0
+      ? composeStoryboardPrompt(
+          data.hubTitle || "",
+          notes.trim(),
+          data.hubAssets ?? [],
+          shots,
+          distributeShotSeconds(shots, duration || durs[0] || ""),
+        ).length
+      : 0;
+  const overPrompt = promptCap > 0 && composedLen > promptCap;
+  if (overPrompt) missing.push(promptCapMessage(composedLen, promptCap));
+  const canGo =
+    Boolean(modelId) && !loading && !enhancing && missing.length === 0;
 
   return (
     <>
@@ -1675,6 +1724,13 @@ function StoryboardPrompt({
         </button>
       </div>
       <p className="estimate">{estimate}</p>
+      {promptCap > 0 ? (
+        <p className={overPrompt ? "hint warn" : "hint"}>
+          {overPrompt
+            ? promptCapMessage(composedLen, promptCap)
+            : `prompt ${composedLen} / ${promptCap}`}
+        </p>
+      ) : null}
       <p className="hint">
         {refs.length}
         {maxRefs > 0 ? ` / ${maxRefs}` : ""} refs

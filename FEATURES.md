@@ -127,7 +127,7 @@ When the model supports it (Kling 3.0):
 - Shots go out as native **`multi_prompt`** (customize or intelligent cuts), not one flattened paragraph.
 - **Elements** tray on Kling 3.0 I2V (`@ElementN`). Hidden on Kling T2V.
 
-Other storyboard models still flatten the board into one R2V prompt plus hub/shot refs. Last frame is not sent from Storyboard (use Video I2V / Bridge for that).
+Other storyboard models still flatten the board into one R2V prompt plus hub/shot refs. Last frame is not sent from Storyboard (use Video I2V / Bridge for that). Grok Imagine 1.5 R2V prompt cap is 4096 (blocked before POST; Enhance compact fits Image N + one line/shot); H3 / R2V refs downscale to 1920 JPEG on the Storyboard upload path.
 
 ---
 

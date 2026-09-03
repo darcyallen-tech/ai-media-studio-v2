@@ -24,6 +24,9 @@ Rules:
 - For storyboard boards: keep shot order, attributed dialogue (Name: "line"),
   camera/move, duration, and framing. Rewrite into one master video prompt
   (global notes) for the selected model. Do not collapse or omit shots.
+- When a hard character cap is given, FIT under that cap: short Image N map
+  (Image 1 = character/scene/costume) plus one line per shot. Do not dump
+  costume seams, fabric, or unused stats.
 - When a source still is attached, look at it. First briefly note what is
   visible (sky, house, smoke, people, furniture, lighting). Then rewrite the
   user's prompt for the selected edit model, keeping their intent, grounded
@@ -73,7 +76,7 @@ def _refs_block(refs: list[dict[str, Any]] | None) -> str:
         if not isinstance(raw, dict):
             continue
         role = str(raw.get("role") or "").strip().lower()
-        if role not in ("character", "scene", "source", "prop"):
+        if role not in ("character", "scene", "source", "prop", "costume"):
             continue
         name = str(raw.get("name") or raw.get("id") or role).strip() or role
         note = str(raw.get("note") or "").strip()
@@ -97,6 +100,7 @@ def enhance_prompt_text(
     mode: str = "",
     refs: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
+    max_prompt: int | None = None,
 ) -> dict[str, Any]:
     original = (prompt or "").strip()
     if not original:
@@ -121,6 +125,18 @@ def enhance_prompt_text(
             "Fibo Edit 1.5: label attached stills as <image_1> (source to edit), "
             "<image_2> <image_3> <image_4> for extra references (furniture, "
             "costume, object, style). Keep those tags in the rewrite.\n\n"
+        )
+    cap = 0
+    try:
+        cap = int(max_prompt or 0)
+    except (TypeError, ValueError):
+        cap = 0
+    if cap > 0:
+        wan_note += (
+            f"HARD CAP: the rewritten prompt MUST be ≤ {cap} characters. "
+            "Short Image N map (Image 1 = character, Image 2 = scene, "
+            "costume ref = Image N) plus one line per shot. "
+            "Do not dump costume seams, fabric, or unused stats.\n\n"
         )
     images = [p for p in (image_urls or []) if str(p).strip()]
     readable = [p for p in images if still_data_url(p)]

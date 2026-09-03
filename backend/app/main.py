@@ -290,6 +290,7 @@ class EnhanceIn(BaseModel):
     mode: str = "image"
     refs: list[RefRoleIn] = Field(default_factory=list)
     image_urls: list[str] = Field(default_factory=list)
+    max_prompt: int | None = None
 
 
 class CreateStateIn(BaseModel):
@@ -663,6 +664,7 @@ def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
         mode=body.mode,
         refs=[r.model_dump() for r in (body.refs or [])],
         image_urls=list(body.image_urls or []),
+        max_prompt=body.max_prompt,
     )
 
 

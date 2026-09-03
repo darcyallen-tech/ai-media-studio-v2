@@ -146,6 +146,61 @@ export function composeStoryboardEnhanceBrief(
   return parts.join("\n").trim();
 }
 
+/** Per-model prompt cap. 0 = none. Not a catalog field. */
+export function maxPromptChars(model?: ModelRow | null): number {
+  const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
+  if (
+    blob.includes("grok-imagine-video/v1.5/reference-to-video") ||
+    (blob.includes("grok imagine 1.5") && blob.includes("reference"))
+  ) {
+    return 4096;
+  }
+  return 0;
+}
+
+export function promptCapMessage(length: number, cap: number): string {
+  return `prompt ${length} / ${cap} — Enhance compact or trim shots`;
+}
+
+export function composeStoryboardEnhanceCompact(
+  title: string,
+  notes: string,
+  assets: HubAsset[],
+  shots: ShotState[],
+  cap: number,
+  holds?: Map<string, number>,
+): string {
+  const parts: string[] = [];
+  const t = title.trim();
+  if (t) parts.push(`Sequence: ${t}.`);
+  const map: string[] = [];
+  let n = 0;
+  for (const row of assets) {
+    if (!row.item?.path) continue;
+    n += 1;
+    const label = (row.label || row.item.name || row.role).trim();
+    map.push(`Image ${n} = ${row.role} ${label}`.trim());
+  }
+  if (map.length) parts.push(map.join(". ") + ".");
+  const mood = notes.trim();
+  if (mood) parts.push(mood);
+  const ordered = [...shots].sort((a, b) => a.order - b.order);
+  for (const shot of ordered) {
+    const hold = holds?.get(shot.id);
+    const cam = [shot.move, shot.framing.trim()].filter(Boolean).join(", ");
+    const action = shot.action.trim() || "(empty)";
+    const dur = shotDurationLabel(shot, hold);
+    const line = [`Shot ${shot.order}: ${action}`];
+    if (cam) line.push(cam);
+    line.push(dur);
+    parts.push(line.join(" · "));
+  }
+  parts.push(
+    `Rewrite to FIT under ${cap} characters. Short Image N map + one line per shot. Do not dump costume seams, fabric, or unused stats.`,
+  );
+  return parts.join("\n").trim();
+}
+
 export function storyboardRefItems(
   assets: HubAsset[],
   shots: ShotState[],

@@ -33,6 +33,53 @@ from app.pricing import format_job_cost, format_render_metrics, resolve_generati
 ProgressCallback = Callable[[str], None]
 
 
+def _endpoint_needs_ref_proxy(endpoint: str | None) -> bool:
+    ep = (endpoint or "").lower()
+    if "reference-to-video" in ep:
+        return True
+    return any(
+        n in ep
+        for n in (
+            "kling-video",
+            "kling",
+            "seedance",
+            "minimax/h3",
+            "hailuo",
+            "wan-3.0",
+        )
+    )
+
+
+def _proxy_ref_still(
+    path: Path,
+    *,
+    spec: Any,
+    output_dir: str | Path,
+    label: str,
+    progress: ProgressCallback,
+) -> Path:
+    """Longest-edge 1920 JPEG for H3 / R2V (and other strict image-ref APIs)."""
+    if not _endpoint_needs_ref_proxy(getattr(spec, "endpoint", None)):
+        return path
+    from app.motion_sync_prep import (
+        MAX_API_STILL_BYTES,
+        MAX_API_STILL_SIDE,
+        prepare_api_still,
+    )
+
+    prep = prepare_api_still(
+        path,
+        output_dir=output_dir,
+        max_side=MAX_API_STILL_SIDE,
+        max_bytes=MAX_API_STILL_BYTES,
+        jpeg_quality=90,
+        on_progress=progress,
+        proxy_subdir="_storyboard_still_proxies",
+        label=label,
+    )
+    return Path(prep.path)
+
+
 @dataclass
 class ImageToVideoResult:
     ok: bool
@@ -107,6 +154,13 @@ def run_image_to_video(
     try:
         image_url = ""
         if has_still and ipath is not None:
+            ipath = _proxy_ref_still(
+                ipath,
+                spec=spec,
+                output_dir=output_dir,
+                label="start/ref still",
+                progress=progress,
+            )
             image_url = upload_file(ipath, on_progress=progress)
 
         # Extra stills (multi-ref / omni Image 2+)
@@ -121,6 +175,13 @@ def run_image_to_video(
                     continue
                 if has_still and ipath and p.resolve() == ipath.resolve():
                     continue
+                p = _proxy_ref_still(
+                    p,
+                    spec=spec,
+                    output_dir=output_dir,
+                    label="ref still",
+                    progress=progress,
+                )
                 progress(f"Uploading ref still: {p.name}")
                 extra_urls.append(upload_file(p, on_progress=progress))
             except Exception as exc:
@@ -153,10 +214,15 @@ def run_image_to_video(
             or "minimax/h3" in (spec.endpoint or "")
             or "hailuo" in (spec.endpoint or "")
         ):
-            progress(f"Uploading end frame: {Path(str(end_local)).name}")
-            params["end_image_url"] = upload_file(
-                Path(str(end_local)), on_progress=progress
+            end_path = _proxy_ref_still(
+                Path(str(end_local)),
+                spec=spec,
+                output_dir=output_dir,
+                label="end frame",
+                progress=progress,
             )
+            progress(f"Uploading end frame: {end_path.name}")
+            params["end_image_url"] = upload_file(end_path, on_progress=progress)
 
         # Reference videos (omni / Seedance)
         v_urls: list[str] = list(
