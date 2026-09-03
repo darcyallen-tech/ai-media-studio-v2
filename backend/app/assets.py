@@ -16,7 +16,7 @@ KINDS: tuple[Kind, ...] = ("character", "scene", "prop", "costume")
 
 ASSETS_INDEX = ASSETS_DIR / "assets.json"
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-_MAX_STILLS = {"character": 8, "scene": 4, "prop": 3, "costume": 8}
+_MAX_STILLS = {"character": 8, "scene": 8, "prop": 3, "costume": 8}
 IDENTITY_SLOTS: tuple[str, ...] = (
     "front",
     "side",
@@ -26,6 +26,11 @@ IDENTITY_SLOTS: tuple[str, ...] = (
     "threequarter_back",
     "top",
     "sheet",
+    "hero",
+    "opposite",
+    "feature",
+    "detail",
+    "overview",
 )
 
 SHEET_MODELS = ("flux", "seedream", "nano")
@@ -111,7 +116,7 @@ def _still_list(row: dict[str, Any]) -> list[str]:
 def primary_still_path(row: dict[str, Any]) -> str:
     ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
     slot = _primary_slot_name(row)
-    for key in (slot, "front"):
+    for key in (slot, "front", "hero"):
         p = str(ident.get(key) or "").strip()
         if p and Path(p).is_file():
             return p
@@ -179,7 +184,12 @@ def _to_public(row: dict[str, Any]) -> dict[str, Any]:
             identity[slot] = p
             identity_urls[slot] = f"/assets/{aid}/still?slot={slot}"
     primary_slot = _primary_slot_name(row)
-    primary = identity.get(primary_slot) or identity.get("front") or (stills[0] if stills else "")
+    primary = (
+        identity.get(primary_slot)
+        or identity.get("front")
+        or identity.get("hero")
+        or (stills[0] if stills else "")
+    )
     url = f"/assets/{aid}/still" if primary else None
     parent_id = str(row.get("parent_id") or "").strip() or None
     name = str(row.get("name") or "").strip() or "Untitled"
@@ -187,7 +197,12 @@ def _to_public(row: dict[str, Any]) -> dict[str, Any]:
     is_costume = kind == "costume"
     is_variant = kind == "character" and bool(parent_id)
     label = f"{parent} / {name}" if parent and is_variant else name
-    thumb = identity_urls.get(primary_slot) or identity_urls.get("front") or url
+    thumb = (
+        identity_urls.get(primary_slot)
+        or identity_urls.get("front")
+        or identity_urls.get("hero")
+        or url
+    )
     return {
         "id": aid,
         "name": name,
@@ -429,12 +444,24 @@ def _apply_sheet_or_primary(
         else:
             primary = _primary_slot_name(found)
             found["still_path"] = (
-                ident.get(primary) or ident.get("front") or (stills[0] if stills else str(dest))
+                ident.get(primary)
+                or ident.get("front")
+                or ident.get("hero")
+                or (stills[0] if stills else str(dest))
             )
         return
     primary = _primary_slot_name(found)
-    found["still_path"] = ident.get(primary) or ident.get("front") or (stills[0] if stills else "")
-    if primary == key or (primary == "front" and key == "front" and not ident.get("sheet")):
+    found["still_path"] = (
+        ident.get(primary)
+        or ident.get("front")
+        or ident.get("hero")
+        or (stills[0] if stills else "")
+    )
+    if primary == key or (
+        primary in ("front", "hero")
+        and key in ("front", "hero")
+        and not ident.get("sheet")
+    ):
         found["sheet_path"] = str(ident.get(primary) or dest)
 
 
@@ -570,12 +597,17 @@ def save_sheet(
     if not row:
         raise ValueError("Asset not found.")
     ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
-    front = str(ident.get("front") or "").strip()
+    front = str(ident.get("front") or ident.get("hero") or "").strip()
     sheet = str(ident.get("sheet") or row.get("sheet_path") or "").strip()
     if require_front and not (
         (front and Path(front).is_file()) or (sheet and Path(sheet).is_file())
     ):
-        raise ValueError("Front still or sheet is required to save.")
+        kind = str(row.get("kind") or "")
+        raise ValueError(
+            "Hero still or sheet is required to save."
+            if kind == "scene"
+            else "Front still or sheet is required to save."
+        )
     return update_asset(
         asset_id,
         name=name or None,

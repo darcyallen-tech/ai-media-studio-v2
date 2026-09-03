@@ -1593,6 +1593,11 @@ function StudioCanvas() {
         "threequarter_front",
         "threequarter_back",
         "top",
+        "hero",
+        "opposite",
+        "feature",
+        "detail",
+        "overview",
         "sheet",
       ];
       const sheetish =
@@ -1898,10 +1903,17 @@ function StudioCanvas() {
         promptOverride ??
         ((angle.data as ResultNodeData).prompt || "")
       ).trim();
-      const frontPath = anglePath(`sang-${builderId}-front`);
+      const frontPath =
+        anglePath(`sang-${builderId}-front`) || anglePath(`sang-${builderId}-hero`);
       const nodeData = angle.data as ResultNodeData;
-      if (slot !== "front" && !frontPath && !nodeData.sourceStill) {
-        const msg = slot === "sheet" ? "Generate a costume angle first" : "Generate Front first";
+      if (slot !== "front" && slot !== "hero" && !frontPath && !nodeData.sourceStill) {
+        const sceneSlot = ["opposite", "feature", "detail", "overview"].includes(slot);
+        const msg =
+          slot === "sheet"
+            ? "Generate a costume angle first"
+            : nodeData.sheetKind === "scene" || sceneSlot
+              ? "Generate Hero first"
+              : "Generate Front first";
         upsertSheetAngle(builderId, slot, { slot, generating: false, error: msg });
         toast(msg, true);
         return;
@@ -1909,7 +1921,8 @@ function StudioCanvas() {
       const extraRefs = Array.isArray(nodeData.extraRefs)
         ? nodeData.extraRefs.filter(Boolean)
         : [];
-      const sourceStill = nodeData.sourceStill || (slot === "front" ? "" : frontPath);
+      const sourceStill =
+        nodeData.sourceStill || (slot === "front" || slot === "hero" ? "" : frontPath);
       const packed: string[] = [];
       for (const p of [sourceStill, ...extraRefs]) {
         if (p && !packed.includes(p)) packed.push(p);
@@ -1960,7 +1973,7 @@ function StudioCanvas() {
             asset_id: assetId,
             slot,
             model_id:
-              slot === "front" && !sourceStill
+              (slot === "front" || slot === "hero") && !sourceStill
                 ? session?.t2iModel || ""
                 : session?.r2iModel || session?.t2iModel || "",
             prompt,

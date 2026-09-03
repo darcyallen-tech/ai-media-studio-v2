@@ -17,8 +17,15 @@ EXTRA_SLOTS: tuple[str, ...] = (
     "threequarter_back",
     "top",
 )
+SCENE_SLOTS: tuple[str, ...] = (
+    "hero",
+    "opposite",
+    "feature",
+    "detail",
+    "overview",
+)
 SHEET_SLOT = "sheet"
-ALL_SLOTS: tuple[str, ...] = CORE_SLOTS + EXTRA_SLOTS + (SHEET_SLOT,)
+ALL_SLOTS: tuple[str, ...] = CORE_SLOTS + EXTRA_SLOTS + SCENE_SLOTS + (SHEET_SLOT,)
 
 SLOT_LABELS: dict[str, str] = {
     "front": "Front (full body)",
@@ -29,6 +36,28 @@ SLOT_LABELS: dict[str, str] = {
     "threequarter_back": "¾ back",
     "top": "Top / high angle",
     "sheet": "Costume sheet",
+    "hero": "Hero (walk-in wide)",
+    "opposite": "Opposite",
+    "feature": "Feature",
+    "detail": "Detail",
+    "overview": "Overview",
+}
+
+SCENE_SLOT_LABELS: dict[str, str] = {
+    "hero": "Hero (walk-in wide)",
+    "opposite": "Opposite",
+    "feature": "Feature",
+    "detail": "Detail",
+    "overview": "Overview",
+    "sheet": "Scene sheet",
+}
+
+SCENE_VIEWS: dict[str, str] = {
+    "hero": "Walk-in wide of the space — enter the location as a visitor would.",
+    "opposite": "Opposite view of the same space, looking back from the far side.",
+    "feature": "Feature view of a distinctive architectural or set piece in this space.",
+    "detail": "Tight detail of architecture, material, or lighting in this space.",
+    "overview": "Overview of the whole space, showing layout and how areas connect.",
 }
 
 CLEAN_PLATE = (
@@ -815,12 +844,23 @@ def dress_prompt(slot: str, outfit: str, extra: str = "") -> str:
     )
 
 
-def scene_sheet_prompt(fields: dict[str, Any] | None, extra: str = "") -> str:
-    brief = scene_prompt(fields, detail=False)
+def scene_sheet_prompt(
+    fields: dict[str, Any] | None,
+    extra: str = "",
+    attached: list[str] | None = None,
+) -> str:
+    brief = scene_prompt(fields, slot="hero")
+    names = [str(n).strip() for n in (attached or []) if str(n).strip()]
+    panels = (
+        "Clean studio grid of the same space from the attached stills only: "
+        + ", ".join(names)
+        + ". Do not invent extra panels."
+        if names
+        else "Clean studio grid of the same space from the attached stills only. Do not invent extra panels."
+    )
     body = (
         f"Production location SHEET of {brief}. One image only. "
-        "Clean grid of the same space: wide hero establishing, a medium view, "
-        "and a detail of architecture or lighting. Match the attached stills. "
+        f"{panels} "
         "Empty of prominent people. Photoreal. Optional small clean labels only. "
         "No gibberish text, no watermarks, no logos."
     )
@@ -843,7 +883,12 @@ def prop_sheet_prompt(fields: dict[str, Any] | None, extra: str = "") -> str:
     return body
 
 
-def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
+def scene_prompt(
+    fields: dict[str, Any] | None,
+    *,
+    detail: bool = False,
+    slot: str = "",
+) -> str:
     f = fields or {}
     override = _nv(f.get("identity_prompt")) or _nv(f.get("prompt"))
     name = _nv(f.get("name")) or "the location"
@@ -884,20 +929,18 @@ def scene_prompt(fields: dict[str, Any] | None, *, detail: bool = False) -> str:
             bits.append(f"architecture: {arch}")
         if light:
             bits.append(f"lighting: {light}")
-        if cam:
-            bits.append(f"camera: {cam}")
         if elements:
             bits.append(f"key elements: {elements}")
         if furniture:
             bits.append(f"furniture / fixtures: {furniture}")
         if grade:
             bits.append(f"color grade: {grade}")
-        head = "; ".join(bits) if bits else f"Establishing still of {name}."
-    view = (
-        "Closer detail angle of the same space, matching lighting and architecture."
-        if detail
-        else "Wide hero establishing view so we know the space."
-    )
+        head = "; ".join(bits) if bits else f"Location still of {name}."
+    key = (slot or ("detail" if detail else "hero")).strip().lower() or "hero"
+    if key == "hero":
+        view = f"Camera: {cam}." if cam else SCENE_VIEWS["hero"]
+    else:
+        view = SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
     out = f"{head}. {view} Empty of prominent people. Photoreal. No text, no logo, no watermark."
     if notes and notes not in out:
         out = f"{out} {notes}"
@@ -1002,7 +1045,7 @@ def compose_angle_prompt(
     if kind == "scene":
         if key == SHEET_SLOT:
             return scene_sheet_prompt(merged, extra)
-        return scene_prompt(merged, detail=key != "front")
+        return scene_prompt(merged, slot=key, detail=key == "detail")
     if kind == "prop":
         if key == SHEET_SLOT:
             return prop_sheet_prompt(merged, extra)
@@ -1113,14 +1156,14 @@ def _estimate_sheet_cost_inner(
     angles: list[dict[str, Any]] = []
     total = 0.0
     for i, slot in enumerate(planned):
-        first = i == 0 or slot == "front"
+        first = i == 0 or slot == "front" or slot == "hero"
         if want == "costume":
             modality = "r2i"
             mid = (r2i_model_id or t2i_model_id).strip()
         elif first:
             modality = "t2i"
             mid = (t2i_model_id or "").strip()
-        elif want == "character":
+        elif want in ("character", "scene"):
             modality = "r2i"
             mid = (r2i_model_id or t2i_model_id).strip()
         else:
@@ -1482,7 +1525,8 @@ def generate_angle(
     if key == SHEET_SLOT and not client_sent:
         ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
         ordered: list[str] = []
-        for angle in CORE_SLOTS + EXTRA_SLOTS:
+        pack = SCENE_SLOTS if kind == "scene" else CORE_SLOTS + EXTRA_SLOTS
+        for angle in pack:
             p = _nv(ident.get(angle))
             if p and Path(p).is_file() and p not in ordered:
                 ordered.append(p)

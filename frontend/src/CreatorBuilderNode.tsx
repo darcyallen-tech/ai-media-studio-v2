@@ -62,6 +62,9 @@ import {
   composeSceneBrief,
   composeSceneSheetPrompt,
   composeSceneStill,
+  SCENE_SLOTS,
+  SCENE_SLOT_LABEL,
+  SCENE_SHEET_SLOT,
   isFluxEditModel,
   pickDefaultResolution,
   pickSheetResolution,
@@ -2203,7 +2206,6 @@ function SceneForm({
   const [notes, setNotes] = useState("");
   const [scenePrompt, setScenePrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
-  const [sheet, setSheet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
@@ -2213,11 +2215,14 @@ function SceneForm({
   const angleSizes = sizeChoices(r2iRow);
   const frontQuals = qualityChoices(t2iRow);
   const angleQuals = qualityChoices(r2iRow);
-  const slots = sheet ? ["front", "side"] : ["front"];
-  const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, slots, models);
-  const haveFront = Boolean(data.doneSlots?.front);
+  const slots = [...SCENE_SLOTS];
+  const estimate = useSheetEstimate("scene", models.t2iId, models.r2iId, ["hero"], models);
+  const haveHero = Boolean(data.doneSlots?.hero);
   const haveSceneAngle = Boolean(
-    data.doneSlots && Object.entries(data.doneSlots).some(([k, p]) => k !== "sheet" && p),
+    data.doneSlots &&
+      Object.entries(data.doneSlots).some(
+        ([k, p]) => k !== SCENE_SHEET_SLOT && p && (SCENE_SLOTS as readonly string[]).includes(k),
+      ),
   );
   const themeKey = pickField(theme, themeC);
   const locationOpts = sceneLocationsFor(themeKey);
@@ -2298,15 +2303,27 @@ function SceneForm({
       toast(msg, true);
       return;
     }
-    const sizes = slot === "front" ? frontSizes : angleSizes;
-    const quals = slot === "front" ? frontQuals : angleQuals;
+    const isHero = slot === "hero";
+    if (!isHero && !haveHero) {
+      const msg = "Generate Hero first.";
+      setError(msg);
+      toast(msg, true);
+      return;
+    }
+    const sizes = isHero ? frontSizes : angleSizes;
+    const quals = isHero ? frontQuals : angleQuals;
     const sheetSize = pickDefaultResolution(sizes);
+    const label = SCENE_SLOT_LABEL[slot] || slot;
+    const prompt = composeSceneStill(sceneText(), {
+      slot,
+      camera: isHero ? pickField(camera, cameraC) : "",
+    });
     try {
       spawnAngleResult({
         builderId,
         slot,
-        label: slot === "front" ? "Hero" : "Detail",
-        prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
+        label,
+        prompt,
         generating: false,
         error: null,
         focus: true,
@@ -2318,10 +2335,10 @@ function SceneForm({
         t2iModel: models.t2iId,
         r2iModel: models.r2iId || models.t2iId,
         assetId: data.sessionAssetId || "",
-        sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
-        maxRefs: slot === "front" ? undefined : sheetR2iRefCap(r2iRow),
+        sourceStill: isHero ? "" : data.doneSlots?.hero || "",
+        maxRefs: isHero ? undefined : sheetR2iRefCap(r2iRow),
         name: name.trim() || "Scene",
-        sheetKind: undefined,
+        fields: sceneFields(),
       });
       setError(null);
     } catch (err: unknown) {
@@ -2338,13 +2355,14 @@ function SceneForm({
             builderId,
             slot,
             assetId: id,
-            label: slot === "front" ? "Hero" : "Detail",
-            prompt: composeSceneStill(sceneText(), { detail: slot !== "front" }),
+            label,
+            prompt,
             focus: true,
             t2iModel: models.t2iId,
             r2iModel: models.r2iId || models.t2iId,
-            sourceStill: slot === "front" ? "" : data.doneSlots?.front || "",
+            sourceStill: isHero ? "" : data.doneSlots?.hero || "",
             name: name.trim() || "Scene",
+            fields: sceneFields(),
           });
         })
         .catch((err: unknown) => {
@@ -2355,26 +2373,32 @@ function SceneForm({
     }
   }
 
-  function openSceneSheet() {
+  async function openSceneSheet() {
+    const filled = SCENE_SLOTS.filter((s) => data.doneSlots?.[s]);
     const refs: string[] = [];
-    for (const slot of ["front", "side", "closeup"] as const) {
+    const previews: { id: string; label: string; path: string }[] = [];
+    for (const slot of filled) {
       const p = data.doneSlots?.[slot] || "";
-      if (p && !refs.includes(p)) refs.push(p);
+      if (!p) continue;
+      previews.push({ id: slot, label: SCENE_SLOT_LABEL[slot] || slot, path: p });
+      if (!refs.includes(p)) refs.push(p);
     }
     if (!refs.length) {
-      setError("Generate the hero still first.");
+      setError("Generate Hero first.");
+      toast("Generate Hero first.", true);
       return;
     }
     const sizes = angleSizes.length ? angleSizes : frontSizes;
     const quals = angleQuals.length ? angleQuals : frontQuals;
     const sheetSize = pickSheetResolution(sizes);
+    const label = name.trim() || "Scene";
     try {
+      const assetId = await ensureDraft();
       spawnAngleResult({
         builderId,
-        slot: COSTUME_SHEET_SLOT,
-        nodeKey: "scene-sheet",
-        label: "Scene sheet",
-        prompt: composeSceneSheetPrompt(sceneText()),
+        slot: SCENE_SHEET_SLOT,
+        label: SCENE_SLOT_LABEL.sheet,
+        prompt: composeSceneSheetPrompt(sceneText(), "", previews),
         generating: false,
         error: null,
         focus: true,
@@ -2385,11 +2409,13 @@ function SceneForm({
         qualityChoices: quals,
         t2iModel: models.t2iId,
         r2iModel: models.r2iId || models.t2iId,
-        assetId: data.sessionAssetId || "",
+        assetId,
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
         maxRefs: sheetR2iRefCap(r2iRow),
-        name: name.trim() || "Scene",
+        refPreviews: previews,
+        name: label,
+        fields: sceneFields(),
         sheetKind: "scene",
       });
       setError(null);
@@ -2402,8 +2428,8 @@ function SceneForm({
   }
 
   async function save() {
-    if (!haveFront) {
-      setError("Generate the hero still first.");
+    if (!haveHero) {
+      setError("Generate Hero first.");
       return;
     }
     setSaving(true);
@@ -2436,7 +2462,7 @@ function SceneForm({
     <>
       <p className="hint">
         Theme filters Location / Architecture / Lighting. Apply selection composes the prompt.
-        Generate Hero on a Result node. Scene Sheet when a hero still exists.
+        Generate Hero on a Result node. Extra angles (Opposite, Feature, Detail, Overview) stay available. Scene sheet lists only attached stills.
       </p>
       <label className="builder-field">
         <span className="field-label">Name</span>
@@ -2621,12 +2647,6 @@ function SceneForm({
           onChange={(e) => setScenePrompt(e.target.value)}
         />
       </label>
-      <label className="builder-field">
-        <span className="field-label">
-          <input type="checkbox" checked={sheet} onChange={(e) => setSheet(e.target.checked)} />{" "}
-          Second angle
-        </span>
-      </label>
       <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
@@ -2637,26 +2657,32 @@ function SceneForm({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            openAngle("front");
+            openAngle("hero");
           }}
         >
-          Generate Hero
+          Generate {SCENE_SLOT_LABEL.hero}
         </button>
-        {sheet ? (
+      </div>
+      <span className="field-label">Extra angles</span>
+      <div className="prompt-actions">
+        {SCENE_SLOTS.filter((s) => s !== "hero").map((slot) => (
           <button
+            key={slot}
             type="button"
-            className="generate nodrag"
-            disabled={!haveFront}
+            className="ghost nodrag"
+            disabled={!haveHero}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              openAngle("side");
+              openAngle(slot);
             }}
           >
-            Generate Detail
+            Generate {SCENE_SLOT_LABEL[slot] || slot}
           </button>
-        ) : null}
+        ))}
+      </div>
+      <div className="prompt-actions">
         <button
           type="button"
           className="generate nodrag"
@@ -2665,12 +2691,12 @@ function SceneForm({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            openSceneSheet();
+            void openSceneSheet();
           }}
         >
-          Generate Scene Sheet
+          Generate {SCENE_SLOT_LABEL.sheet}
         </button>
-        <button type="button" className="ghost" disabled={!haveFront || saving} onClick={() => void save()}>
+        <button type="button" className="ghost" disabled={!haveHero || saving} onClick={() => void save()}>
           {saving ? "Saving…" : "Save Scene"}
         </button>
       </div>

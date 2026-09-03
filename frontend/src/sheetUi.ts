@@ -11,6 +11,30 @@ export const EXTRA_SLOTS = [
   "threequarter_back",
   "top",
 ] as const;
+/** Scene Builder stills — not Character front/side/closeup. */
+export const SCENE_SLOTS = [
+  "hero",
+  "opposite",
+  "feature",
+  "detail",
+  "overview",
+] as const;
+export const SCENE_SHEET_SLOT = "sheet";
+export const SCENE_SLOT_LABEL: Record<string, string> = {
+  hero: "Hero (walk-in wide)",
+  opposite: "Opposite",
+  feature: "Feature",
+  detail: "Detail",
+  overview: "Overview",
+  sheet: "Scene sheet",
+};
+export const SCENE_VIEWS: Record<string, string> = {
+  hero: "Walk-in wide of the space — enter the location as a visitor would.",
+  opposite: "Opposite view of the same space, looking back from the far side.",
+  feature: "Feature view of a distinctive architectural or set piece in this space.",
+  detail: "Tight detail of architecture, material, or lighting in this space.",
+  overview: "Overview of the whole space, showing layout and how areas connect.",
+};
 export const COSTUME_TAGS = [
   "everyday",
   "hero",
@@ -725,6 +749,11 @@ export const SLOT_LABEL: Record<string, string> = {
   threequarter_back: "¾ back",
   top: "Top",
   sheet: "Costume sheet",
+  hero: "Hero (walk-in wide)",
+  opposite: "Opposite",
+  feature: "Feature",
+  detail: "Detail",
+  overview: "Overview",
 };
 
 function bit(v: string | undefined | null): string {
@@ -877,8 +906,6 @@ export function composeSceneBrief(
   if (arch) parts.push(`architecture: ${arch}`);
   const light = bit(fields.lighting);
   if (light) parts.push(`lighting: ${light}`);
-  const cam = bit(fields.camera);
-  if (cam) parts.push(`camera: ${cam}`);
   const els = bit(fields.elements);
   if (els) parts.push(`key elements: ${els}`);
   const furn = bit(fields.furniture);
@@ -918,14 +945,20 @@ export function composePropBrief(
   return head;
 }
 
-export function composeSceneStill(brief: string, opts?: { detail?: boolean }): string {
+export function composeSceneStill(
+  brief: string,
+  opts?: { slot?: string; camera?: string; detail?: boolean },
+): string {
   const head = bit(brief) || "a photoreal location";
-  const view = opts?.detail
-    ? "Closer detail angle of the same space, matching lighting and architecture."
-    : "Wide hero establishing view so we know the space.";
+  const slot = (opts?.slot || (opts?.detail ? "detail" : "hero")).trim() || "hero";
+  let framing = SCENE_VIEWS[slot] || SCENE_VIEWS.detail;
+  if (slot === "hero") {
+    const cam = bit(opts?.camera);
+    framing = cam ? `Camera: ${cam}.` : SCENE_VIEWS.hero;
+  }
   return [
-    `Establishing still of ${head}.`,
-    view,
+    `Location still of ${head}.`,
+    framing,
     "Empty of prominent people. Photoreal. No text, no logo, no watermark.",
   ].join(" ");
 }
@@ -942,10 +975,20 @@ export function composePropStill(brief: string, opts?: { detail?: boolean }): st
   ].join(" ");
 }
 
-export function composeSceneSheetPrompt(brief: string, extra = ""): string {
+export function composeSceneSheetPrompt(
+  brief: string,
+  extra = "",
+  attached: { id?: string; label?: string }[] = [],
+): string {
+  const names = attached
+    .map((row) => bit(row.label) || SCENE_SLOT_LABEL[row.id || ""] || bit(row.id))
+    .filter(Boolean);
+  const panels = names.length
+    ? `Clean studio grid of the same space from the attached stills only: ${names.join(", ")}. Do not invent extra panels.`
+    : "Clean studio grid of the same space from the attached stills only. Do not invent extra panels.";
   const bits = [
     `Production location SHEET of ${bit(brief) || "this place"}. One image only.`,
-    "Clean studio grid of the same space: wide hero establishing, a medium view, and a detail of architecture or lighting. Match the attached stills.",
+    panels,
     "Empty of prominent people. Photoreal. Optional small clean labels only.",
     SHEET_NO_GARBLED,
   ];
@@ -1004,15 +1047,29 @@ export function sheetSlotPhrase(slot: string): string {
       return "full-body ¾ front";
     case "threequarter_back":
       return "full-body ¾ back";
+    case "hero":
+      return "hero walk-in wide";
+    case "opposite":
+      return "opposite";
+    case "feature":
+      return "feature";
+    case "detail":
+      return "detail";
+    case "overview":
+      return "overview";
     default:
-      return SLOT_LABEL[slot] || slot;
+      return SLOT_LABEL[slot] || SCENE_SLOT_LABEL[slot] || slot;
   }
 }
 
-export function defaultSheetRefSlots(available: string[], cap: number): string[] {
-  const pack = SHEET_REF_PACK.filter((s) => available.includes(s));
-  if (cap <= 0 || pack.length <= cap) return pack;
-  return pack.slice(0, cap);
+export function defaultSheetRefSlots(
+  available: string[],
+  cap: number,
+  pack: readonly string[] = SHEET_REF_PACK,
+): string[] {
+  const ordered = pack.filter((s) => available.includes(s));
+  if (cap <= 0 || ordered.length <= cap) return ordered;
+  return ordered.slice(0, cap);
 }
 
 export function sheetAnglesFromIdentity(
@@ -1020,12 +1077,16 @@ export function sheetAnglesFromIdentity(
   urls?: Record<string, string> | null,
 ): SheetAngleChip[] {
   const out: SheetAngleChip[] = [];
-  for (const slot of SHEET_REF_PACK) {
-    const path = String(identity?.[slot] || "").trim();
+  const ident = identity || {};
+  const sceneHit = SCENE_SLOTS.some((s) => String(ident[s] || "").trim());
+  const pack = sceneHit ? SCENE_SLOTS : SHEET_REF_PACK;
+  const labels = sceneHit ? SCENE_SLOT_LABEL : SLOT_LABEL;
+  for (const slot of pack) {
+    const path = String(ident[slot] || "").trim();
     if (!path) continue;
     out.push({
       slot,
-      label: SLOT_LABEL[slot] || slot,
+      label: labels[slot] || SLOT_LABEL[slot] || slot,
       path,
       url: String(urls?.[slot] || "").trim(),
     });
@@ -1096,10 +1157,14 @@ export function sheetStatFooter(
 
 export function collectSheetAngleRefs(
   identity?: Record<string, string> | null,
-  kind: "character" | "costume" = "character",
+  kind: "character" | "costume" | "scene" = "character",
 ): string[] {
   const slots =
-    kind === "costume" ? COSTUME_PLATE_SLOTS : [...CORE_SLOTS, ...EXTRA_SLOTS];
+    kind === "costume"
+      ? COSTUME_PLATE_SLOTS
+      : kind === "scene"
+        ? SCENE_SLOTS
+        : [...CORE_SLOTS, ...EXTRA_SLOTS];
   const out: string[] = [];
   for (const slot of slots) {
     const p = String(identity?.[slot] || "").trim();
@@ -1114,7 +1179,12 @@ export function collectAssetSheetRefs(asset: {
   still_path?: string | null;
   still_paths?: string[];
 }): string[] {
-  const kind = asset.kind === "costume" ? "costume" : "character";
+  const kind =
+    asset.kind === "costume"
+      ? "costume"
+      : asset.kind === "scene"
+        ? "scene"
+        : "character";
   const out = collectSheetAngleRefs(asset.identity, kind);
   const add = (p?: string | null) => {
     const s = String(p || "").trim();
@@ -1211,7 +1281,7 @@ export function sheetPrimaryPath(
 ): string {
   const ident = identity || {};
   const slot = (primarySlot || "front").trim().toLowerCase() || "front";
-  return (ident[slot] || ident.front || fallback || "").trim();
+  return (ident[slot] || ident.front || ident.hero || fallback || "").trim();
 }
 
 export type DressRefChip = {

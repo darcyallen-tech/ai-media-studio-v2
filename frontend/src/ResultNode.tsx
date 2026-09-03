@@ -23,6 +23,8 @@ import {
   SHEET_NO_PANEL_TEXT,
   SHEET_NO_TEXT,
   SHEET_REF_PACK,
+  SCENE_SLOTS,
+  SCENE_SLOT_LABEL,
   sizeChoices,
   SLOT_LABEL,
   sortSheetComposeModels,
@@ -143,6 +145,10 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   const isCharacterSheet =
     isSheet &&
     (data.sheetKind === "character" || (!data.sheetKind && data.slot === "sheet"));
+  const isSceneSheet = isSheet && data.sheetKind === "scene";
+  const isSheetPicker = isCharacterSheet || isSceneSheet;
+  const sheetRefPack = isSceneSheet ? SCENE_SLOTS : SHEET_REF_PACK;
+  const sheetRefLabel = isSceneSheet ? SCENE_SLOT_LABEL : SLOT_LABEL;
   useEffect(() => {
     pickedManualRef.current = false;
   }, [data.assetId]);
@@ -223,7 +229,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     return () => ac.abort();
   }, [isSheet, selectedModel?.id, size, quality, data.aspect, data.resolution, fluxEdit]);
   useEffect(() => {
-    if (!isCharacterSheet) {
+    if (!isSheetPicker) {
       setAngleChips([]);
       return;
     }
@@ -233,11 +239,13 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       .map((c) => {
         const id = String(c.id || "").trim();
         const slot =
-          SHEET_REF_PACK.find((s) => s === id) ||
-          (Object.keys(SLOT_LABEL).find((s) => SLOT_LABEL[s] === c.label) || "");
+          sheetRefPack.find((s) => s === id) ||
+          (Object.keys(sheetRefLabel).find((s) => sheetRefLabel[s] === c.label) ||
+            Object.keys(SLOT_LABEL).find((s) => SLOT_LABEL[s] === c.label) ||
+            "");
         return {
-          slot: slot || id || "front",
-          label: c.label || SLOT_LABEL[slot] || slot || "Ref",
+          slot: slot || id || (isSceneSheet ? "hero" : "front"),
+          label: c.label || sheetRefLabel[slot] || SLOT_LABEL[slot] || slot || "Ref",
           path: c.path,
           url: c.url || "",
         };
@@ -248,8 +256,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
       const paths = [data.sourceStill || "", ...extras].filter(Boolean);
       const fallback: SheetAngleChip[] = paths.map((path, i) => ({
-        slot: SHEET_REF_PACK[i] || `ref_${i + 1}`,
-        label: SLOT_LABEL[SHEET_REF_PACK[i] || ""] || `Ref ${i + 1}`,
+        slot: sheetRefPack[i] || `ref_${i + 1}`,
+        label: sheetRefLabel[sheetRefPack[i] || ""] || `Ref ${i + 1}`,
         path,
         url: "",
       }));
@@ -272,8 +280,8 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           fromPreview.length
             ? fromPreview
             : paths.map((path, i) => ({
-                slot: SHEET_REF_PACK[i] || `ref_${i + 1}`,
-                label: SLOT_LABEL[SHEET_REF_PACK[i] || ""] || `Ref ${i + 1}`,
+                slot: sheetRefPack[i] || `ref_${i + 1}`,
+                label: sheetRefLabel[sheetRefPack[i] || ""] || `Ref ${i + 1}`,
                 path,
                 url: "",
               })),
@@ -285,16 +293,16 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
     return () => {
       cancelled = true;
     };
-  }, [isCharacterSheet, data.assetId, data.sourceStill, data.extraRefs, data.refPreviews]);
+  }, [isSheetPicker, isSceneSheet, data.assetId, data.sourceStill, data.extraRefs, data.refPreviews]);
   useEffect(() => {
-    if (!isCharacterSheet || !angleChips.length) return;
+    if (!isSheetPicker || !angleChips.length) return;
     const avail = angleChips.map((c) => c.slot);
-    const def = defaultSheetRefSlots(avail, cap);
+    const def = defaultSheetRefSlots(avail, cap, sheetRefPack);
     setPickedSlots((cur) => {
       if (!pickedManualRef.current) return def;
       return cur.filter((s) => avail.includes(s));
     });
-  }, [isCharacterSheet, cap, angleChips]);
+  }, [isSheetPicker, cap, angleChips, isSceneSheet]);
 
   const result = data.result;
   const paths = (result.result_paths ?? []).length
@@ -399,7 +407,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
   }
 
   function packedRefCount() {
-    if (isCharacterSheet && angleChips.length) {
+    if (isSheetPicker && angleChips.length) {
       return pickedSlots.filter((s) => angleChips.some((c) => c.slot === s)).length;
     }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
@@ -436,12 +444,20 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           prompt: [
             prompt,
             "",
-            "[Rewrite this character-sheet prompt only.]",
+            isSceneSheet
+              ? "[Rewrite this location-sheet prompt only.]"
+              : "[Rewrite this character-sheet prompt only.]",
             names
-              ? `Panels to include (name each once, do not repeat a slot): ${names}.`
+              ? isSceneSheet
+                ? `Panels to include (name each once, attached stills only, do not invent extras): ${names}.`
+                : `Panels to include (name each once, do not repeat a slot): ${names}.`
               : "",
-            SHEET_FULL_BODY_RULE,
-            "Keep identity and wardrobe lock. No gibberish labels.",
+            isSceneSheet
+              ? "Match attached stills only. Same space in every panel. Do not invent a medium panel."
+              : SHEET_FULL_BODY_RULE,
+            isSceneSheet
+              ? "Keep location lock. No gibberish labels."
+              : "Keep identity and wardrobe lock. No gibberish labels.",
           ]
             .filter(Boolean)
             .join("\n"),
@@ -502,13 +518,23 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
       setLocalError("Angle prompt is empty.");
       return;
     }
-    if (slot !== "front" && !data.sourceStill) {
-      setLocalError(slot === "sheet" ? "Generate at least one angle first" : "Generate Front first");
+    const sceneExtra =
+      isSceneSheet === false &&
+      (SCENE_SLOTS as readonly string[]).includes(slot) &&
+      slot !== "hero";
+    if (slot !== "front" && slot !== "hero" && !data.sourceStill) {
+      setLocalError(
+        slot === "sheet"
+          ? "Generate at least one angle first"
+          : sceneExtra || data.sheetKind === "scene"
+            ? "Generate Hero first"
+            : "Generate Front first",
+      );
       return;
     }
     const extras = Array.isArray(data.extraRefs) ? data.extraRefs.filter(Boolean) : [];
     const packed: string[] = [];
-    if (isCharacterSheet && angleChips.length) {
+    if (isSheetPicker && angleChips.length) {
       const selected = angleChips.filter((c) => pickedSlots.includes(c.slot));
       if (cap > 0 && selected.length > cap) {
         setLocalError(`This model allows ${cap} refs — deselect extras`);
@@ -569,9 +595,22 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            kind: "character",
-            name: data.name || "Character",
-            fields: {},
+            kind:
+              data.sheetKind === "scene" ||
+              (SCENE_SLOTS as readonly string[]).includes(slot)
+                ? "scene"
+                : data.sheetKind === "prop"
+                  ? "prop"
+                  : data.sheetKind === "costume"
+                    ? "costume"
+                    : "character",
+            name:
+              data.name ||
+              (data.sheetKind === "scene" ||
+              (SCENE_SLOTS as readonly string[]).includes(slot)
+                ? "Scene"
+                : "Character"),
+            fields: data.fields || {},
             notes: "",
           }),
         });
@@ -592,7 +631,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
           slot,
           model_id: isSheet
             ? selectedModel?.id || data.r2iModel || data.t2iModel || ""
-            : slot === "front" && !data.sourceStill
+            : (slot === "front" || slot === "hero") && !data.sourceStill
               ? data.t2iModel || ""
               : data.modelId || data.r2iModel || data.t2iModel || "",
           prompt: (() => {
@@ -744,7 +783,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
         </div>
         {isAngle ? (
           <>
-            {isCharacterSheet && angleChips.length ? (
+            {isSheetPicker && angleChips.length ? (
               <div className="ref-chip-row sheet-ref-picker">
                 {angleChips.map((chip) => {
                   const on = pickedSlots.includes(chip.slot);
@@ -903,7 +942,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
               />
             </label>
             <div className="prompt-actions">
-              {isCharacterSheet ? (
+              {isSheetPicker ? (
                 <button
                   type="button"
                   className="ghost nodrag enhance"
@@ -920,7 +959,7 @@ export default function ResultNode({ data }: NodeProps<ResultFlowNode>) {
                 disabled={
                   busy ||
                   data.generating ||
-                  (isCharacterSheet && cap > 0 && packedRefCount() > cap)
+                  (isSheetPicker && cap > 0 && packedRefCount() > cap)
                 }
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => void runAngleJob(e)}

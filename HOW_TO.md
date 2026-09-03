@@ -119,6 +119,8 @@ This path is Runware-only. Fal video models do not replace it.
 
 Last frame is not sent from Storyboard. Use Video I2V / Bridge for first→last.
 
+Scene Builder stills are Hero (walk-in wide), Opposite, Feature, Detail, and Overview, then Scene sheet. Detail is always on the extra-angle row (no Second-angle checkbox). Camera applies to Hero only. The sheet prompt names only the stills you attached.
+
 ---
 
 ## 8. Library
