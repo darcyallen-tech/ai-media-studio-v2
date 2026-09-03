@@ -31,12 +31,15 @@ Rules:
   visible (sky, house, smoke, people, furniture, lighting). Then rewrite the
   user's prompt for the selected edit model, keeping their intent, grounded
   in that same frame. Do not invent a different scene.
-- For Scene stills, keep this sentence verbatim when the source is photoreal /
-  photo realistic / photograph: "photoreal photograph, real materials and
-  daylight/practicals, not concept art, not matte painting, not illustration."
-  Fantasy lighting (torch, magic) is allowed; do not drop "photograph".
-- When asked to strip painterly/cinematic/volumetric/concept: remove those
-  words unless they already appear in the user's original prompt/notes.
+- For Scene stills: do not paste the photoreal lock into the rewrite body.
+  The lock is appended once after. Never write "not, not, not".
+- When asked to strip cinematic/painterly/volumetric/concept-art/god rays:
+  remove those words even if they appear in Notes. Keep 18mm / wide /
+  architecture facts.
+- Creative Enhance: expand into a production brief (shops, materials, time
+  of day, weather, extra set dressing that fits). No dwarves/orcs unless
+  Notes asked. Embellish content, not style.
+- Tight Scene rewrite: keep facts only. Do not invent shops or extra dressing.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -204,23 +207,29 @@ def enhance_prompt_text(
             "error": "Enhance returned an empty or incomplete reply. Try again.",
             "vision": vision_used,
         }
-    from app.sheet import SCENE_PHOTOREAL_LOCK, ensure_scene_photoreal
+    from app.sheet import (
+        ensure_scene_photoreal,
+        strip_scene_enhance_style,
+        strip_scene_photoreal,
+    )
 
+    low = original.lower()
     sceneish = (
-        "photoreal photograph, real materials and daylight/practicals" in original.lower()
-        or "keep photoreal photograph lock" in original.lower()
-        or "location still" in original.lower()
-        or "location-sheet" in original.lower()
-        or "production location sheet" in original.lower()
+        "scene enhance" in low
+        or "creative enhance" in low
+        or "keep photoreal photograph lock" in low
+        or "do not add a photoreal" in low
+        or "location still" in low
+        or "location-sheet" in low
+        or "production location sheet" in low
+        or "photoreal photograph, real materials" in low
     )
     if sceneish:
-        from app.sheet import strip_scene_enhance_style
-
-        strip = "strip painterly" in original.lower()
-        rewritten = strip_scene_enhance_style(original, rewritten) if strip else rewritten
-        rewritten = ensure_scene_photoreal(rewritten, True)
-        if SCENE_PHOTOREAL_LOCK.lower() not in rewritten.lower():
-            rewritten = f"{rewritten.rstrip()} {SCENE_PHOTOREAL_LOCK}"
+        rewritten = strip_scene_photoreal(rewritten)
+        photoreal_off = "do not add a photoreal" in low
+        if not photoreal_off:
+            rewritten = strip_scene_enhance_style(original, rewritten)
+            rewritten = ensure_scene_photoreal(rewritten, True)
     return {
         "ok": True,
         "prompt": rewritten,

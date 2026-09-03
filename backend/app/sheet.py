@@ -64,13 +64,39 @@ def _photoreal_on(fields: dict[str, Any] | None) -> bool:
     return raw not in ("off", "0", "false", "no")
 
 
+def strip_scene_photoreal(text: str) -> str:
+    """Remove every copy of the photo lock so it can be appended once."""
+    t = text or ""
+    t = re.sub(
+        r"photoreal photograph,\s*real materials and daylight/practicals,\s*"
+        r"not concept art,\s*not matte painting,\s*not illustration\.?",
+        "",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(
+        r"photoreal photograph,\s*real materials and daylight/practicals\.?",
+        "",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(
+        r"not concept art,\s*not matte painting,\s*not illustration\.?",
+        "",
+        t,
+        flags=re.I,
+    )
+    t = re.sub(r"\bnot(?:\s*,\s*not)+\b", "not", t, flags=re.I)
+    t = re.sub(r"\s{2,}", " ", t)
+    t = re.sub(r"\s+([,.;])", r"\1", t)
+    return t.strip(" ,.;")
+
+
 def ensure_scene_photoreal(text: str, force: bool = False) -> str:
-    t = (text or "").strip()
-    if not t and not force:
+    t = strip_scene_photoreal(text)
+    if not force and not t:
         return t
-    if "photoreal photograph, real materials and daylight/practicals" in t.lower():
-        return t
-    blob = t.lower()
+    blob = f"{text or ''} {t}".lower()
     wants = force or any(
         tok in blob
         for tok in (
@@ -87,6 +113,10 @@ def ensure_scene_photoreal(text: str, force: bool = False) -> str:
 
 
 _SCENE_STYLE_BANNED = (
+    "god rays",
+    "god-rays",
+    "godrays",
+    "concept-art",
     "concept art",
     "matte painting",
     "painterly",
@@ -96,17 +126,12 @@ _SCENE_STYLE_BANNED = (
 )
 
 
-def strip_scene_enhance_style(original: str, rewritten: str) -> str:
-    """Drop painterly/cinematic/volumetric/concept unless the user typed them."""
-    src = (original or "").lower()
+def strip_scene_enhance_style(_original: str, rewritten: str) -> str:
+    """Drop cinematic/painterly/volumetric/concept-art/god rays even if they were in Notes."""
     out = rewritten or ""
     for phrase in _SCENE_STYLE_BANNED:
-        if phrase in src:
-            continue
         pat = re.compile(r"\b" + re.escape(phrase).replace(r"\ ", r"\s+") + r"\b", re.I)
         out = pat.sub("", out)
-    if not re.search(r"\bconcept\b", src):
-        out = re.sub(r"\bconcept\b", "", out, flags=re.I)
     return re.sub(r"\s{2,}", " ", out).replace(" ,", ",").strip(" ,.;")
 
 SCENE_VIEWS: dict[str, str] = {
@@ -916,14 +941,17 @@ def scene_sheet_prompt(
         else "Clean studio grid of the same space from the attached stills only. Do not invent extra panels."
     )
     body = (
-        f"Production location SHEET of {brief}. One image only. "
+        f"Production location SHEET of {strip_scene_photoreal(brief)}. One image only. "
         f"{panels} "
         "Empty of prominent people. Optional small clean labels only. "
-        + ((_photoreal_on(fields) and (SCENE_PHOTOREAL_LOCK + " ")) or "")
-        + "No gibberish text, no watermarks, no logos."
+        "No gibberish text, no watermarks, no logos."
     )
     if _nv(extra):
         body += f" {_nv(extra)}"
+    if _photoreal_on(fields):
+        body = ensure_scene_photoreal(body, True)
+    else:
+        body = strip_scene_photoreal(body)
     return body
 
 
@@ -999,11 +1027,16 @@ def scene_prompt(
         view = f"Camera: {cam}." if cam else SCENE_VIEWS["hero"]
     else:
         view = SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
-    out = f"{head}. {view} Empty of prominent people. No text, no logo, no watermark."
-    if _photoreal_on(f):
-        out = f"{out} {SCENE_PHOTOREAL_LOCK}"
+    out = (
+        f"{strip_scene_photoreal(head)}. {view} "
+        "Empty of prominent people. No text, no logo, no watermark."
+    )
     if notes and notes not in out:
         out = f"{out} {notes}"
+    if _photoreal_on(f):
+        out = ensure_scene_photoreal(out, True)
+    else:
+        out = strip_scene_photoreal(out)
     return out
 
 
@@ -1663,8 +1696,11 @@ def generate_angle(
         "false",
         "no",
     )
-    if (kind == "scene" or key in SCENE_SLOTS) and photoreal_on:
-        text = ensure_scene_photoreal(text, True)
+    if kind == "scene" or key in SCENE_SLOTS:
+        if photoreal_on:
+            text = ensure_scene_photoreal(text, True)
+        else:
+            text = strip_scene_photoreal(text)
 
     modality = "t2i"
     if refs:

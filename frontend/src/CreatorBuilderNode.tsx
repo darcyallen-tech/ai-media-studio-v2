@@ -2210,6 +2210,7 @@ function SceneForm({
   const [gradeC, setGradeC] = useState("");
   const [notes, setNotes] = useState("");
   const [photoreal, setPhotoreal] = useState(true);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
   const [scenePrompt, setScenePrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2490,10 +2491,7 @@ function SceneForm({
             onChange={(e) => {
               const on = e.target.checked;
               setPhotoreal(on);
-              setScenePrompt((cur) => {
-                if (!cur.trim()) return cur;
-                return on ? ensureScenePhotoreal(cur, true) : stripScenePhotoreal(cur);
-              });
+              setScenePrompt((cur) => stripScenePhotoreal(cur));
             }}
           />{" "}
           Photoreal
@@ -2660,11 +2658,14 @@ function SceneForm({
               scene: true,
               notes: notes.trim(),
               photoreal,
+              creative: creativeEnhance,
             })
               .then((text) => {
-                const src = `${sceneText()}\n${notes}`;
-                let next = photoreal ? stripSceneEnhanceStyle(src, text) : stripScenePhotoreal(text);
-                if (photoreal) next = ensureScenePhotoreal(next, true);
+                let next = stripScenePhotoreal(text);
+                if (photoreal) {
+                  next = stripSceneEnhanceStyle(sceneText(), next);
+                  next = ensureScenePhotoreal(next, true);
+                }
                 setScenePrompt(next);
                 toast("Scene enhanced.");
               })
@@ -2679,6 +2680,17 @@ function SceneForm({
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
       </div>
+      <label className="param">
+        <span>
+          <input
+            type="checkbox"
+            checked={creativeEnhance}
+            onChange={(e) => setCreativeEnhance(e.target.checked)}
+          />{" "}
+          Creative Enhance
+        </span>
+      </label>
+      <p className="hint">Creative = more detail. Photoreal = photograph, not painting.</p>
       <label className="builder-field">
         <span className="field-label">Scene prompt</span>
         <textarea
@@ -3193,23 +3205,32 @@ function PropForm({
 async function enhancePrompt(
   text: string,
   modelId: string,
-  opts?: { scene?: boolean; notes?: string; photoreal?: boolean },
+  opts?: { scene?: boolean; notes?: string; photoreal?: boolean; creative?: boolean },
 ): Promise<string> {
-  const raw = text.trim();
+  const raw = stripScenePhotoreal(text.trim());
   if (!raw) throw new Error("Apply selection first so Enhance has text to rewrite.");
+  let instruct = "";
+  if (opts?.scene) {
+    if (opts.creative) {
+      instruct =
+        "[Creative Enhance. Expand this location brief into a production brief: shops, materials, time of day, weather, extra set dressing that fits the location. Do not add dwarves/orcs unless Notes asked. Embellish content, not style.]";
+    } else {
+      instruct =
+        "[Scene Enhance. Tight rewrite: keep facts, camera, architecture. Do not invent shops, extra weather, or set dressing. Do not add dwarves/orcs unless Notes asked.]";
+    }
+    if (opts.photoreal !== false) {
+      instruct +=
+        " [Photoreal ON: strip cinematic, painterly, volumetric, concept-art, god rays even if they appear in Notes. Keep 18mm / wide / architecture facts. Do not paste the photo lock in the rewrite — it is appended once after.]";
+    } else {
+      instruct += " [Do not add a photoreal photograph lock.]";
+    }
+    if (opts.notes) instruct += `\nNotes: ${opts.notes}`;
+  }
   const res = await fetch("/enhance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      prompt: opts?.scene
-        ? opts.photoreal !== false
-          ? `${raw}\n\n[Keep photoreal photograph lock. Fantasy lighting (torch, magic) is allowed; do not drop photograph. Strip painterly/cinematic/volumetric/concept unless they already appear in the user prompt or notes.]${
-              opts.notes ? `\nNotes: ${opts.notes}` : ""
-            }`
-          : `${raw}\n\n[Do not add a photoreal photograph lock.]${
-              opts.notes ? `\nNotes: ${opts.notes}` : ""
-            }`
-        : raw,
+      prompt: opts?.scene ? `${raw}\n\n${instruct}` : raw,
       model_id: modelId,
       modality: "t2i",
       mode: "image",

@@ -952,29 +952,40 @@ export function wantsScenePhotoreal(text: string): boolean {
   return /photo\s*-?\s*real|photograph|photo\s*realistic/i.test(text || "");
 }
 
+/** Remove every copy of the photo lock so it can be appended once. */
+export function stripScenePhotoreal(text: string): string {
+  let t = text || "";
+  t = t.replace(
+    /photoreal photograph,\s*real materials and daylight\/practicals,\s*not concept art,\s*not matte painting,\s*not illustration\.?/gi,
+    "",
+  );
+  t = t.replace(
+    /photoreal photograph,\s*real materials and daylight\/practicals\.?/gi,
+    "",
+  );
+  t = t.replace(
+    /not concept art,\s*not matte painting,\s*not illustration\.?/gi,
+    "",
+  );
+  t = t.replace(/\bnot(?:\s*,\s*not)+\b/gi, "not");
+  t = t.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1");
+  return t.trim().replace(/^[,.;]+|[,.;]+$/g, "").trim();
+}
+
 export function ensureScenePhotoreal(text: string, force = false): string {
-  const t = (text || "").trim();
-  if (!t && !force) return t;
-  if (/photoreal photograph, real materials and daylight\/practicals/i.test(t)) {
-    return t;
-  }
-  if (!force && !wantsScenePhotoreal(t)) return t;
+  const t = stripScenePhotoreal(text);
+  if (!force && !t) return t;
+  if (!force && !wantsScenePhotoreal(text || "") && !wantsScenePhotoreal(t)) return t;
   return t ? `${t} ${SCENE_PHOTOREAL_LOCK}` : SCENE_PHOTOREAL_LOCK;
 }
 
-export function stripScenePhotoreal(text: string): string {
-  return (text || "")
-    .replace(
-      /\s*photoreal photograph, real materials and daylight\/practicals, not concept art, not matte painting, not illustration\.?/gi,
-      "",
-    )
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-export function stripSceneEnhanceStyle(original: string, rewritten: string): string {
-  const src = (original || "").toLowerCase();
+/** Always strip style words, even if they were in Notes. Keep 18mm / wide / architecture. */
+export function stripSceneEnhanceStyle(_original: string, rewritten: string): string {
   const banned = [
+    "god rays",
+    "god-rays",
+    "godrays",
+    "concept-art",
     "concept art",
     "matte painting",
     "painterly",
@@ -984,12 +995,11 @@ export function stripSceneEnhanceStyle(original: string, rewritten: string): str
   ];
   let out = rewritten || "";
   for (const phrase of banned) {
-    if (src.includes(phrase)) continue;
-    const re = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+")}\\b`, "gi");
+    const re = new RegExp(
+      `\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+")}\\b`,
+      "gi",
+    );
     out = out.replace(re, "");
-  }
-  if (!/\bconcept\b/i.test(src)) {
-    out = out.replace(/\bconcept\b/gi, "");
   }
   return out.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
 }
@@ -998,7 +1008,7 @@ export function composeSceneStill(
   brief: string,
   opts?: { slot?: string; camera?: string; detail?: boolean; photoreal?: boolean },
 ): string {
-  const head = bit(brief) || "a photoreal location";
+  const head = stripScenePhotoreal(bit(brief) || "a location");
   const slot = (opts?.slot || (opts?.detail ? "detail" : "hero")).trim() || "hero";
   let framing = SCENE_VIEWS[slot] || SCENE_VIEWS.detail;
   if (slot === "hero") {
@@ -1010,8 +1020,8 @@ export function composeSceneStill(
     framing,
     "Empty of prominent people. No text, no logo, no watermark.",
   ].join(" ");
-  if (opts?.photoreal === false) return body;
-  return ensureScenePhotoreal(`${body} ${SCENE_PHOTOREAL_LOCK}`, true);
+  if (opts?.photoreal === false) return stripScenePhotoreal(body);
+  return ensureScenePhotoreal(body, true);
 }
 
 export function composePropStill(brief: string, opts?: { detail?: boolean }): string {
@@ -1039,14 +1049,15 @@ export function composeSceneSheetPrompt(
     ? `Clean studio grid of the same space from the attached stills only: ${names.join(", ")}. Do not invent extra panels.`
     : "Clean studio grid of the same space from the attached stills only. Do not invent extra panels.";
   const bits = [
-    `Production location SHEET of ${bit(brief) || "this place"}. One image only.`,
+    `Production location SHEET of ${stripScenePhotoreal(bit(brief) || "this place")}. One image only.`,
     panels,
     "Empty of prominent people. Optional small clean labels only.",
   ];
-  if (opts?.photoreal !== false) bits.push(SCENE_PHOTOREAL_LOCK);
   bits.push(SHEET_NO_GARBLED);
   if (bit(extra)) bits.push(bit(extra));
-  return bits.join(" ");
+  const joined = bits.join(" ");
+  if (opts?.photoreal === false) return stripScenePhotoreal(joined);
+  return ensureScenePhotoreal(joined, true);
 }
 
 export function composePropSheetPrompt(brief: string, extra = ""): string {
