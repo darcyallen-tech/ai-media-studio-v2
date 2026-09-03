@@ -129,6 +129,7 @@ type StudioNode =
   | Node<RefNodeData, "character">
   | Node<RefNodeData, "scene">
   | Node<RefNodeData, "prop">
+  | Node<RefNodeData, "costume">
   | Node<HubNodeData, "hub">
   | Node<ShotNodeData, "shot">
   | Node<ShotBuilderNodeData, "shot-builder">
@@ -155,6 +156,7 @@ const nodeTypes: NodeTypes = {
   character: RefNode,
   scene: RefNode,
   prop: RefNode,
+  costume: RefNode,
   hub: HubNode,
   shot: ShotNode,
   "shot-builder": ShotBuilderNode,
@@ -237,6 +239,13 @@ function editPrimaryStill(
 }
 const BUILDER_ID = "prompt-builder";
 const DIRECTOR_ID = "director";
+
+function hubRoleFromId(id: string): AssetRole {
+  if (id.startsWith("scene-")) return "scene";
+  if (id.startsWith("prop-")) return "prop";
+  if (id.startsWith("costume-")) return "costume";
+  return "character";
+}
 const HUB_ID = "asset-hub";
 function spbId(shotId: string) {
   return `spb-${shotId}`;
@@ -327,6 +336,7 @@ function StudioCanvas() {
   const [characters, setCharacters] = useState<RefSlotState[]>([]);
   const [scenes, setScenes] = useState<RefSlotState[]>([]);
   const [props, setProps] = useState<RefSlotState[]>([]);
+  const [costumes, setCostumes] = useState<RefSlotState[]>([]);
   const [hubTitle, setHubTitle] = useState("");
   const [hubNotes, setHubNotes] = useState("");
   const [hubIds, setHubIds] = useState<string[]>([]);
@@ -335,6 +345,7 @@ function StudioCanvas() {
   const [charCatalog, setCharCatalog] = useState<RefCatalogEntry[]>([]);
   const [sceneCatalog, setSceneCatalog] = useState<RefCatalogEntry[]>([]);
   const [propCatalog, setPropCatalog] = useState<RefCatalogEntry[]>([]);
+  const [costumeCatalog, setCostumeCatalog] = useState<RefCatalogEntry[]>([]);
   const [builderSessions, setBuilderSessions] = useState<
     Record<
       string,
@@ -555,6 +566,9 @@ function StudioCanvas() {
       }
       if (id.startsWith("prop-")) {
         setProps((cur) => cur.filter((r) => r.id !== id));
+      }
+      if (id.startsWith("costume-")) {
+        setCostumes((cur) => cur.filter((r) => r.id !== id));
       }
       if (id === HUB_ID) {
         setHubIds([]);
@@ -1381,7 +1395,13 @@ function StudioCanvas() {
         }
       }
       const prefix =
-        role === "character" ? "char" : role === "scene" ? "scene" : "prop";
+        role === "character"
+          ? "char"
+          : role === "scene"
+            ? "scene"
+            : role === "costume"
+              ? "costume"
+              : "prop";
       const id = `${prefix}-${Date.now().toString(36)}`;
       const row: RefSlotState = {
         id,
@@ -1392,12 +1412,13 @@ function StudioCanvas() {
       };
       if (role === "character") setCharacters((cur) => [...cur, row]);
       else if (role === "scene") setScenes((cur) => [...cur, row]);
+      else if (role === "costume") setCostumes((cur) => [...cur, row]);
       else setProps((cur) => [...cur, row]);
       setNodes((current) => {
         if (current.some((n) => n.id === id)) return current;
         const prompt = current.find((n) => n.id === "prompt");
         const siblings = current.filter((n) =>
-          ["source", "character", "scene", "prop"].includes(n.type || ""),
+          ["source", "character", "scene", "prop", "costume"].includes(n.type || ""),
         );
         const y = siblings.length
           ? Math.max(...siblings.map((n) => n.position.y)) + 250
@@ -1416,7 +1437,9 @@ function StudioCanvas() {
                 ? "Character"
                 : role === "scene"
                   ? "Scene"
-                  : "Prop",
+                  : role === "costume"
+                    ? "Costume"
+                    : "Prop",
             role,
             item: null,
             catalogId: "",
@@ -1427,7 +1450,9 @@ function StudioCanvas() {
                 ? charCatalog
                 : role === "scene"
                   ? sceneCatalog
-                  : propCatalog,
+                  : role === "costume"
+                    ? costumeCatalog
+                    : propCatalog,
             onClear: () => undefined,
             onOpenLibrary: () => openLibrary(),
             onAttach: () => undefined,
@@ -1450,6 +1475,7 @@ function StudioCanvas() {
                 id: hubEdge,
                 source: id,
                 target: HUB_ID,
+                label: role === "costume" ? "Costume" : undefined,
                 style: { stroke: "#8aa4c2", strokeWidth: 2 },
               },
               eds,
@@ -1477,6 +1503,7 @@ function StudioCanvas() {
       charCatalog,
       characters,
       closeNode,
+      costumeCatalog,
       maxRefs,
       propCatalog,
       sceneCatalog,
@@ -1494,6 +1521,7 @@ function StudioCanvas() {
   );
   const addSceneNode = useCallback(() => addRefNode("scene"), [addRefNode]);
   const addPropNode = useCallback(() => addRefNode("prop"), [addRefNode]);
+  const addCostumeNode = useCallback(() => addRefNode("costume"), [addRefNode]);
 
   const addCreatorBuilder = useCallback(
     (kind: CreatorKind, attachSlotId?: string, seeds?: { characterId?: string; costumeId?: string }) => {
@@ -2021,6 +2049,7 @@ function StudioCanvas() {
             id: edgeId,
             source: id,
             target: HUB_ID,
+            label: hubRoleFromId(id) === "costume" ? "Costume" : undefined,
             style: { stroke: "#8aa4c2", strokeWidth: 2 },
           },
           current,
@@ -2035,6 +2064,7 @@ function StudioCanvas() {
       ...characters.map((r) => r.id),
       ...scenes.map((r) => r.id),
       ...props.map((r) => r.id),
+      ...costumes.map((r) => r.id),
     ];
     setNodes((current) => {
       if (current.some((n) => n.id === HUB_ID)) return current;
@@ -2074,6 +2104,7 @@ function StudioCanvas() {
             id: edgeId,
             source: id,
             target: HUB_ID,
+            label: hubRoleFromId(id) === "costume" ? "Costume" : undefined,
             style: { stroke: "#8aa4c2", strokeWidth: 2 },
           },
           next,
@@ -2084,6 +2115,7 @@ function StudioCanvas() {
   }, [
     characters,
     closeNode,
+    costumes,
     hubNotes,
     hubTitle,
     props,
@@ -2378,6 +2410,12 @@ function StudioCanvas() {
         setPropCatalog(body.items ?? []);
       })
       .catch(() => undefined);
+    fetch("/costumes")
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((body: { items?: RefCatalogEntry[] }) => {
+        setCostumeCatalog(body.items ?? []);
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -2404,7 +2442,8 @@ function StudioCanvas() {
       if (
         slot.startsWith("char-") ||
         slot.startsWith("scene-") ||
-        slot.startsWith("prop-")
+        slot.startsWith("prop-") ||
+        slot.startsWith("costume-")
       ) {
         if (!slotAccepts("image", item)) {
           toast(slotNeedLabel("image"), true);
@@ -2412,8 +2451,21 @@ function StudioCanvas() {
         }
         const isChar = slot.startsWith("char-");
         const isProp = slot.startsWith("prop-");
-        const rows = isChar ? characters : isProp ? props : scenes;
-        const setter = isChar ? setCharacters : isProp ? setProps : setScenes;
+        const isCostume = slot.startsWith("costume-");
+        const rows = isChar
+          ? characters
+          : isProp
+            ? props
+            : isCostume
+              ? costumes
+              : scenes;
+        const setter = isChar
+          ? setCharacters
+          : isProp
+            ? setProps
+            : isCostume
+              ? setCostumes
+              : setScenes;
         const existing = rows.find((r) => r.id === slot);
         const replacing = Boolean(existing?.item?.path);
         if (!replacing && atRefLimit()) {
@@ -2455,6 +2507,7 @@ function StudioCanvas() {
       addSourceNode,
       atRefLimit,
       characters,
+      costumes,
       maxRefs,
       plan.source,
       props,
@@ -2504,8 +2557,13 @@ function StudioCanvas() {
           tryAttachSlot(emptyProp.id, item);
           return;
         }
+        const emptyCostume = costumes.find((r) => !r.item);
+        if (emptyCostume) {
+          tryAttachSlot(emptyCostume.id, item);
+          return;
+        }
         if (studioMode === "storyboard") {
-          toast("Add a Character, Scene, or Prop first, or drop onto one.", true);
+          toast("Add a Character, Scene, Prop, or Costume first, or drop onto one.", true);
           return;
         }
         if (plan.source && !sourceItem) {
@@ -2522,6 +2580,7 @@ function StudioCanvas() {
     [
       addSourceNode,
       characters,
+      costumes,
       firstItem,
       lastItem,
       plan,
@@ -2540,13 +2599,17 @@ function StudioCanvas() {
           ? charCatalog
           : role === "scene"
             ? sceneCatalog
-            : propCatalog;
+            : role === "costume"
+              ? costumeCatalog
+              : propCatalog;
       const setter =
         role === "character"
           ? setCharacters
           : role === "scene"
             ? setScenes
-            : setProps;
+            : role === "costume"
+              ? setCostumes
+              : setProps;
       const entry = catalog.find((r) => r.id === catalogId) ?? null;
       const identPaths = catalogId
         ? preferredIdentityPaths(
@@ -2581,21 +2644,25 @@ function StudioCanvas() {
         }),
       );
     },
-    [atRefLimit, charCatalog, maxRefs, propCatalog, sceneCatalog],
+    [atRefLimit, charCatalog, costumeCatalog, maxRefs, propCatalog, sceneCatalog],
   );
 
   const applyCreatedAsset = useCallback(
     (asset: StudioAsset, slotId?: string) => {
-      if (asset.kind === "costume") return;
       const item = assetToLibraryItem(asset);
       const label = asset.label || asset.name;
       const role = asset.kind;
+      if (role !== "character" && role !== "scene" && role !== "prop" && role !== "costume") {
+        return;
+      }
       const setter =
         role === "character"
           ? setCharacters
           : role === "scene"
             ? setScenes
-            : setProps;
+            : role === "costume"
+              ? setCostumes
+              : setProps;
       if (slotId) {
         setter((cur) =>
           cur.map((r) =>
@@ -2616,11 +2683,13 @@ function StudioCanvas() {
           ? characters
           : role === "scene"
             ? scenes
-            : props;
+            : role === "costume"
+              ? costumes
+              : props;
       const empty = rows.find((r) => !r.item);
       if (empty && item) tryAttachSlot(empty.id, item);
     },
-    [characters, props, scenes, tryAttachSlot],
+    [characters, costumes, props, scenes, tryAttachSlot],
   );
 
   useEffect(() => {
@@ -2671,6 +2740,7 @@ function StudioCanvas() {
       return;
     }
     setProps([]);
+    setCostumes([]);
     setHubIds([]);
     setShots([]);
     setActiveShotId(null);
@@ -2678,6 +2748,7 @@ function StudioCanvas() {
       current.filter(
         (n) =>
           n.type !== "prop" &&
+          n.type !== "costume" &&
           n.type !== "shot" &&
           n.type !== "shot-builder" &&
           n.id !== HUB_ID,
@@ -2742,6 +2813,7 @@ function StudioCanvas() {
               onAddCharacter: addCharacterNode,
               onAddScene: addSceneNode,
               onAddProp: addPropNode,
+              onAddCostume: addCostumeNode,
               onAddHub: addHub,
               onAddShot: addShot,
               onAddShotBuilder: () => addShotBuilder(),
@@ -2756,17 +2828,13 @@ function StudioCanvas() {
               shots,
               hubAssets: hubIds
                 .map((id) => {
-                  const row = [...characters, ...scenes, ...props].find(
+                  const row = [...characters, ...scenes, ...props, ...costumes].find(
                     (r) => r.id === id,
                   );
                   if (!row) return null;
                   return {
                     id: row.id,
-                    role: row.id.startsWith("scene-")
-                      ? ("scene" as const)
-                      : row.id.startsWith("prop-")
-                        ? ("prop" as const)
-                        : ("character" as const),
+                    role: hubRoleFromId(row.id),
                     label: row.label || row.item?.name || "",
                     item: row.item,
                   };
@@ -2847,17 +2915,13 @@ function StudioCanvas() {
           };
         }
         if (n.id === HUB_ID) {
-          const lookup = [...characters, ...scenes, ...props];
+          const lookup = [...characters, ...scenes, ...props, ...costumes];
           const assets: HubAsset[] = hubIds
             .map((id) => lookup.find((r) => r.id === id))
             .filter((row): row is RefSlotState => Boolean(row))
             .map((row) => ({
               id: row.id,
-              role: row.id.startsWith("scene-")
-                ? "scene"
-                : row.id.startsWith("prop-")
-                  ? "prop"
-                  : "character",
+              role: hubRoleFromId(row.id),
               label: row.label || row.item?.name || "",
               item: row.item,
             }));
@@ -3318,6 +3382,48 @@ function StudioCanvas() {
             },
           };
         }
+        if (n.type === "costume") {
+          const row = costumes.find((r) => r.id === n.id);
+          if (!row) return n;
+          return {
+            ...n,
+            type: "costume",
+            data: {
+              title: "Costume",
+              role: "costume",
+              item: row.item,
+              catalogId: row.catalogId,
+              note: row.note,
+              label: row.label ?? "",
+              catalog: costumeCatalog,
+              onClear: () =>
+                setCostumes((cur) =>
+                  cur.map((r) =>
+                    r.id === n.id
+                      ? { ...r, item: null, catalogId: "", note: "" }
+                      : r,
+                  ),
+                ),
+              onOpenLibrary: () => openLibrary(),
+              onAttach: (item) => tryAttachSlot(n.id, item),
+              onPickCatalog: (id) => pickCatalog(n.id, "costume", id),
+              onNote: (note) =>
+                setCostumes((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, note } : r)),
+                ),
+              onLabel: (label) =>
+                setCostumes((cur) =>
+                  cur.map((r) => (r.id === n.id ? { ...r, label } : r)),
+                ),
+              onAddToHub:
+                studioMode === "storyboard"
+                  ? () => addAssetToHub(n.id)
+                  : undefined,
+              onCreate: () => addCreatorBuilder("costume", n.id),
+              onClose: () => closeNode(n.id),
+            },
+          };
+        }
         if (n.type === "shot") {
           const row = shots.find((s) => s.id === n.id);
           if (!row) return n;
@@ -3455,6 +3561,7 @@ function StudioCanvas() {
     addDirector,
     addHub,
     addPropNode,
+    addCostumeNode,
     addShot,
     addShotBuilder,
     addCreatorBuilder,
@@ -3494,6 +3601,8 @@ function StudioCanvas() {
     sourceAccept,
     propCatalog,
     props,
+    costumeCatalog,
+    costumes,
     sceneCatalog,
     scenes,
     shots,
@@ -3665,6 +3774,7 @@ function StudioCanvas() {
         hit.id.startsWith("char-") ||
         hit.id.startsWith("scene-") ||
         hit.id.startsWith("prop-") ||
+        hit.id.startsWith("costume-") ||
         hit.id.startsWith("shot-")
       ) {
         tryAttachSlot(hit.id, item);
@@ -3688,6 +3798,7 @@ function StudioCanvas() {
         (src.startsWith("char-") && tgt === HUB_ID) ||
         (src.startsWith("scene-") && tgt === HUB_ID) ||
         (src.startsWith("prop-") && tgt === HUB_ID) ||
+        (src.startsWith("costume-") && tgt === HUB_ID) ||
         (src === HUB_ID && tgt.startsWith("shot-")) ||
         (src === HUB_ID && tgt === "prompt") ||
         (src.startsWith("shot-") && tgt === "prompt") ||
@@ -3705,13 +3816,18 @@ function StudioCanvas() {
         tgt === HUB_ID &&
         (src.startsWith("char-") ||
           src.startsWith("scene-") ||
-          src.startsWith("prop-"))
+          src.startsWith("prop-") ||
+          src.startsWith("costume-"))
       ) {
         setHubIds((cur) => (cur.includes(src) ? cur : [...cur, src]));
       }
       setEdges((eds) =>
         addEdge(
-          { ...connection, style: { stroke: "#8aa4c2", strokeWidth: 2 } },
+          {
+            ...connection,
+            label: src.startsWith("costume-") && tgt === HUB_ID ? "Costume" : undefined,
+            style: { stroke: "#8aa4c2", strokeWidth: 2 },
+          },
           eds,
         ),
       );
@@ -3859,6 +3975,7 @@ function StudioCanvas() {
             (src.startsWith("char-") && tgt === HUB_ID) ||
             (src.startsWith("scene-") && tgt === HUB_ID) ||
             (src.startsWith("prop-") && tgt === HUB_ID) ||
+            (src.startsWith("costume-") && tgt === HUB_ID) ||
             (src === HUB_ID && tgt.startsWith("shot-")) ||
             (src === HUB_ID && tgt === "prompt") ||
             (src.startsWith("shot-") && tgt === "prompt") ||

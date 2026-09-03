@@ -117,7 +117,7 @@ Optional. Needs a **Runware** key. One catalog row: **Aleph 2.0 (Runware)**.
 
 A Hub + Shot nodes, then one generate.
 
-- **Asset Hub:** characters, scenes, props (and costumes when you have them).
+- **Asset Hub:** characters, scenes, props, and **Add Costume** (Assets → costumes, edge labeled Costume so shots do not treat it as a second character). Drag-from-Library still works.
 - **Shots:** action / camera, duration budget, start stills.
 - Default model: **MiniMax H3 Omni** (reference-to-video).
 - Also in the storyboard list: Seedance 2.5 R2V, Grok Imagine 1.5 R2V, Veo 3.1 reference, FLUX 3 identity R2V, Mirage Avatar X, **Kling 3.0** Standard/Pro I2V and T2V.

@@ -34,7 +34,12 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
             .filter((row) => row.item?.path)
             .map((row) => ({
               path: row.item?.path,
-              role: row.role === "prop" ? "scene" : row.role,
+              role:
+                row.role === "prop"
+                  ? "scene"
+                  : row.role === "costume"
+                    ? "costume"
+                    : row.role,
               name: row.label || row.item?.name || row.role,
               note: row.role,
             })),
@@ -74,7 +79,7 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
       </div>
       <div className="node-body nodrag">
         <p className="hint">
-          Characters, scenes, and props collect here. Shots read this Hub.
+          Characters, scenes, props, and costumes collect here. Shots read this Hub.
         </p>
         {data.sequenceLine ? (
           <p className="hint">
@@ -115,7 +120,7 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
         </div>
         <p className="field-label">Attached assets</p>
         {assets.length === 0 ? (
-          <p className="hint">No assets yet — add Character / Scene / Prop.</p>
+          <p className="hint">No assets yet — add Character / Scene / Prop / Costume.</p>
         ) : (
           <ul className="hub-list">
             {assets.map((row) => (
@@ -152,5 +157,6 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
 function roleLabel(role: string) {
   if (role === "scene") return "Scene";
   if (role === "prop") return "Prop";
+  if (role === "costume") return "Costume";
   return "Character";
 }

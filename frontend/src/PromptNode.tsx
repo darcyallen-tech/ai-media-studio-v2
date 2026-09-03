@@ -1550,6 +1550,9 @@ function StoryboardPrompt({
         <button type="button" className="ghost nodrag" onClick={data.onAddProp}>
           Add Prop
         </button>
+        <button type="button" className="ghost nodrag" onClick={data.onAddCostume}>
+          Add Costume
+        </button>
         <button type="button" className="ghost nodrag" onClick={data.onAddHub}>
           Add Hub
         </button>

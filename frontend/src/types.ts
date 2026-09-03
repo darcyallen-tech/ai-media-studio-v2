@@ -101,7 +101,7 @@ export type GraphInputs = {
   scenes?: boolean;
 };
 
-export type RefRole = "character" | "scene" | "source" | "prop";
+export type RefRole = "character" | "scene" | "source" | "prop" | "costume";
 
 export type RefCatalogEntry = {
   id: string;
@@ -162,6 +162,7 @@ export type PromptNodeData = {
   onAddCharacter: () => void;
   onAddScene: () => void;
   onAddProp?: () => void;
+  onAddCostume?: () => void;
   onAddHub?: () => void;
   onAddShot?: () => void;
   onAddShotBuilder?: () => void;
@@ -381,7 +382,7 @@ export type SourceNodeData = {
   locked?: boolean;
 };
 
-export type AssetRole = "character" | "scene" | "prop";
+export type AssetRole = "character" | "scene" | "prop" | "costume";
 export type AssetKind = AssetRole | "costume";
 
 export type StudioAsset = {
@@ -760,7 +761,10 @@ export function catalogToItem(entry: RefCatalogEntry): LibraryItem | null {
   if (!path) return null;
   const url = entry.url || "";
   const owned =
-    (entry.kind === "character" || entry.kind === "scene" || entry.kind === "prop") &&
+    (entry.kind === "character" ||
+      entry.kind === "scene" ||
+      entry.kind === "prop" ||
+      entry.kind === "costume") &&
     Boolean(url?.startsWith("/assets/"));
   return {
     id: `${entry.kind || "ref"}:${entry.id}`,

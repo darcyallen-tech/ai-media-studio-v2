@@ -10,7 +10,7 @@ import {
   type RefNodeData,
 } from "./types";
 
-export type RefFlowNode = Node<RefNodeData, "character" | "scene" | "prop">;
+export type RefFlowNode = Node<RefNodeData, "character" | "scene" | "prop" | "costume">;
 
 function itemFromEvent(event: DragEvent): LibraryItem | null {
   return peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
@@ -20,14 +20,22 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
   const item = data.item;
   const title =
     data.title ||
-    (data.role === "scene" ? "Scene" : data.role === "prop" ? "Prop" : "Character");
+    (data.role === "scene"
+      ? "Scene"
+      : data.role === "prop"
+        ? "Prop"
+        : data.role === "costume"
+          ? "Costume"
+          : "Character");
   const [hover, setHover] = useState<"ok" | "bad" | null>(null);
   const placeholder =
     data.role === "scene"
       ? "this location is…"
       : data.role === "prop"
         ? "this prop is…"
-        : "this character is…";
+        : data.role === "costume"
+          ? "this costume is…"
+          : "this character is…";
 
   function incomingItem(event: DragEvent): LibraryItem | null {
     return (
@@ -127,7 +135,9 @@ export default function RefNode({ id, data }: NodeProps<RefFlowNode>) {
               ? "Label (e.g. Gym interior)"
               : data.role === "prop"
                 ? "Label (e.g. Red mug)"
-                : "Label (e.g. Alice)"
+                : data.role === "costume"
+                  ? "Label (e.g. Hero suit)"
+                  : "Label (e.g. Alice)"
           }
           value={data.label ?? ""}
           onChange={(e) => data.onLabel?.(e.target.value)}
