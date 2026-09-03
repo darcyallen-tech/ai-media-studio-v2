@@ -41,6 +41,8 @@ _MODEL_ALIASES: dict[str, str] = {
     "topaz recovery": "topaz-recovery",
     "flux 2 pro": "flux-2-pro",
     "flux 2 flex": "flux-2-flex",
+    "flux 2 max": "flux-2-max",
+    "gpt image 2": "gpt-image-2",
     "flux kontext pro": "flux-kontext-pro",
     "kling o3 standard edit": "kling-o3-std-v2v",
     "kling o3 pro edit": "kling-o3-pro-v2v",

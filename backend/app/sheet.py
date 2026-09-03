@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,11 @@ SCENE_PHOTOREAL_LOCK = (
 )
 
 
+def _photoreal_on(fields: dict[str, Any] | None) -> bool:
+    raw = str((fields or {}).get("photoreal") or "on").strip().lower()
+    return raw not in ("off", "0", "false", "no")
+
+
 def ensure_scene_photoreal(text: str, force: bool = False) -> str:
     t = (text or "").strip()
     if not t and not force:
@@ -78,6 +84,30 @@ def ensure_scene_photoreal(text: str, force: bool = False) -> str:
     if not wants:
         return t
     return f"{t} {SCENE_PHOTOREAL_LOCK}" if t else SCENE_PHOTOREAL_LOCK
+
+
+_SCENE_STYLE_BANNED = (
+    "concept art",
+    "matte painting",
+    "painterly",
+    "cinematic",
+    "volumetric",
+    "illustration",
+)
+
+
+def strip_scene_enhance_style(original: str, rewritten: str) -> str:
+    """Drop painterly/cinematic/volumetric/concept unless the user typed them."""
+    src = (original or "").lower()
+    out = rewritten or ""
+    for phrase in _SCENE_STYLE_BANNED:
+        if phrase in src:
+            continue
+        pat = re.compile(r"\b" + re.escape(phrase).replace(r"\ ", r"\s+") + r"\b", re.I)
+        out = pat.sub("", out)
+    if not re.search(r"\bconcept\b", src):
+        out = re.sub(r"\bconcept\b", "", out, flags=re.I)
+    return re.sub(r"\s{2,}", " ", out).replace(" ,", ",").strip(" ,.;")
 
 SCENE_VIEWS: dict[str, str] = {
     "hero": "Walk-in wide of the space — enter the location as a visitor would.",
@@ -889,8 +919,8 @@ def scene_sheet_prompt(
         f"Production location SHEET of {brief}. One image only. "
         f"{panels} "
         "Empty of prominent people. Optional small clean labels only. "
-        + SCENE_PHOTOREAL_LOCK
-        + " No gibberish text, no watermarks, no logos."
+        + ((_photoreal_on(fields) and (SCENE_PHOTOREAL_LOCK + " ")) or "")
+        + "No gibberish text, no watermarks, no logos."
     )
     if _nv(extra):
         body += f" {_nv(extra)}"
@@ -969,10 +999,9 @@ def scene_prompt(
         view = f"Camera: {cam}." if cam else SCENE_VIEWS["hero"]
     else:
         view = SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
-    out = (
-        f"{head}. {view} Empty of prominent people. No text, no logo, no watermark. "
-        + SCENE_PHOTOREAL_LOCK
-    )
+    out = f"{head}. {view} Empty of prominent people. No text, no logo, no watermark."
+    if _photoreal_on(f):
+        out = f"{out} {SCENE_PHOTOREAL_LOCK}"
     if notes and notes not in out:
         out = f"{out} {notes}"
     return out
@@ -1437,12 +1466,49 @@ def character_angle_params(
                 quality = canon
                 req_aspect = ""
                 break
+    is_flux_t2i = "flux" in blob and (
+        "t2i" in blob or ("flux-2" in endpoint and "/edit" not in endpoint)
+    ) and ("pro" in blob or "max" in blob or "flex" in blob)
+    is_gpt = "gpt-image-2" in endpoint or "gpt image 2" in blob
     if is_flux_edit:
-        if landscape:
-            framing = (req_aspect or req).strip().lower().replace(" ", "")
-            aspect = "4:3" if "4:3" in framing and "16:9" not in framing else "16:9"
-            return aspect, "auto"
         return "auto", "auto"
+    if is_flux_t2i:
+        framing = (req_aspect or req).strip()
+        if not framing or _is_quality_token(framing) or _is_video_size_token(framing):
+            framing = "landscape_16_9" if landscape else "portrait_16_9"
+        aspect = pick_character_resolution(
+            [a for a in aspects if a] or ["landscape_16_9", "portrait_16_9"],
+            framing,
+            prefer=_SHEET_SIZE_PREFER if landscape else _PORTRAIT_SIZE_PREFER,
+        )
+        q_raw = (quality or req or req_aspect or "").lower()
+        resolution = "~2K (4MP max)" if ("2k" in q_raw or "4mp" in q_raw) else "1K"
+        if quality and "1k" in quality.lower().replace(" ", "") and "2k" not in quality.lower():
+            resolution = "1K"
+        return aspect or "landscape_16_9", resolution
+    if is_gpt:
+        framing = (req_aspect or req).strip()
+        if not framing or _is_quality_token(framing) or _is_video_size_token(framing):
+            framing = "landscape_16_9" if landscape else "auto"
+        aspect = pick_character_resolution(
+            [a for a in aspects if a]
+            or [
+                "landscape_16_9",
+                "landscape_4_3",
+                "square_hd",
+                "auto",
+            ],
+            framing,
+            prefer=_SHEET_SIZE_PREFER if landscape else ("auto", "portrait_16_9"),
+        )
+        q_allowed = {
+            r.lower(): r
+            for r in resolutions
+            if r.lower() in ("auto", "low", "medium", "high")
+        } or {"high": "high", "medium": "medium", "low": "low", "auto": "auto"}
+        q_raw = (quality or req or "").strip().lower()
+        resolution = q_allowed.get(q_raw) or q_allowed.get("high") or "high"
+        return aspect or "landscape_16_9", resolution
     if is_muse:
         framing = (req_aspect or req).strip()
         low = framing.lower()
@@ -1591,7 +1657,13 @@ def generate_angle(
         wardrobe=outfit,
         extra=extra,
     )
-    if kind == "scene" or key in SCENE_SLOTS:
+    photoreal_on = str(fields.get("photoreal") or "on").strip().lower() not in (
+        "off",
+        "0",
+        "false",
+        "no",
+    )
+    if (kind == "scene" or key in SCENE_SLOTS) and photoreal_on:
         text = ensure_scene_photoreal(text, True)
 
     modality = "t2i"

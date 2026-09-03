@@ -71,6 +71,8 @@ import {
   pickSheetResolution,
   sceneSizeChoices,
   ensureScenePhotoreal,
+  stripScenePhotoreal,
+  stripSceneEnhanceStyle,
   qualityChoices,
   sheetR2iRefCap,
   sizeChoices,
@@ -2207,6 +2209,7 @@ function SceneForm({
   const [grade, setGrade] = useState("");
   const [gradeC, setGradeC] = useState("");
   const [notes, setNotes] = useState("");
+  const [photoreal, setPhotoreal] = useState(true);
   const [scenePrompt, setScenePrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2253,6 +2256,7 @@ function SceneForm({
       elements: elements.trim(),
       furniture: furniture.trim(),
       grade: pickField(grade, gradeC),
+      photoreal: photoreal ? "on" : "off",
     };
   }
   const settingVal = pickField(setting, settingC);
@@ -2330,6 +2334,7 @@ function SceneForm({
     const prompt = composeSceneStill(sceneText(), {
       slot,
       camera: isHero ? pickField(camera, cameraC) : "",
+      photoreal,
     });
     try {
       spawnAngleResult({
@@ -2411,7 +2416,7 @@ function SceneForm({
         builderId,
         slot: SCENE_SHEET_SLOT,
         label: SCENE_SLOT_LABEL.sheet,
-        prompt: composeSceneSheetPrompt(sceneText(), "", previews),
+        prompt: composeSceneSheetPrompt(sceneText(), "", previews, { photoreal }),
         generating: false,
         error: null,
         focus: true,
@@ -2477,6 +2482,23 @@ function SceneForm({
         Theme filters Location / Architecture / Lighting. Apply selection composes the prompt.
         Generate Hero on a Result node. Extra angles (Opposite, Feature, Detail, Overview) stay available. Scene sheet lists only attached stills.
       </p>
+      <label className="param">
+        <span>
+          <input
+            type="checkbox"
+            checked={photoreal}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setPhotoreal(on);
+              setScenePrompt((cur) => {
+                if (!cur.trim()) return cur;
+                return on ? ensureScenePhotoreal(cur, true) : stripScenePhotoreal(cur);
+              });
+            }}
+          />{" "}
+          Photoreal
+        </span>
+      </label>
       <label className="builder-field">
         <span className="field-label">Name</span>
         <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
@@ -2637,9 +2659,13 @@ function SceneForm({
             void enhancePrompt(sceneText(), models.t2iId, {
               scene: true,
               notes: notes.trim(),
+              photoreal,
             })
               .then((text) => {
-                setScenePrompt(ensureScenePhotoreal(text, true));
+                const src = `${sceneText()}\n${notes}`;
+                let next = photoreal ? stripSceneEnhanceStyle(src, text) : stripScenePhotoreal(text);
+                if (photoreal) next = ensureScenePhotoreal(next, true);
+                setScenePrompt(next);
                 toast("Scene enhanced.");
               })
               .catch((err: unknown) => {
@@ -3167,7 +3193,7 @@ function PropForm({
 async function enhancePrompt(
   text: string,
   modelId: string,
-  opts?: { scene?: boolean; notes?: string },
+  opts?: { scene?: boolean; notes?: string; photoreal?: boolean },
 ): Promise<string> {
   const raw = text.trim();
   if (!raw) throw new Error("Apply selection first so Enhance has text to rewrite.");
@@ -3176,9 +3202,13 @@ async function enhancePrompt(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: opts?.scene
-        ? `${raw}\n\n[Keep photoreal photograph lock. Fantasy lighting (torch, magic) is allowed; do not drop photograph.]${
-            opts.notes ? `\nNotes: ${opts.notes}` : ""
-          }`
+        ? opts.photoreal !== false
+          ? `${raw}\n\n[Keep photoreal photograph lock. Fantasy lighting (torch, magic) is allowed; do not drop photograph. Strip painterly/cinematic/volumetric/concept unless they already appear in the user prompt or notes.]${
+              opts.notes ? `\nNotes: ${opts.notes}` : ""
+            }`
+          : `${raw}\n\n[Do not add a photoreal photograph lock.]${
+              opts.notes ? `\nNotes: ${opts.notes}` : ""
+            }`
         : raw,
       model_id: modelId,
       modality: "t2i",

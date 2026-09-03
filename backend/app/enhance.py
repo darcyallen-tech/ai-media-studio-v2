@@ -35,6 +35,8 @@ Rules:
   photo realistic / photograph: "photoreal photograph, real materials and
   daylight/practicals, not concept art, not matte painting, not illustration."
   Fantasy lighting (torch, magic) is allowed; do not drop "photograph".
+- When asked to strip painterly/cinematic/volumetric/concept: remove those
+  words unless they already appear in the user's original prompt/notes.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
 
@@ -212,6 +214,10 @@ def enhance_prompt_text(
         or "production location sheet" in original.lower()
     )
     if sceneish:
+        from app.sheet import strip_scene_enhance_style
+
+        strip = "strip painterly" in original.lower()
+        rewritten = strip_scene_enhance_style(original, rewritten) if strip else rewritten
         rewritten = ensure_scene_photoreal(rewritten, True)
         if SCENE_PHOTOREAL_LOCK.lower() not in rewritten.lower():
             rewritten = f"{rewritten.rstrip()} {SCENE_PHOTOREAL_LOCK}"

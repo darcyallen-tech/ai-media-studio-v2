@@ -91,6 +91,7 @@ MODEL_OPTIONS: list[str] = [""] + [
     # image
     "flux 2 pro",
     "flux 2 max",
+    "gpt image 2",
     "mai image 2.5 pro",
     "mai image 2.5",
     "nano banana pro",

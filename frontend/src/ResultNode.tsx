@@ -113,7 +113,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     : isSceneAngle
       ? qualityChoices(angleModel)
       : [];
-  const fluxEdit = isFlux2EditModel(isSheet ? selectedModel : angleModel) && !isSceneAngle;
+  const fluxEdit = isFlux2EditModel(isSheet ? selectedModel : angleModel);
+  const photorealOn =
+    String((data.fields && data.fields.photoreal) || "on").toLowerCase() !== "off" &&
+    String((data.fields && data.fields.photoreal) || "on").toLowerCase() !== "0";
   const dropVideoSize = (s: string) =>
     Boolean(s) && !/^(360p|480p|540p|720p|1080p|1440p|2160p)$/i.test(s);
   const sizeChoicesList = (
@@ -533,7 +536,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
       if (!res.ok || !rewritten) {
         throw new Error(errorFromBody(body, "Enhance returned an empty reply."));
       }
-      const kept = isSceneSheet ? ensureScenePhotoreal(rewritten, true) : rewritten;
+      const kept = isSceneSheet && photorealOn ? ensureScenePhotoreal(rewritten, true) : rewritten;
       setAnglePrompt(kept);
       data.onPrompt?.(kept);
       toast("Sheet prompt enhanced.");
@@ -699,7 +702,9 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               : data.modelId || data.r2iModel || data.t2iModel || "",
           prompt: (() => {
             let send = prompt;
-            if (isSceneAngle || isSceneSheet) send = ensureScenePhotoreal(send, true);
+            if ((isSceneAngle || isSceneSheet) && photorealOn) {
+              send = ensureScenePhotoreal(send, true);
+            }
             if (!isSheet) return send;
             const footer =
               isCharacterSheet && statFooter
@@ -923,7 +928,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                 <select
                   className="model"
                   value={sizeChoicesList.includes(size) ? size : sizeChoicesList[0]}
-                  disabled={data.generating || busy || (fluxEdit && !isSceneAngle)}
+                  disabled={data.generating || busy || fluxEdit}
                   onChange={(e) => {
                     setSize(e.target.value);
                     data.onResolution?.(e.target.value);

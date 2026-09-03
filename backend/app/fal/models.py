@@ -675,6 +675,40 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "Up to 8 refs (fal product page). image_size auto only — 2K is not a Flux-edit field."
         ),
     ),
+    "gpt image 2": ImageEditModelSpec(
+        key="gpt image 2",
+        label="Image · GPT Image 2 (edit)",
+        endpoint="openai/gpt-image-2/edit",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=16,
+        max_num_images=4,
+        aspect_ratio_param=None,
+        allowed_aspect_ratios=(
+            "auto",
+            "landscape_16_9",
+            "landscape_4_3",
+            "square_hd",
+            "square",
+            "portrait_4_3",
+            "portrait_16_9",
+        ),
+        default_aspect_ratio="auto",
+        resolution_param=None,
+        image_size_param="image_size",
+        allowed_resolutions=("auto", "low", "medium", "high"),
+        default_resolution="high",
+        max_resolution="",
+        default_output_format="png",
+        cost_per_image=0.18,
+        resolution_cost_mult={"AUTO": 1.0, "HIGH": 1.0, "MEDIUM": 0.7, "LOW": 0.4},
+        extra_defaults={"quality": "high", "background": "auto"},
+        supports_mask=True,
+        notes=(
+            "OpenAI GPT Image 2 edit on fal. Up to 16 refs. image_size auto infers "
+            "from input; quality auto/low/medium/high (default high). Token-billed."
+        ),
+    ),
     "mai image 2.5 pro": ImageEditModelSpec(
         key="mai image 2.5 pro",
         label="Image · MAI-Image-2.5-Pro (edit)",
@@ -2208,6 +2242,11 @@ _ALIASES: dict[str, str] = {
     "flux 2 max (edit)": "flux 2 max",
     "image · flux 2 max (edit)": "flux 2 max",
     "fal-ai/flux-2-max/edit": "flux 2 max",
+    "gpt image 2": "gpt image 2",
+    "gpt image 2 (edit)": "gpt image 2",
+    "image · gpt image 2 (edit)": "gpt image 2",
+    "openai/gpt-image-2/edit": "gpt image 2",
+    "openai/gpt-image-2": "gpt image 2",
     "mai image 2.5 pro": "mai image 2.5 pro",
     "mai-image-2.5-pro": "mai image 2.5 pro",
     "mai-image-2.5-pro edit": "mai image 2.5 pro",
@@ -2466,6 +2505,7 @@ def model_dropdown_choices() -> list[str]:
     for key in (
         "flux 2 pro",
         "flux 2 max",
+        "gpt image 2",
         "mai image 2.5 pro",
         "mai image 2.5",
         "nano banana pro",
@@ -2814,7 +2854,38 @@ def build_edit_arguments(
 
     if spec.image_size_param:
         ep = (spec.endpoint or "").lower()
-        if "qwen-image-3" in ep:
+        if "gpt-image-2" in ep:
+            size_in = (
+                params.get("aspect_ratio")
+                or other.get("aspect_ratio")
+                or params.get("image_size")
+                or other.get("image_size")
+                or spec.default_aspect_ratio
+                or "auto"
+            )
+            size_s = str(size_in or "auto").strip()
+            allowed_sizes = {
+                str(a).lower(): str(a)
+                for a in (spec.allowed_aspect_ratios or ())
+            }
+            args[spec.image_size_param] = (
+                allowed_sizes.get(size_s.lower()) or spec.default_aspect_ratio or "auto"
+            )
+            q_in = (
+                params.get("resolution")
+                or other.get("resolution")
+                or params.get("quality")
+                or other.get("quality")
+                or spec.default_resolution
+                or "high"
+            )
+            q_allowed = {
+                str(a).lower(): str(a)
+                for a in (spec.allowed_resolutions or ("auto", "low", "medium", "high"))
+            }
+            q_s = str(q_in or "high").strip().lower()
+            args["quality"] = q_allowed.get(q_s) or spec.default_resolution or "high"
+        elif "qwen-image-3" in ep:
             from app.vision_registry import map_t2i_image_size, qwen_t2i_image_size
 
             asp = str(

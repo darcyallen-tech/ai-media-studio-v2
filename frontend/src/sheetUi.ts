@@ -962,9 +962,41 @@ export function ensureScenePhotoreal(text: string, force = false): string {
   return t ? `${t} ${SCENE_PHOTOREAL_LOCK}` : SCENE_PHOTOREAL_LOCK;
 }
 
+export function stripScenePhotoreal(text: string): string {
+  return (text || "")
+    .replace(
+      /\s*photoreal photograph, real materials and daylight\/practicals, not concept art, not matte painting, not illustration\.?/gi,
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function stripSceneEnhanceStyle(original: string, rewritten: string): string {
+  const src = (original || "").toLowerCase();
+  const banned = [
+    "concept art",
+    "matte painting",
+    "painterly",
+    "cinematic",
+    "volumetric",
+    "illustration",
+  ];
+  let out = rewritten || "";
+  for (const phrase of banned) {
+    if (src.includes(phrase)) continue;
+    const re = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+")}\\b`, "gi");
+    out = out.replace(re, "");
+  }
+  if (!/\bconcept\b/i.test(src)) {
+    out = out.replace(/\bconcept\b/gi, "");
+  }
+  return out.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+}
+
 export function composeSceneStill(
   brief: string,
-  opts?: { slot?: string; camera?: string; detail?: boolean },
+  opts?: { slot?: string; camera?: string; detail?: boolean; photoreal?: boolean },
 ): string {
   const head = bit(brief) || "a photoreal location";
   const slot = (opts?.slot || (opts?.detail ? "detail" : "hero")).trim() || "hero";
@@ -973,15 +1005,13 @@ export function composeSceneStill(
     const cam = bit(opts?.camera);
     framing = cam ? `Camera: ${cam}.` : SCENE_VIEWS.hero;
   }
-  return ensureScenePhotoreal(
-    [
-      `Location still of ${head}.`,
-      framing,
-      "Empty of prominent people. No text, no logo, no watermark.",
-      SCENE_PHOTOREAL_LOCK,
-    ].join(" "),
-    true,
-  );
+  const body = [
+    `Location still of ${head}.`,
+    framing,
+    "Empty of prominent people. No text, no logo, no watermark.",
+  ].join(" ");
+  if (opts?.photoreal === false) return body;
+  return ensureScenePhotoreal(`${body} ${SCENE_PHOTOREAL_LOCK}`, true);
 }
 
 export function composePropStill(brief: string, opts?: { detail?: boolean }): string {
@@ -1000,6 +1030,7 @@ export function composeSceneSheetPrompt(
   brief: string,
   extra = "",
   attached: { id?: string; label?: string }[] = [],
+  opts?: { photoreal?: boolean },
 ): string {
   const names = attached
     .map((row) => bit(row.label) || SCENE_SLOT_LABEL[row.id || ""] || bit(row.id))
@@ -1011,9 +1042,9 @@ export function composeSceneSheetPrompt(
     `Production location SHEET of ${bit(brief) || "this place"}. One image only.`,
     panels,
     "Empty of prominent people. Optional small clean labels only.",
-    SCENE_PHOTOREAL_LOCK,
-    SHEET_NO_GARBLED,
   ];
+  if (opts?.photoreal !== false) bits.push(SCENE_PHOTOREAL_LOCK);
+  bits.push(SHEET_NO_GARBLED);
   if (bit(extra)) bits.push(bit(extra));
   return bits.join(" ");
 }
@@ -1292,6 +1323,7 @@ export function sheetR2iRefCap(model?: ModelRow | null): number {
   if (raw > 0) return raw;
   const blob = `${model?.id || ""} ${model?.label || ""} ${model?.endpoint || ""}`.toLowerCase();
   if (blob.includes("muse") || blob.includes("seedream")) return 10;
+  if (blob.includes("gpt-image-2") || blob.includes("gpt image 2")) return 16;
   if (blob.includes("qwen")) return 3;
   return 4;
 }
@@ -1524,6 +1556,19 @@ export function isFlux2EditModel(row: ModelRow | null | undefined): boolean {
   );
 }
 
+/** Flux 2 Pro / Flex / Max T2I — real image_size enums, not 4K. */
+export function isFlux2T2iModel(row: ModelRow | null | undefined): boolean {
+  const blob = `${row?.id || ""} ${row?.label || ""} ${row?.endpoint || ""}`.toLowerCase();
+  if (blob.includes("/edit") || blob.includes(" r2i") || blob.includes("kontext")) return false;
+  const family =
+    blob.includes("flux-2") || blob.includes("flux 2") || blob.includes("flux2");
+  if (!family) return false;
+  const which =
+    blob.includes("pro") || blob.includes("max") || blob.includes("flex");
+  if (!which) return false;
+  return blob.includes("t2i") || blob.includes("text-to-image") || /fal-ai\/flux-2-(pro|max|flex)$/.test(blob);
+}
+
 const VIDEO_SIZE_TOKEN = /^(360p|480p|540p|720p|1080p|1440p|2160p)$/i;
 
 function uniqueChoices(list: string[]): string[] {
@@ -1548,10 +1593,14 @@ export function aspectChoices(row: ModelRow | null | undefined): string[] {
 
 export function qualityChoices(row: ModelRow | null | undefined): string[] {
   if (isFlux2EditModel(row)) return [];
-  return uniqueChoices(
-    (row?.resolution_choices ?? [])
-      .map((s) => String(s).trim())
-      .filter((s) => /^(0\.5K|1K|2K|4K)$/i.test(s)),
+  const raw = uniqueChoices((row?.resolution_choices ?? []).map((s) => String(s).trim()));
+  if (isFlux2T2iModel(row)) {
+    return raw.filter((s) => /^(1K|~?2K)/i.test(s));
+  }
+  return raw.filter(
+    (s) =>
+      /^(0\.5K|1K|2K|4K)$/i.test(s) ||
+      /^(auto|low|medium|high)$/i.test(s),
   );
 }
 
@@ -1604,8 +1653,10 @@ export function pickSceneAspect(choices: string[]): string {
 }
 
 export function sceneSizeChoices(row: ModelRow | null | undefined): string[] {
-  if (isFlux2EditModel(row)) return ["16:9", "4:3"];
+  if (isFlux2EditModel(row)) return ["auto"];
   const raw = sizeChoices(row);
+  if (isFlux2T2iModel(row)) return raw;
+  if (raw.some((s) => /landscape_16_9|portrait_16_9/i.test(s))) return raw;
   const extras = ["16:9", "4:3"];
   const out = [...raw];
   for (const extra of extras) {
@@ -1719,6 +1770,7 @@ export function sortSheetComposeModels(rows: ModelRow[]): ModelRow[] {
     if (blob.includes("nano")) return 1;
     if (blob.includes("flux 2 pro")) return 2;
     if (blob.includes("flux 2 max")) return 3;
+    if (blob.includes("gpt image 2") || blob.includes("gpt-image-2")) return 3.5;
     if (blob.includes("flux")) return 4;
     if (blob.includes("seedream")) return 5;
     if (blob.includes("qwen")) return 6;

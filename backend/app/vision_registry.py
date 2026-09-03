@@ -129,6 +129,37 @@ T2I_ASPECT_CHOICES: tuple[str, ...] = (
     "1:1 square HD",
 )
 
+# Flux 2 Pro / Flex / Max T2I — fal image_size enums (not friendly labels)
+FLUX_T2I_IMAGE_SIZES: tuple[str, ...] = (
+    "landscape_16_9",
+    "landscape_4_3",
+    "square_hd",
+    "square",
+    "portrait_4_3",
+    "portrait_16_9",
+)
+FLUX_T2I_QUALITY: tuple[str, ...] = ("1K", "~2K (4MP max)")
+
+GPT_IMAGE_SIZES: tuple[str, ...] = (
+    "landscape_16_9",
+    "landscape_4_3",
+    "square_hd",
+    "square",
+    "portrait_4_3",
+    "portrait_16_9",
+    "auto",
+)
+GPT_IMAGE_QUALITY: tuple[str, ...] = ("auto", "low", "medium", "high")
+
+_FLUX_T2I_PRESET_PX: dict[str, tuple[int, int]] = {
+    "landscape_16_9": (1024, 576),
+    "landscape_4_3": (1024, 768),
+    "square_hd": (1024, 1024),
+    "square": (1024, 1024),
+    "portrait_4_3": (768, 1024),
+    "portrait_16_9": (576, 1024),
+}
+
 # Nano Banana family uses colon aspect ratios (+ resolution on 2/Pro)
 T2I_NANO_ASPECT_CHOICES: tuple[str, ...] = (
     "auto",
@@ -260,6 +291,26 @@ def map_t2i_image_size(aspect_label: str | None) -> str:
     return "landscape_16_9"
 
 
+def flux_t2i_image_size(aspect_label: str | None, quality: str | None = None) -> str | dict[str, int]:
+    """Flux 2 Pro/Flex/Max T2I image_size: enum at 1K, {width,height} at ~2K (4MP max)."""
+    enum = map_t2i_image_size(aspect_label) or "landscape_16_9"
+    if enum not in _FLUX_T2I_PRESET_PX:
+        enum = "landscape_16_9"
+    q = (quality or "").strip().lower()
+    want_2k = "2k" in q or "4mp" in q
+    if not want_2k:
+        return enum
+    w, h = _FLUX_T2I_PRESET_PX[enum]
+    w2, h2 = w * 2, h * 2
+    max_area = 4194304
+    max_edge = 2560
+    if w2 * h2 > max_area or max(w2, h2) > max_edge:
+        scale = min(max_edge / max(w2, h2), (max_area / float(w2 * h2)) ** 0.5)
+        w2 = max(256, int(w2 * scale) // 16 * 16)
+        h2 = max(256, int(h2 * scale) // 16 * 16)
+    return {"width": w2, "height": h2}
+
+
 def map_t2i_aspect_colon(aspect_label: str | None) -> str:
     """Map UI aspect label → '16:9' style string for Nano Banana / Recraft / Ultra."""
     raw = (aspect_label or "").strip().lower()
@@ -331,10 +382,10 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         ),
         duration_choices=(),
         default_duration="",
-        aspect_choices=T2I_ASPECT_CHOICES,
-        default_aspect="16:9 landscape",
-        resolution_choices=(),
-        default_resolution="",
+        aspect_choices=FLUX_T2I_IMAGE_SIZES,
+        default_aspect="landscape_16_9",
+        resolution_choices=FLUX_T2I_QUALITY,
+        default_resolution="1K",
         supports_audio=False,
         supports_negative=False,
         max_num_images=4,
@@ -367,14 +418,35 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         notes="Flux 2 Flex — more control / quality tradeoff. ~$0.05/MP.",
         duration_choices=(),
         default_duration="",
-        aspect_choices=T2I_ASPECT_CHOICES,
-        default_aspect="16:9 landscape",
-        resolution_choices=(),
-        default_resolution="",
+        aspect_choices=FLUX_T2I_IMAGE_SIZES,
+        default_aspect="landscape_16_9",
+        resolution_choices=FLUX_T2I_QUALITY,
+        default_resolution="1K",
         supports_audio=False,
         supports_negative=False,
         max_num_images=4,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
+    "flux 2 max t2i": VisionModelSpec(
+        key="flux 2 max t2i",
+        label="Flux 2 Max (T2I)",
+        mode="text_to_image",
+        endpoint="fal-ai/flux-2-max",
+        cost_estimate_usd=0.07,
+        notes=(
+            "FLUX.2 [max] text→image — highest Flux T2I quality. "
+            "Est. $0.07 first MP, +$0.03 extra MP. Up to 4MP."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=FLUX_T2I_IMAGE_SIZES,
+        default_aspect="landscape_16_9",
+        resolution_choices=FLUX_T2I_QUALITY,
+        default_resolution="1K",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=4,
+        extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
     ),
     "flux 1.1 pro ultra t2i": VisionModelSpec(
         key="flux 1.1 pro ultra t2i",
@@ -684,6 +756,33 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         max_num_images=10,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
     ),
+    "gpt image 2 t2i": VisionModelSpec(
+        key="gpt image 2 t2i",
+        label="GPT Image 2 (T2I)",
+        mode="text_to_image",
+        endpoint="openai/gpt-image-2",
+        cost_estimate_usd=0.16,
+        notes=(
+            "OpenAI GPT Image 2 T2I on fal. image_size presets or auto; "
+            "quality auto/low/medium/high (default high). Token-billed; "
+            "est. ~$0.13–$0.20 @ high 1K."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="landscape_16_9",
+        resolution_choices=GPT_IMAGE_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=4,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -752,6 +851,29 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         supports_strength=True,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
+    "gpt image 2 i2i": VisionModelSpec(
+        key="gpt image 2 i2i",
+        label="GPT Image 2 (edit)",
+        mode="image_to_image",
+        endpoint="openai/gpt-image-2/edit",
+        cost_estimate_usd=0.18,
+        notes=(
+            "OpenAI GPT Image 2 edit on fal. Up to 16 refs. image_size auto infers "
+            "from input; quality auto/low/medium/high."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=15,
+        image_field="image_urls",
+        edit_model_key="gpt image 2",
+        extra_defaults={"num_images": 1, "output_format": "png", "quality": "high", "background": "auto"},
     ),
     "flux 2 flex i2i": VisionModelSpec(
         key="flux 2 flex i2i",
@@ -1861,6 +1983,28 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
     ),
+    "gpt image 2 r2i": VisionModelSpec(
+        key="gpt image 2 r2i",
+        label="GPT Image 2 · R2I",
+        mode="reference_to_image",
+        endpoint="openai/gpt-image-2/edit",
+        cost_estimate_usd=0.18,
+        notes=(
+            "Build a still from refs with GPT Image 2 edit. Up to 16 refs. "
+            "image_size auto; quality auto/low/medium/high."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        max_refs=16,
+        image_field="image_urls",
+        edit_model_key="gpt image 2",
+        extra_defaults={"num_images": 1, "output_format": "png", "quality": "high", "background": "auto"},
+    ),
     "nano banana pro r2i": VisionModelSpec(
         key="nano banana pro r2i",
         label="Nano Banana Pro · R2I",
@@ -2855,11 +2999,17 @@ def estimate_vision_cost(
         if "auto 4" in asp or "auto_4" in asp:
             base *= 1.35
         res = (resolution or spec.default_resolution or "").lower()
-        if res in ("4k", "4K".lower()):
+        if "gpt-image-2" in ep_still:
+            q = res if res in ("auto", "low", "medium", "high") else "high"
+            if q == "low":
+                base *= 0.4
+            elif q == "medium":
+                base *= 0.7
+        elif "4k" in res and "4mp" not in res:
             base *= 2.4
-        elif res in ("2k", "2K".lower()):
+        elif "2k" in res or "4mp" in res:
             base *= 1.55
-        elif res in ("0.5k", "0.5K".lower()):
+        elif res in ("0.5k",):
             base *= 0.7
         # Nano Banana Pro is steeper at high res
         if "nano-banana-pro" in spec.endpoint and res in ("2k", "4k"):
@@ -3103,6 +3253,18 @@ def build_vision_arguments(
                     picked_ar = allowed.get(colon_ar.lower())
             args["aspect_ratio"] = picked_ar or spec.default_aspect or "16:9"
             args.pop("image_size", None)
+        elif "gpt-image-2" in ep:
+            allowed = {str(a).lower(): str(a) for a in (spec.aspect_choices or GPT_IMAGE_SIZES)}
+            raw_size = (aspect_ratio or spec.default_aspect or "landscape_16_9").strip()
+            picked_size = allowed.get(raw_size.lower()) or allowed.get(
+                str(size).lower()
+            )
+            args["image_size"] = picked_size or spec.default_aspect or "landscape_16_9"
+            q_allowed = {str(a).lower(): str(a) for a in (spec.resolution_choices or GPT_IMAGE_QUALITY)}
+            q_raw = (res or spec.default_resolution or "high").strip().lower()
+            args["quality"] = q_allowed.get(q_raw) or spec.default_resolution or "high"
+        elif "flux-2" in ep:
+            args["image_size"] = flux_t2i_image_size(aspect_ratio or size, res)
         else:
             # Flux 2 family: image_size enum
             args["image_size"] = size
