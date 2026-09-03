@@ -30,11 +30,17 @@ export const SCENE_SLOT_LABEL: Record<string, string> = {
 };
 export const SCENE_VIEWS: Record<string, string> = {
   hero: "Walk-in wide of the space — enter the location as a visitor would.",
-  opposite: "Opposite view of the same space, looking back from the far side.",
-  feature: "Feature view of a distinctive architectural or set piece in this space.",
-  detail: "Tight detail of architecture, material, or lighting in this space.",
-  overview: "Overview of the whole space, showing layout and how areas connect.",
+  opposite:
+    "Same town, same day, same architecture. Camera is now at the FAR END of the square, 180 degrees from the hero still. We look BACK toward the hero camera position. The fountain/center landmark must change place in frame (if it was mid-ground center, it is now closer or offset). Do not repeat the hero composition.",
+  feature:
+    "Same space. 3/4 view of the hero landmark (fountain / inn / gate). Camera off the center axis, still chest height. Do not regenerate the wide establishing.",
+  detail:
+    "Tight photograph of one real surface in this scene (stone, timber, stall, fountain basin). No new wide street.",
+  overview:
+    "Unlabeled isometric or high top-down of THIS square only. No compass letters, no map labels.",
 };
+export const SCENE_EXTRA_CAMERA_GUARD =
+  "Do not copy the source camera angle.";
 export const COSTUME_TAGS = [
   "everyday",
   "hero",
@@ -1014,12 +1020,13 @@ export function composeSceneStill(
   if (slot === "hero") {
     const cam = bit(opts?.camera);
     framing = cam ? `Camera: ${cam}.` : SCENE_VIEWS.hero;
+  } else {
+    framing = `${SCENE_EXTRA_CAMERA_GUARD} ${framing}`;
   }
-  const body = [
-    `Location still of ${head}.`,
-    framing,
-    "Empty of prominent people. No text, no logo, no watermark.",
-  ].join(" ");
+  const empty = /empty of prominent people/i.test(framing)
+    ? ""
+    : "Empty of prominent people. No text, no logo, no watermark.";
+  const body = [`Location still of ${head}.`, framing, empty].filter(Boolean).join(" ");
   if (opts?.photoreal === false) return stripScenePhotoreal(body);
   return ensureScenePhotoreal(body, true);
 }

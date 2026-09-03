@@ -24,6 +24,7 @@ import {
   SHEET_REF_PACK,
   SCENE_SLOTS,
   SCENE_SLOT_LABEL,
+  SCENE_EXTRA_CAMERA_GUARD,
   sceneSizeChoices,
   sizeChoices,
   SLOT_LABEL,
@@ -704,6 +705,13 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
             let send = prompt;
             if ((isSceneAngle || isSceneSheet) && photorealOn) {
               send = ensureScenePhotoreal(send, true);
+            }
+            if (
+              isSceneAngle &&
+              slot !== "hero" &&
+              !send.toLowerCase().includes(SCENE_EXTRA_CAMERA_GUARD.toLowerCase())
+            ) {
+              send = `${SCENE_EXTRA_CAMERA_GUARD} ${send}`;
             }
             if (!isSheet) return send;
             const footer =

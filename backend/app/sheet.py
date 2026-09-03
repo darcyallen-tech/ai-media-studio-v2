@@ -136,11 +136,28 @@ def strip_scene_enhance_style(_original: str, rewritten: str) -> str:
 
 SCENE_VIEWS: dict[str, str] = {
     "hero": "Walk-in wide of the space — enter the location as a visitor would.",
-    "opposite": "Opposite view of the same space, looking back from the far side.",
-    "feature": "Feature view of a distinctive architectural or set piece in this space.",
-    "detail": "Tight detail of architecture, material, or lighting in this space.",
-    "overview": "Overview of the whole space, showing layout and how areas connect.",
+    "opposite": (
+        "Same town, same day, same architecture. Camera is now at the FAR END "
+        "of the square, 180 degrees from the hero still. We look BACK toward "
+        "the hero camera position. The fountain/center landmark must change "
+        "place in frame (if it was mid-ground center, it is now closer or "
+        "offset). Do not repeat the hero composition."
+    ),
+    "feature": (
+        "Same space. 3/4 view of the hero landmark (fountain / inn / gate). "
+        "Camera off the center axis, still chest height. Do not regenerate "
+        "the wide establishing."
+    ),
+    "detail": (
+        "Tight photograph of one real surface in this scene (stone, timber, "
+        "stall, fountain basin). No new wide street."
+    ),
+    "overview": (
+        "Unlabeled isometric or high top-down of THIS square only. "
+        "No compass letters, no map labels."
+    ),
 }
+SCENE_EXTRA_CAMERA_GUARD = "Do not copy the source camera angle."
 
 CLEAN_PLATE = (
     "Pure solid black background only (#000000). Isolated subject on a clean plate — "
@@ -1026,11 +1043,16 @@ def scene_prompt(
     if key == "hero":
         view = f"Camera: {cam}." if cam else SCENE_VIEWS["hero"]
     else:
-        view = SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
-    out = (
-        f"{strip_scene_photoreal(head)}. {view} "
-        "Empty of prominent people. No text, no logo, no watermark."
+        view = (
+            f"{SCENE_EXTRA_CAMERA_GUARD} "
+            + SCENE_VIEWS.get(key, SCENE_VIEWS["detail"])
+        )
+    empty = (
+        ""
+        if re.search(r"empty of prominent people", view, re.I)
+        else " Empty of prominent people. No text, no logo, no watermark."
     )
+    out = f"{strip_scene_photoreal(head)}. {view}{empty}"
     if notes and notes not in out:
         out = f"{out} {notes}"
     if _photoreal_on(f):
@@ -1701,6 +1723,9 @@ def generate_angle(
             text = ensure_scene_photoreal(text, True)
         else:
             text = strip_scene_photoreal(text)
+        if key in SCENE_SLOTS and key != "hero":
+            if SCENE_EXTRA_CAMERA_GUARD.lower() not in text.lower():
+                text = f"{SCENE_EXTRA_CAMERA_GUARD} {text}"
 
     modality = "t2i"
     if refs:
