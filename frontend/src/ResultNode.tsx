@@ -6,6 +6,8 @@ import { formatDuration, isAudioPath, isVideoPath } from "./media";
 import NodeClose from "./NodeClose";
 import { openLightbox } from "./lightbox";
 import { sendToResolve, toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import {
   defaultSheetRefSlots,
   modelCostLabel,
@@ -169,6 +171,8 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   const [estimate, setEstimate] = useState("");
   const [estimateBusy, setEstimateBusy] = useState(isSheet || isSceneAngle);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
   const [pickedSlots, setPickedSlots] = useState<string[]>([]);
   const pickedManualRef = useRef(false);
@@ -503,13 +507,8 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     setEnhancingPrompt(true);
     setLocalError(null);
     try {
-      const res = await fetch("/enhance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: [
-            prompt,
-            "",
+      const sheetBits = isSheetPicker
+        ? [
             isSceneSheet
               ? "[Rewrite this location-sheet prompt only.]"
               : "[Rewrite this character-sheet prompt only.]",
@@ -525,11 +524,16 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               ? "Keep location lock. No gibberish labels."
               : "Keep identity and wardrobe lock. No gibberish labels.",
           ]
-            .filter(Boolean)
-            .join("\n"),
-          model_id: selectedModel?.id || data.r2iModel || "",
-          modality: "r2i",
+        : ["[Rewrite this extra-angle prompt only. Keep the locked camera. Do not invent a new location or character.]"];
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: [prompt, "", ...sheetBits].filter(Boolean).join("\n"),
+          model_id: selectedModel?.id || data.r2iModel || data.t2iModel || "",
+          modality: isSheet || !isHeroT2i ? "r2i" : "t2i",
           mode: "image",
+          creative: creativeEnhance,
         }),
       });
       const body = await readJson(res);
@@ -1029,16 +1033,23 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               />
             </label>
             <div className="prompt-actions">
-              {isSheetPicker ? (
-                <button
-                  type="button"
-                  className="ghost nodrag enhance"
-                  disabled={busy || data.generating || enhancingPrompt || !anglePrompt.trim()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => void enhanceSheetPrompt()}
-                >
-                  {enhancingPrompt ? "Enhancing…" : "Enhance"}
-                </button>
+              {isAngle ? (
+                <>
+                  <button
+                    type="button"
+                    className="ghost nodrag enhance"
+                    disabled={busy || data.generating || enhancingPrompt || !anglePrompt.trim()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => void enhanceSheetPrompt()}
+                  >
+                    {enhancingPrompt ? "Enhancing…" : "Enhance"}
+                  </button>
+                  <CreativeEnhanceToggle
+                    checked={creativeEnhance}
+                    onChange={setCreativeEnhance}
+                    hasXai={hasXai}
+                  />
+                </>
               ) : null}
               <button
                 type="button"

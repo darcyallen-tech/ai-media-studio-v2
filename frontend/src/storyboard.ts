@@ -90,6 +90,7 @@ export function composeStoryboardEnhanceBrief(
   shots: ShotState[],
   holds?: Map<string, number>,
   hubNotes?: string,
+  creative?: boolean,
 ): string {
   const parts: string[] = [];
   const t = title.trim();
@@ -143,6 +144,11 @@ export function composeStoryboardEnhanceBrief(
   parts.push(
     "Rewrite this board into a master generation prompt (global notes) for the selected model. Keep shot order, attributed dialogue, hub identities, camera/move, durations, and framing. Do not drop shots or unname the cast.",
   );
+  if (creative) {
+    parts.push(
+      "Creative Enhance ON: embroider shot-to-shot continuity from these shot prompts. Include every shot's camera and action; do not replace or drop shots.",
+    );
+  }
   return parts.join("\n").trim();
 }
 
@@ -169,6 +175,7 @@ export function composeStoryboardEnhanceCompact(
   shots: ShotState[],
   cap: number,
   holds?: Map<string, number>,
+  creative?: boolean,
 ): string {
   const parts: string[] = [];
   const t = title.trim();
@@ -198,6 +205,11 @@ export function composeStoryboardEnhanceCompact(
   parts.push(
     `Rewrite to FIT under ${cap} characters. Short Image N map + one line per shot. Do not dump costume seams, fabric, or unused stats.`,
   );
+  if (creative) {
+    parts.push(
+      "Creative ON: continuity embroidery allowed. Keep every shot's camera and action.",
+    );
+  }
   return parts.join("\n").trim();
 }
 

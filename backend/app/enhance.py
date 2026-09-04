@@ -18,7 +18,9 @@ Rules:
 - Replace likely-flagged trademark, franchise, celebrity, or brand names with
   short descriptive visual equivalents (look, costume, setting) — never the name.
 - Do not add lectures, warnings, disclaimers, or meta commentary.
-- Do not invent a new concept. Do not refuse. Just rewrite.
+- Do not invent a new location, new character, or new plot beat the user did not ask for.
+- Do not refuse. Just rewrite.
+- Do not change the selected model. This is not a filter bypass.
 - If character / scene / source / prop references are listed, mention them by role
   (character, scene, source, prop) so the rewrite stays consistent with those
   identities, locations, and objects. Do not drop them.
@@ -37,13 +39,29 @@ Rules:
 - When asked to strip cinematic/painterly/volumetric/concept-art/god rays:
   remove those words even if they appear in Notes. Keep 18mm / wide /
   architecture facts.
-- Creative Enhance: expand into a production brief (shops, materials, time
-  of day, weather, extra set dressing that fits). No dwarves/orcs unless
-  Notes asked. Embellish content, not style. Not a policy bypass — do not
-  add names, sexualization, or filter-evasion wording.
-- Tight Scene rewrite: keep facts only. Do not invent shops or extra dressing.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
+
+TIGHT_NOTE = (
+    "Creative Enhance is OFF. Tight rewrite for the selected model. Facts only. "
+    "Do not invent shops, extra weather, set dressing, wardrobe micro, or SFX layers. "
+    "If a photoreal lock is requested, keep it as one sentence after the rewrite — "
+    "do not paste it into the body.\n\n"
+)
+
+CREATIVE_NOTE = (
+    "Creative Enhance is ON. Brief-in, production-brief-out. Invent fitting detail "
+    "(set dressing, camera beat, wardrobe micro, SFX layers) that matches the attached "
+    "refs / scenario. Do not invent a new location, new character, or new plot beat "
+    "the user did not ask for. Photoreal ON means more CONTENT, still photograph not painting. "
+    "Not a filter bypass. Do not change the selected model.\n\n"
+)
+
+STORYBOARD_CREATIVE_NOTE = (
+    "Storyboard + Creative ON: you may embroider shot-to-shot continuity from the "
+    "attached shot prompts. You must still include every shot's camera and action; "
+    "do not replace or drop shots.\n\n"
+)
 
 
 def _parse_prompt(raw: str, fallback: str) -> str:
@@ -112,6 +130,7 @@ def enhance_prompt_text(
     refs: list[dict[str, Any]] | None = None,
     image_urls: list[str] | None = None,
     max_prompt: int | None = None,
+    creative: bool = False,
 ) -> dict[str, Any]:
     original = (prompt or "").strip()
     if not original:
@@ -163,10 +182,15 @@ def enhance_prompt_text(
         if readable
         else ""
     )
+    creative_on = bool(creative)
+    creative_note = CREATIVE_NOTE if creative_on else TIGHT_NOTE
+    if creative_on and (mode or "").strip().lower() in ("storyboard", "board"):
+        creative_note += STORYBOARD_CREATIVE_NOTE
     user = (
         f"Mode: {mode or 'image'}\n"
         f"Modality: {modality or 't2i'}\n"
         f"Model: {label}\n\n"
+        + creative_note
         + vision_note
         + wan_note
         + family_notes
@@ -181,8 +205,8 @@ def enhance_prompt_text(
                     system=SYSTEM,
                     user_text=user,
                     image_paths=readable,
-                    temperature=0.35,
-                    max_tokens=2200,
+                    temperature=0.35 if not creative_on else 0.5,
+                    max_tokens=4000 if creative_on else 2200,
                 )
                 vision_used = True
             except Exception:
@@ -192,11 +216,19 @@ def enhance_prompt_text(
                     "Enhance vision failed; falling back to text-only"
                 )
                 raw = chat_json(
-                    system=SYSTEM, user=user, temperature=0.35, max_tokens=2200
+                    system=SYSTEM,
+                    user=user,
+                    temperature=0.35 if not creative_on else 0.5,
+                    max_tokens=4000 if creative_on else 2200,
                 )
                 vision_used = False
         else:
-            raw = chat_json(system=SYSTEM, user=user, temperature=0.35, max_tokens=2200)
+            raw = chat_json(
+                system=SYSTEM,
+                user=user,
+                temperature=0.35 if not creative_on else 0.5,
+                max_tokens=4000 if creative_on else 2200,
+            )
     except XAIConfigError as exc:
         return {"ok": False, "prompt": original, "original": original, "error": str(exc), "vision": False}
     except Exception as exc:

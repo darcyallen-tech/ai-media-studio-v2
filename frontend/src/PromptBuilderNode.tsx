@@ -3,6 +3,8 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import { readJson } from "./http";
 import { toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import {
   CORE_INSTRUMENTS,
   MUSIC_BUILDS,
@@ -53,6 +55,9 @@ export default function PromptBuilderNode({
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
 
   useEffect(() => {
     if (isMusic) return;
@@ -105,39 +110,85 @@ export default function PromptBuilderNode({
     setError(null);
   }
 
+  async function composeScenarioPrompt(): Promise<string> {
+    const res = await fetch("/builder/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scenario_key: scenarioKey,
+        fields: values,
+        mode,
+        modality,
+      }),
+    });
+    const body = (await res.json()) as {
+      ok?: boolean;
+      prompt?: string;
+      detail?: string;
+      error?: string;
+    };
+    if (!res.ok || body.ok === false) {
+      throw new Error(
+        body.error ||
+          (typeof body.detail === "string" ? body.detail : null) ||
+          "Apply failed.",
+      );
+    }
+    return (body.prompt || "").trim();
+  }
+
   async function onApply() {
     if (!scenarioKey || applying) return;
     setApplying(true);
     setError(null);
     try {
-      const res = await fetch("/builder/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scenario_key: scenarioKey,
-          fields: values,
-          mode,
-          modality,
-        }),
-      });
-      const body = (await res.json()) as {
-        ok?: boolean;
-        prompt?: string;
-        detail?: string;
-        error?: string;
-      };
-      if (!res.ok || body.ok === false) {
-        throw new Error(
-          body.error ||
-            (typeof body.detail === "string" ? body.detail : null) ||
-            "Apply failed.",
-        );
-      }
-      data.onApply((body.prompt || "").trim());
+      data.onApply(await composeScenarioPrompt());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Apply failed.");
     } finally {
       setApplying(false);
+    }
+  }
+
+  async function onEnhanceScenario() {
+    if (!scenarioKey || enhancing || applying) return;
+    setEnhancing(true);
+    setError(null);
+    try {
+      const raw = await composeScenarioPrompt();
+      if (!raw) throw new Error("Apply selection first so Enhance has a prompt.");
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: raw,
+          mode,
+          modality,
+          creative: creativeEnhance,
+        }),
+      });
+      const body = (await readJson(res)) as {
+        ok?: boolean;
+        prompt?: string;
+        error?: string;
+        detail?: string;
+      };
+      const rewritten = (body.prompt || "").trim();
+      if (!res.ok || body.ok === false || !rewritten) {
+        throw new Error(
+          (typeof body.detail === "string" && body.detail) ||
+            body.error ||
+            "Enhance returned an empty reply.",
+        );
+      }
+      data.onApply(rewritten);
+      toast("Enhanced prompt applied.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Enhance failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setEnhancing(false);
     }
   }
 
@@ -225,6 +276,19 @@ export default function PromptBuilderNode({
           >
             {applying ? "Applying…" : "Apply to prompt"}
           </button>
+          <button
+            type="button"
+            className="ghost enhance nodrag"
+            disabled={!scenarioKey || enhancing || applying}
+            onClick={() => void onEnhanceScenario()}
+          >
+            {enhancing ? "Enhancing…" : "Enhance"}
+          </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
         </div>
         {error ? (
           <p className="hint warn" role="alert">
@@ -395,6 +459,8 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
   const [useCase, setUseCase] = useState("");
   const [notes, setNotes] = useState("");
   const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [error, setError] = useState<string | null>(null);
 
   const subs = subgenresFor(genre);
@@ -463,6 +529,7 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
           prompt: raw,
           mode: "audio",
           modality: "music",
+          creative: creativeEnhance,
         }),
       });
       const body = (await readJson(res)) as {
@@ -605,6 +672,11 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
           >
             {enhancing ? "Enhancing…" : "Enhance"}
           </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
         </div>
         {error ? (
           <p className="hint warn" role="alert">

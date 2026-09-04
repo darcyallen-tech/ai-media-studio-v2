@@ -37,6 +37,8 @@ import {
 } from "./storyboard";
 import { readJson } from "./http";
 import { toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import {
   durationOptions,
   formatDurationToken,
@@ -160,6 +162,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [switchOffer, setSwitchOffer] = useState<SwitchOffer | null>(null);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [seed, setSeed] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
@@ -812,6 +816,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               storyShots,
               promptCap,
               distributeShotSeconds(storyShots, sbDuration),
+              creativeEnhance,
             )
           : composeStoryboardEnhanceBrief(
               data.hubTitle || "",
@@ -820,6 +825,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
               storyShots,
               distributeShotSeconds(storyShots, sbDuration),
               data.hubNotes,
+              creativeEnhance,
             )
         : "";
       const res = await fetch("/enhance", {
@@ -849,6 +855,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             ? storyRefs.map((item) => item.path).slice(0, 3)
             : enhanceImagePaths(data),
           max_prompt: promptCap > 0 ? promptCap : undefined,
+          creative: creativeEnhance,
         }),
       });
       const body = (await readJson(res)) as {
@@ -958,6 +965,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             onGenerate={() => void onGenerate()}
             onEnhance={() => void onEnhance()}
             canEnhance={canEnhance}
+            creativeEnhance={creativeEnhance}
+            onCreativeEnhance={setCreativeEnhance}
+            hasXai={hasXai}
             switchOffer={switchOffer}
             onSwitch={applySwitch}
             elements={elements}
@@ -1285,6 +1295,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           >
             {enhancing ? "Enhancing…" : "Enhance"}
           </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
           {showMaskUi ? (
             <button
               type="button"
@@ -1518,6 +1533,9 @@ function StoryboardPrompt({
   onGenerate,
   onEnhance,
   canEnhance,
+  creativeEnhance,
+  onCreativeEnhance,
+  hasXai,
   switchOffer,
   onSwitch,
   elements,
@@ -1547,6 +1565,9 @@ function StoryboardPrompt({
   onGenerate: () => void;
   onEnhance: () => void;
   canEnhance: boolean;
+  creativeEnhance: boolean;
+  onCreativeEnhance: (v: boolean) => void;
+  hasXai: boolean;
   switchOffer: SwitchOffer | null;
   onSwitch: (offer: SwitchOffer) => void;
   elements: PromptElement[];
@@ -1783,6 +1804,11 @@ function StoryboardPrompt({
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+        <CreativeEnhanceToggle
+          checked={creativeEnhance}
+          onChange={onCreativeEnhance}
+          hasXai={hasXai}
+        />
         <button
           type="button"
           className="generate nodrag"

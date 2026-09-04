@@ -1628,6 +1628,21 @@ html[data-theme="night"] .ref-chip.pick-on {
   align-items: center;
 }
 
+.creative-enhance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 12rem;
+}
+
+.creative-enhance .param {
+  margin: 0;
+}
+
+.creative-enhance .hint {
+  margin: 0;
+}
+
 .enhance:not(:disabled) {
   border-color: #7aaa2a;
   background: #c8ec6a;

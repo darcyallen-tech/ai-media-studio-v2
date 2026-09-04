@@ -3,12 +3,16 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import { readJson } from "./http";
 import { toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import type { HubNodeData } from "./types";
 
 export type HubFlowNode = Node<HubNodeData, "hub">;
 
 export default function HubNode({ data }: NodeProps<HubFlowNode>) {
   const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [error, setError] = useState<string | null>(null);
   const assets = data.assets ?? [];
   const canEnhance = Boolean(data.notes.trim()) && !enhancing;
@@ -29,6 +33,7 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
           prompt: data.notes.trim(),
           mode: "image",
           modality: "t2i",
+          creative: creativeEnhance,
           image_urls: paths,
           refs: assets
             .filter((row) => row.item?.path)
@@ -117,6 +122,11 @@ export default function HubNode({ data }: NodeProps<HubFlowNode>) {
           >
             {enhancing ? "Enhancing…" : "Enhance"}
           </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
         </div>
         <p className="field-label">Attached assets</p>
         {assets.length === 0 ? (

@@ -3,6 +3,9 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
 import { peekLibraryDrag, slotAccepts, slotNeedLabel } from "./libraryDrag";
 import { toast } from "./toast";
+import { readJson } from "./http";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import {
   CAMERA_EASES,
   CAMERA_MOVES,
@@ -21,6 +24,9 @@ function itemFromEvent(event: DragEvent): LibraryItem | null {
 
 export default function ShotNode({ id, data }: NodeProps<ShotFlowNode>) {
   const [hover, setHover] = useState<"ok" | "bad" | null>(null);
+  const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const staticMove = data.move === "Static";
   const still = data.still;
 
@@ -47,6 +53,44 @@ export default function ShotNode({ id, data }: NodeProps<ShotFlowNode>) {
       return;
     }
     data.onAttachStill(dragged);
+  }
+
+  async function onEnhanceAction() {
+    const raw = data.action.trim();
+    if (!raw || enhancing) return;
+    setEnhancing(true);
+    try {
+      const res = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: raw,
+          mode: "storyboard",
+          modality: "r2v",
+          creative: creativeEnhance,
+        }),
+      });
+      const body = (await readJson(res)) as {
+        ok?: boolean;
+        prompt?: string;
+        error?: string;
+        detail?: string;
+      };
+      const rewritten = (body.prompt || "").trim();
+      if (!res.ok || body.ok === false || !rewritten) {
+        throw new Error(
+          (typeof body.detail === "string" && body.detail) ||
+            body.error ||
+            "Enhance returned an empty reply.",
+        );
+      }
+      data.onPatch({ action: rewritten });
+      toast("Shot action enhanced.");
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Enhance failed.", true);
+    } finally {
+      setEnhancing(false);
+    }
   }
 
   const cls =
@@ -116,6 +160,21 @@ export default function ShotNode({ id, data }: NodeProps<ShotFlowNode>) {
             onChange={(e) => data.onPatch({ action: e.target.value })}
           />
         </label>
+        <div className="prompt-actions">
+          <button
+            type="button"
+            className="ghost nodrag enhance"
+            disabled={enhancing || !data.action.trim()}
+            onClick={() => void onEnhanceAction()}
+          >
+            {enhancing ? "Enhancing…" : "Enhance"}
+          </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
+        </div>
         <label className="builder-field">
           <span className="field-label">Move</span>
           <select

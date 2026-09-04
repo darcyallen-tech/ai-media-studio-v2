@@ -5,6 +5,8 @@ import NodeErrorBoundary from "./NodeErrorBoundary";
 import { spawnAngleResult } from "./angleSpawn";
 import { readJson as readJsonSafe } from "./http";
 import { toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import { importOsFiles, isOsFileDrag } from "./osImport";
 import {
   CORE_SLOTS,
@@ -298,6 +300,8 @@ function CharacterForm({
   const [wardrobe, setWardrobe] = useState("");
   const [identityPrompt, setIdentityPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"generate" | "upload" | "ref">("generate");
@@ -699,6 +703,7 @@ function CharacterForm({
           model_id: models.t2iId,
           modality: "t2i",
           mode: "image",
+          creative: creativeEnhance,
         }),
       });
       const body = await readJson<GenBody>(res);
@@ -1001,6 +1006,11 @@ function CharacterForm({
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+        <CreativeEnhanceToggle
+          checked={creativeEnhance}
+          onChange={setCreativeEnhance}
+          hasXai={hasXai}
+        />
       </div>
       <label className="builder-field">
         <span className="field-label">Identity prompt</span>
@@ -1192,6 +1202,8 @@ function CostumeForm({
   const [notes, setNotes] = useState("");
   const [outfitPrompt, setOutfitPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
@@ -1611,7 +1623,7 @@ function CostumeForm({
             const raw = outfitText();
             setEnhancing(true);
             setError(null);
-            void enhancePrompt(raw, models.t2iId)
+            void enhancePrompt(raw, models.t2iId, { creative: creativeEnhance })
               .then((text) => {
                 setOutfitPrompt(text);
                 toast("Outfit enhanced.");
@@ -1626,6 +1638,11 @@ function CostumeForm({
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+        <CreativeEnhanceToggle
+          checked={creativeEnhance}
+          onChange={setCreativeEnhance}
+          hasXai={hasXai}
+        />
       </div>
       <label className="builder-field">
         <span className="field-label">Outfit prompt</span>
@@ -2211,6 +2228,7 @@ function SceneForm({
   const [notes, setNotes] = useState("");
   const [photoreal, setPhotoreal] = useState(true);
   const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [scenePrompt, setScenePrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2679,18 +2697,12 @@ function SceneForm({
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+        <CreativeEnhanceToggle
+          checked={creativeEnhance}
+          onChange={setCreativeEnhance}
+          hasXai={hasXai}
+        />
       </div>
-      <label className="param">
-        <span>
-          <input
-            type="checkbox"
-            checked={creativeEnhance}
-            onChange={(e) => setCreativeEnhance(e.target.checked)}
-          />{" "}
-          Creative Enhance
-        </span>
-      </label>
-      <p className="hint">Creative = more detail. Photoreal = photograph, not painting.</p>
       <label className="builder-field">
         <span className="field-label">Scene prompt</span>
         <textarea
@@ -2804,6 +2816,8 @@ function PropForm({
   const [notes, setNotes] = useState("");
   const [propPrompt, setPropPrompt] = useState("");
   const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const models = useSheetModels();
@@ -3117,7 +3131,7 @@ function PropForm({
           onClick={() => {
             setEnhancing(true);
             setError(null);
-            void enhancePrompt(propText(), models.t2iId)
+            void enhancePrompt(propText(), models.t2iId, { creative: creativeEnhance })
               .then((text) => {
                 setPropPrompt(text);
                 toast("Prop enhanced.");
@@ -3132,6 +3146,11 @@ function PropForm({
         >
           {enhancing ? "Enhancing…" : "Enhance"}
         </button>
+        <CreativeEnhanceToggle
+          checked={creativeEnhance}
+          onChange={setCreativeEnhance}
+          hasXai={hasXai}
+        />
       </div>
       <label className="builder-field">
         <span className="field-label">Prop prompt</span>
@@ -3234,6 +3253,7 @@ async function enhancePrompt(
       model_id: modelId,
       modality: "t2i",
       mode: "image",
+      creative: Boolean(opts?.creative),
     }),
   });
   const body = await readJson<GenBody>(res);

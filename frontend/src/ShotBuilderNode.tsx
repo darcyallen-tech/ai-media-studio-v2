@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import NodeClose from "./NodeClose";
+import { readJson } from "./http";
+import { toast } from "./toast";
+import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
+import { useXaiKey } from "./useXaiKey";
 import type { ShotBuilderNodeData } from "./types";
 
 export type ShotBuilderFlowNode = Node<ShotBuilderNodeData, "shot-builder">;
@@ -110,6 +114,9 @@ export default function ShotBuilderNode({
   const [framing, setFraming] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
+  const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const hasXai = useXaiKey();
 
   const showWho = beat !== "Hold";
   const whoOptional = beat === "Establish" || beat === "Insert / Detail";
@@ -208,6 +215,101 @@ export default function ShotBuilderNode({
       setError(err instanceof Error ? err.message : "Apply failed.");
     } finally {
       setApplying(false);
+    }
+  }
+
+  async function onEnhance() {
+    if (enhancing || applying) return;
+    setEnhancing(true);
+    setError(null);
+    try {
+      const dialogue = who
+        .map((name) => `${name}=${lines[name] || ""}`)
+        .join("|");
+      const res = await fetch("/shot-builder/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fields: {
+            beat,
+            emotion,
+            camera,
+            lens,
+            degrees,
+            rotation,
+            who: who.join("|"),
+            where,
+            where_from: showFrom ? whereFrom : "",
+            props: pickedProps.join("|"),
+            action_preset: actionPreset,
+            action_line: actionLine,
+            sequence: steps.filter(Boolean).join("|"),
+            emotion_custom: emotionCustom,
+            framing,
+            dialogue: showDialogue ? dialogue : "",
+            speaker: showOptionalSpeech ? speaker : "",
+            speech: showOptionalSpeech ? speech : "",
+            react_to: reactTo,
+          },
+        }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        action?: string;
+        move?: string;
+        speed?: string;
+        ease?: string;
+        framing?: string;
+        detail?: string;
+        error?: string;
+      };
+      if (!res.ok || body.ok === false) {
+        throw new Error(
+          body.error ||
+            (typeof body.detail === "string" ? body.detail : null) ||
+            "Apply failed.",
+        );
+      }
+      const raw = (body.action || "").trim();
+      if (!raw) throw new Error("Apply first so Enhance has a shot action.");
+      const enh = await fetch("/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: raw,
+          mode: "storyboard",
+          modality: "r2v",
+          creative: creativeEnhance,
+        }),
+      });
+      const out = (await readJson(enh)) as {
+        ok?: boolean;
+        prompt?: string;
+        error?: string;
+        detail?: string;
+      };
+      const rewritten = (out.prompt || "").trim();
+      if (!enh.ok || out.ok === false || !rewritten) {
+        throw new Error(
+          (typeof out.detail === "string" && out.detail) ||
+            out.error ||
+            "Enhance returned an empty reply.",
+        );
+      }
+      data.onApply({
+        action: rewritten,
+        move: body.move || "Push in",
+        speed: body.speed || "Slow",
+        ease: body.ease || "Ease in-out",
+        framing: body.framing || "",
+      });
+      toast("Shot action enhanced.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Enhance failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setEnhancing(false);
     }
   }
 
@@ -561,6 +663,19 @@ export default function ShotBuilderNode({
           >
             {applying ? "Applying…" : "Apply to shot"}
           </button>
+          <button
+            type="button"
+            className="ghost enhance nodrag"
+            disabled={applying || enhancing}
+            onClick={() => void onEnhance()}
+          >
+            {enhancing ? "Enhancing…" : "Enhance"}
+          </button>
+          <CreativeEnhanceToggle
+            checked={creativeEnhance}
+            onChange={setCreativeEnhance}
+            hasXai={hasXai}
+          />
         </div>
         {error ? (
           <p className="hint warn" role="alert">
