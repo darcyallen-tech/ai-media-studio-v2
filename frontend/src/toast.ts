@@ -1,4 +1,6 @@
-type ToastFn = (message: string, error?: boolean) => void;
+export type ToastAction = { label: string; onClick: () => void };
+
+type ToastFn = (message: string, error?: boolean, action?: ToastAction) => void;
 
 let _show: ToastFn | null = null;
 
@@ -6,8 +8,8 @@ export function bindToast(fn: ToastFn | null) {
   _show = fn;
 }
 
-export function toast(message: string, error = false) {
-  _show?.(message, error);
+export function toast(message: string, error = false, action?: ToastAction) {
+  _show?.(message, error, action);
 }
 
 export async function sendToResolve(

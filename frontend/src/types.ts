@@ -50,6 +50,14 @@ export type ModelRow = {
   supports_region_boxes?: boolean;
 };
 
+export type SwitchOffer = {
+  message: string;
+  action_label: string;
+  target_model_id: string;
+  target_label: string;
+  line?: string;
+};
+
 export type GenerateResponse = {
   ok: boolean;
   result_paths?: string[];
@@ -63,6 +71,8 @@ export type GenerateResponse = {
   draft_cache_url?: string | null;
   model?: string;
   model_key?: string;
+  switch?: SwitchOffer | null;
+  prompt?: string | null;
 };
 
 export type LibraryItem = {

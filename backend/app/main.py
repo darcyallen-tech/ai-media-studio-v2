@@ -880,6 +880,8 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
             "estimate": estimate_create_cost(state) if not result.ok else cost,
             "is_draft": bool(result.is_draft),
             "draft_cache_url": result.draft_cache_url,
+            "switch": result.switch,
+            "prompt": result.rewritten_prompt,
         },
     )
 

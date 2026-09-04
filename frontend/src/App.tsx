@@ -72,7 +72,7 @@ import {
   SLOT_LABEL,
   preferredIdentityPaths,
 } from "./sheetUi";
-import { bindToast, toast } from "./toast";
+import { bindToast, toast, type ToastAction } from "./toast";
 import {
   assetToLibraryItem,
   catalogToItem,
@@ -395,13 +395,15 @@ function StudioCanvas() {
   const [toolSources, setToolSources] = useState<Record<string, LibraryItem>>(
     {},
   );
-  const [toastMsg, setToastMsg] = useState<{ text: string; error: boolean } | null>(
-    null,
-  );
+  const [toastMsg, setToastMsg] = useState<{
+    text: string;
+    error: boolean;
+    action?: ToastAction;
+  } | null>(null);
 
   useEffect(() => {
-    bindToast((message, error) => {
-      setToastMsg({ text: message, error: Boolean(error) });
+    bindToast((message, error, action) => {
+      setToastMsg({ text: message, error: Boolean(error), action });
     });
     return () => bindToast(null);
   }, []);
@@ -497,7 +499,7 @@ function StudioCanvas() {
 
   useEffect(() => {
     if (!toastMsg) return;
-    const id = window.setTimeout(() => setToastMsg(null), 6000);
+    const id = window.setTimeout(() => setToastMsg(null), toastMsg.action ? 12000 : 6000);
     return () => window.clearTimeout(id);
   }, [toastMsg]);
 
@@ -4065,7 +4067,19 @@ function StudioCanvas() {
           className={toastMsg.error ? "toast error" : "toast"}
           role="status"
         >
-          {toastMsg.text}
+          <span>{toastMsg.text}</span>
+          {toastMsg.action ? (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                toastMsg.action?.onClick();
+                setToastMsg(null);
+              }}
+            >
+              {toastMsg.action.label}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

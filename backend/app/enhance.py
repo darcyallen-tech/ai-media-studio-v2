@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from app.create_catalog import resolve_model
+from app.partner_routing import enhance_instructions, evaluate, family_of
 from app.xai_client import XAIConfigError, chat_json, chat_json_vision, still_data_url
 
 SYSTEM = """You rewrite image/video generation prompts.
@@ -38,7 +39,8 @@ Rules:
   architecture facts.
 - Creative Enhance: expand into a production brief (shops, materials, time
   of day, weather, extra set dressing that fits). No dwarves/orcs unless
-  Notes asked. Embellish content, not style.
+  Notes asked. Embellish content, not style. Not a policy bypass — do not
+  add names, sexualization, or filter-evasion wording.
 - Tight Scene rewrite: keep facts only. Do not invent shops or extra dressing.
 - Return JSON only: {"prompt": "<rewritten prompt>"}.
 """
@@ -148,6 +150,12 @@ def enhance_prompt_text(
             "Do not dump costume seams, fabric, or unused stats.\n\n"
         )
     images = [p for p in (image_urls or []) if str(p).strip()]
+    family_notes = ""
+    if entry:
+        fam = family_of(
+            model_id=entry.id, label=entry.label, endpoint=entry.endpoint
+        )
+        family_notes = enhance_instructions(family=fam, modality=modality or "")
     readable = [p for p in images if still_data_url(p)]
     vision_note = (
         f"Source stills attached ({len(readable)}). Briefly note what is visible, "
@@ -161,6 +169,7 @@ def enhance_prompt_text(
         f"Model: {label}\n\n"
         + vision_note
         + wan_note
+        + family_notes
         + (f"{extra}\n\n" if extra else "")
         + f"User prompt:\n{original}"
     )
@@ -230,10 +239,29 @@ def enhance_prompt_text(
         if not photoreal_off:
             rewritten = strip_scene_enhance_style(original, rewritten)
             rewritten = ensure_scene_photoreal(rewritten, True)
-    return {
+    decision = evaluate(
+        model_id=(entry.id if entry else model_id) or "",
+        label=(entry.label if entry else "") or "",
+        endpoint=(entry.endpoint if entry else "") or "",
+        modality=modality or "",
+        prompt=rewritten,
+        ref_images=list(images),
+        character_ids=[
+            str(r.get("name") or r.get("id") or "")
+            for r in (refs or [])
+            if isinstance(r, dict) and str(r.get("role") or "").lower() == "character"
+        ],
+    )
+    rewritten = decision.prompt
+    out: dict[str, Any] = {
         "ok": True,
         "prompt": rewritten,
         "original": original,
         "error": None,
         "vision": vision_used,
     }
+    if decision.switch:
+        out["switch"] = decision.switch.as_dict()
+    if decision.warning:
+        out["warning"] = decision.warning
+    return out

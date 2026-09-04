@@ -55,6 +55,7 @@ import {
   type LibraryItem,
   type Mode,
   type ModelRow,
+  type SwitchOffer,
   directorAllowed,
   mergeDirectorBlock,
   type PromptNodeData,
@@ -158,6 +159,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [loading, setLoading] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [switchOffer, setSwitchOffer] = useState<SwitchOffer | null>(null);
   const [seed, setSeed] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
@@ -515,10 +517,39 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     draft,
   ]);
 
+  function applySwitch(offer: SwitchOffer) {
+    const needle = (offer.target_model_id || offer.target_label || "").toLowerCase();
+    const hit =
+      models.find((r) => r.id === offer.target_model_id) ||
+      models.find((r) => `${r.id} ${r.label}`.toLowerCase().includes(needle)) ||
+      models.find((r) =>
+        `${r.id} ${r.label}`.toLowerCase().includes(offer.target_label.toLowerCase()),
+      );
+    if (hit) {
+      setModelId(hit.id);
+      setSwitchOffer(null);
+      setError(null);
+      toast(`Switched to ${hit.label}.`);
+      return;
+    }
+    toast(`${offer.target_label} is not in this model list.`, true);
+  }
+
+  function showSwitch(offer: SwitchOffer | null | undefined, msg: string) {
+    setError(offer?.line || msg);
+    if (!offer) return;
+    setSwitchOffer(offer);
+    toast(offer.message, true, {
+      label: offer.action_label,
+      onClick: () => applySwitch(offer),
+    });
+  }
+
   async function onGenerate() {
     if (!canGenerate) return;
     setLoading(true);
     setError(null);
+    setSwitchOffer(null);
     try {
       const klingMp = Boolean(selectedModel?.supports_multi_prompt);
       const sbMod = isStoryboard ? storyboardKlingModality(selectedModel) : modality;
@@ -727,16 +758,22 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           typeof body.detail === "string"
             ? body.detail
             : body.error || `Generate failed (${res.status})`;
-        setError(msg);
-        if (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg)) {
+        if (typeof body.prompt === "string" && body.prompt.trim()) {
+          setPrompt(body.prompt);
+        }
+        showSwitch(body.switch, msg);
+        if (!body.switch && (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg))) {
           toast(msg, true);
         }
         return;
       }
       if (!body.ok) {
         const msg = body.error || body.status || "Generate failed.";
-        setError(msg);
-        if (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg)) {
+        if (typeof body.prompt === "string" && body.prompt.trim()) {
+          setPrompt(body.prompt);
+        }
+        showSwitch(body.switch, msg);
+        if (!body.switch && (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg) || /content_policy|partner_validation|422/i.test(msg))) {
           toast(msg, true);
         }
         return;
@@ -761,6 +798,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     if (!canEnhance) return;
     setEnhancing(true);
     setError(null);
+    setSwitchOffer(null);
     try {
       const sbDuration =
         duration || storyboardDurationChoices(selectedModel)[0] || "";
@@ -819,6 +857,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         error?: string;
         detail?: string;
         vision?: boolean;
+        switch?: SwitchOffer | null;
+        warning?: string | null;
       };
       if (!res.ok || body.ok === false) {
         setError(
@@ -829,6 +869,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         return;
       }
       if (body.prompt) setPrompt(body.prompt);
+      if (body.switch) showSwitch(body.switch, body.switch.line || body.switch.message);
+      else if (body.warning) toast(body.warning, true);
       const sent = isStoryboard
         ? storyRefs.map((item) => item.path).slice(0, 3)
         : enhanceImagePaths(data);
@@ -903,7 +945,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             error={error}
             notes={prompt}
             onNotes={setPrompt}
-            onModel={setModelId}
+            onModel={(id) => {
+              setModelId(id);
+              setSwitchOffer(null);
+            }}
             duration={duration}
             aspect={aspect}
             resolution={resolution}
@@ -913,6 +958,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             onGenerate={() => void onGenerate()}
             onEnhance={() => void onEnhance()}
             canEnhance={canEnhance}
+            switchOffer={switchOffer}
+            onSwitch={applySwitch}
             elements={elements}
             onElements={setElements}
             intelligentCuts={intelligentCuts}
@@ -951,7 +998,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           id="model"
           className="model nodrag"
           value={modelId}
-          onChange={(e) => setModelId(e.target.value)}
+          onChange={(e) => {
+            setModelId(e.target.value);
+            setSwitchOffer(null);
+          }}
           disabled={models.length === 0}
         >
           {models.length === 0 ? (
@@ -1394,6 +1444,18 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         {error ? (
           <p className="hint warn" role="alert">
             {error}
+            {switchOffer ? (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="toast-action nodrag"
+                  onClick={() => applySwitch(switchOffer)}
+                >
+                  {switchOffer.action_label}
+                </button>
+              </>
+            ) : null}
           </p>
         ) : null}
         </>
@@ -1456,6 +1518,8 @@ function StoryboardPrompt({
   onGenerate,
   onEnhance,
   canEnhance,
+  switchOffer,
+  onSwitch,
   elements,
   onElements,
   intelligentCuts,
@@ -1483,6 +1547,8 @@ function StoryboardPrompt({
   onGenerate: () => void;
   onEnhance: () => void;
   canEnhance: boolean;
+  switchOffer: SwitchOffer | null;
+  onSwitch: (offer: SwitchOffer) => void;
   elements: PromptElement[];
   onElements: (rows: PromptElement[]) => void;
   intelligentCuts: boolean;
@@ -1744,6 +1810,18 @@ function StoryboardPrompt({
       {error ? (
         <p className="hint warn" role="alert">
           {error}
+          {switchOffer ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                className="toast-action nodrag"
+                onClick={() => onSwitch(switchOffer)}
+              >
+                {switchOffer.action_label}
+              </button>
+            </>
+          ) : null}
         </p>
       ) : null}
     </>

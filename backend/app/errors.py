@@ -72,6 +72,7 @@ class ContentPolicyInfo:
     short_reason: str  # plain "because" clause + status one-liner
     full_error: str  # raw provider / app error for Copy
     body: str  # full popup body including "Your generation was stopped because:"
+    switch: dict[str, str] | None = None
 
 
 # Provider type strings and message phrases that indicate policy rejections
@@ -166,12 +167,30 @@ def detect_content_policy_violation(
         reason = _shorten_policy_message(raw)
         kind = "other"
 
+    switch_dict = None
+    try:
+        from app.partner_routing import switch_from_error
+
+        sw = switch_from_error(
+            raw,
+            model_id=model_hint or "",
+            label=model_hint or "",
+            endpoint=context or "",
+        )
+        if sw:
+            switch_dict = sw.as_dict()
+            if sw.line not in reason:
+                reason = f"{reason.rstrip('. ')}. {sw.line}"
+    except Exception:
+        switch_dict = None
+
     body = f"Your generation was stopped because: {reason}"
     return ContentPolicyInfo(
         kind=kind,
         short_reason=reason,
         full_error=raw,
         body=body,
+        switch=switch_dict,
     )
 
 
@@ -458,7 +477,9 @@ def friendly_error(
 
     # Content policy / partner face filter — before generic "validation" branch
     # (partner_validation_failed contains "validation" and would otherwise mis-map)
-    policy = detect_content_policy_violation(raw, context=context)
+    policy = detect_content_policy_violation(
+        raw, context=context, model_hint=context
+    )
     if policy is not None:
         return f"{prefix}{policy.short_reason}"
 

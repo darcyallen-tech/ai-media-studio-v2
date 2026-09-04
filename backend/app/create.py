@@ -58,6 +58,8 @@ class CreateResult:
     draft_cache_url: str | None = None
     render_seconds: float | None = None
     timestamp: str = ""
+    switch: dict[str, Any] | None = None
+    rewritten_prompt: str | None = None
 
     @property
     def path(self) -> str | None:
@@ -133,9 +135,24 @@ def _from_vision(r: Any, *, still: bool) -> CreateResult:
     )
 
 
-def _fail(msg: str, errors: list[str] | None = None, *, model: str = "") -> CreateResult:
+def _fail(
+    msg: str,
+    errors: list[str] | None = None,
+    *,
+    model: str = "",
+    switch: dict[str, Any] | None = None,
+    rewritten_prompt: str | None = None,
+) -> CreateResult:
     errs = list(errors or [msg])
-    return CreateResult(ok=False, status=msg, errors=errs, model=model, model_key=model)
+    return CreateResult(
+        ok=False,
+        status=msg,
+        errors=errs,
+        model=model,
+        model_key=model,
+        switch=switch,
+        rewritten_prompt=rewritten_prompt,
+    )
 
 
 def _file_ok(path: str | None) -> bool:
@@ -553,9 +570,40 @@ def generate(
     if cap > 0 and n > cap:
         msg = f"prompt {n} / {cap} — Enhance compact or trim shots"
         return _fail(msg, [msg], model=state.model_id)
+    from app.partner_routing import evaluate_state, switch_from_error
+
+    decision = evaluate_state(entry, state)
+    if decision.prompt != (state.prompt or ""):
+        state.prompt = decision.prompt
+    if decision.block and decision.switch:
+        return _fail(
+            decision.switch.line,
+            [decision.switch.line],
+            model=state.model_id,
+            switch=decision.switch.as_dict(),
+            rewritten_prompt=decision.prompt,
+        )
     if _use_vision(state, entry):
-        return _dispatch_vision(state, entry, on_progress)
-    return _dispatch_studio(state, entry, on_progress)
+        result = _dispatch_vision(state, entry, on_progress)
+    else:
+        result = _dispatch_studio(state, entry, on_progress)
+    if not result.ok:
+        sw = switch_from_error(
+            result.status or " ".join(result.errors),
+            model_id=entry.id,
+            label=entry.label,
+            endpoint=entry.endpoint,
+            modality=state.modality,
+        )
+        if sw:
+            result.switch = sw.as_dict()
+            if sw.line not in (result.status or ""):
+                result.status = f"{(result.status or '').rstrip('. ')}. {sw.line}".strip()
+                if result.errors:
+                    result.errors[0] = result.status
+                else:
+                    result.errors = [result.status]
+    return result
 
 
 def estimate_create_cost(state: CreateState) -> str:
