@@ -125,6 +125,7 @@ MODEL_OPTIONS: list[str] = [""] + [
     "flux 3 first last",
     "minimax h3 i2v",
     "minimax h3 max i2v",
+    "minimax h3 max turbo i2v",
     "minimax h3 reference",
     "minimax h3 max reference",
     "gemini omni 1.1 i2v",

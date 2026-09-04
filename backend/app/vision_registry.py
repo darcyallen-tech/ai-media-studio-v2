@@ -1233,6 +1233,34 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
             "enable_safety_checker": True,
         },
     ),
+    "minimax h3 max turbo t2v": VisionModelSpec(
+        key="minimax h3 max turbo t2v",
+        label="H3 Max Turbo — cheap scout, 768p cap.",
+        mode="text_to_video",
+        endpoint="minimax/h3-max-turbo/text-to-video",
+        cost_estimate_usd=0.05,  # 5s × $0.01 @768P promo
+        cost_per_second=0.01,
+        cost_per_second_by_resolution={"480p": 0.00625, "768p": 0.01},
+        notes=(
+            "H3 Max Turbo — cheap scout, 768p cap. T2V 5–15s · 480P/768P. "
+            "Does not replace H3 Max or H3 R2V. "
+            "Promo $0.00625/s @480P · $0.01/s @768P until 7 Sep 2026; "
+            "then $0.025/s · $0.04/s. prompt_expansion_mode default balanced."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+    ),
     "gemini omni 1.1 t2v": VisionModelSpec(
         key="gemini omni 1.1 t2v",
         label="Gemini Omni Flash 1.1 · Text→Video",
@@ -1715,6 +1743,34 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
             "H3 Max I2V — start still as first frame; optional end still (end_image_url). "
             "5–15s · 480P/768P. Aspect follows the start image. "
             "Promo $0.025/s @480P · $0.04/s @768P until 1 Sep 2026; then $0.05 / $0.08."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=("auto",),
+        default_aspect="auto",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        supports_end_frame=True,
+        duration_as_int=True,
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+    ),
+    "minimax h3 max turbo i2v": VisionModelSpec(
+        key="minimax h3 max turbo i2v",
+        label="H3 Max Turbo — cheap scout, 768p cap.",
+        mode="image_to_video",
+        endpoint="minimax/h3-max-turbo/image-to-video",
+        cost_estimate_usd=0.05,
+        cost_per_second=0.01,
+        cost_per_second_by_resolution={"480p": 0.00625, "768p": 0.01},
+        notes=(
+            "H3 Max Turbo I2V — cheap scout, 768p cap. Start still as first frame; "
+            "optional end still (end_image_url) for Bridge. 5–15s · 480P/768P. "
+            "Aspect follows the start image. Does not replace H3 Max or H3 R2V."
         ),
         duration_choices=tuple(str(i) for i in range(5, 16)),
         default_duration="5",
@@ -2712,6 +2768,37 @@ BRIDGE_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         native_stereo_audio=True,
         omit_aspect_ratio=True,
+    ),
+    "minimax h3 max turbo bridge": VisionModelSpec(
+        key="minimax h3 max turbo bridge",
+        label="H3 Max Turbo · First→Last",
+        mode="bridge",
+        endpoint="minimax/h3-max-turbo/image-to-video",
+        cost_estimate_usd=0.05,
+        cost_per_second=0.01,
+        cost_per_second_by_resolution={"480p": 0.00625, "768p": 0.01},
+        notes=(
+            "H3 Max Turbo first→last — image_url + end_image_url. "
+            "Cheap scout, 768p cap. 5–15s · 480P/768P. Aspect follows start still. "
+            "Does not replace H3 Max or H3 R2V."
+        ),
+        duration_choices=tuple(str(i) for i in range(5, 16)),
+        default_duration="5",
+        aspect_choices=("auto",),
+        default_aspect="auto",
+        resolution_choices=("480P", "768P"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        first_frame_field="image_url",
+        last_frame_field="end_image_url",
+        requires_end_frame=True,
+        duration_as_int=True,
+        omit_aspect_ratio=True,
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
     ),
 }
 

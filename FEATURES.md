@@ -72,6 +72,7 @@ Default video model: Kling O3 Standard V2V edit.
 - Last-frame I2V is on Kling 3.0, Kling O3, Seedance 2.5, MiniMax H3 / H3 Max, LTX 2.5, Wan 3.0, Gemini Omni Flash 1.1, and the dedicated Bridge / First→Last rows.
 - **MiniMax H3 Max** sits beside H3 (does not replace it). T2V + I2V. 5–15s · 480P/768P. Launch promo ~$0.025/s @480P · ~$0.04/s @768P until 1 Sep 2026; catalog after that $0.05 / $0.08.
 - **H3 Max R2V** (`minimax/h3-max/reference-to-video`) is a separate cheaper Max stack for multi-ref characters/scenes (Image 1 / Video 1 / Audio 1). Est. $0.08/s output; extra refs after 4096 included tokens. Not an alias of H3 Max I2V.
+- **H3 Max Turbo** (`minimax/h3-max-turbo`) T2V + I2V (Bridge via `end_image_url`). Cheap scout, 768p cap. Does not replace H3 Max or H3 R2V.
 - **Kling O3 4K Edit** — NL edit of a real clip, native 4K, listing-grade, spendy ($0.42/s). Source mp4/mov 3–15s, max 200MB.
 - **Kling O3 4K Reference** — keep camera/motion from the clip, swap subject/look with @ElementN / @ImageN, native 4K ($0.42/s).
 - **Gemini Omni Flash 1.1** T2V / I2V / R2V / V2V edit. V2V is NL video edit (prompt + source clip; no first/last frame). R2V cites `<IMAGE_REF_0>` / `<VIDEO_REF_0>`. Est. $0.03/s @360p · $0.10/s @720p · $0.15/s @1080p · $0.30/s @4k.

@@ -564,6 +564,9 @@ H3MAX_RESOLUTIONS: tuple[str, ...] = ("480P", "768P")
 H3MAX_DURATIONS: tuple[str, ...] = tuple(str(i) for i in range(5, 16))
 H3MAX_COST_PER_S: dict[str, float] = {"480p": 0.025, "768p": 0.04}
 H3MAX_CATALOG_COST_PER_S: dict[str, float] = {"480p": 0.05, "768p": 0.08}
+# H3 Max Turbo — promo until 2026-09-07; catalog after is $0.025 / $0.04
+H3MAX_TURBO_COST_PER_S: dict[str, float] = {"480p": 0.00625, "768p": 0.01}
+H3MAX_TURBO_CATALOG_COST_PER_S: dict[str, float] = {"480p": 0.025, "768p": 0.04}
 
 # Google Gemini Omni Flash v1.1
 GEMINI_OMNI_ASPECTS: tuple[str, ...] = ("16:9", "9:16")
@@ -1949,6 +1952,42 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "catalog after that $0.05/s · $0.08/s."
         ),
     ),
+    "minimax h3 max turbo i2v": VideoModelSpec(
+        key="minimax h3 max turbo i2v",
+        label="H3 Max Turbo — cheap scout, 768p cap.",
+        endpoint="minimax/h3-max-turbo/image-to-video",
+        task="image_to_video",
+        image_field=None,
+        i2v_image_field="image_url",
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        generate_audio_param=None,
+        supports_end_frame=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=15.0,
+        allowed_durations=H3MAX_DURATIONS,
+        resolution_param="resolution",
+        allowed_resolutions=H3MAX_RESOLUTIONS,
+        default_resolution="768P",
+        aspect_ratio_param=None,  # aspect follows start frame when image_url is set
+        cost_per_second=0.01,
+        cost_per_second_by_resolution=dict(H3MAX_TURBO_COST_PER_S),
+        extra_defaults={
+            "prompt_expansion_mode": "balanced",
+            "enable_safety_checker": True,
+        },
+        notes=(
+            "H3 Max Turbo — cheap scout, 768p cap. Start still; optional "
+            "end_image_url last frame (Bridge). 5–15s · 480P/768P. "
+            "Does not replace H3 Max or H3 R2V. "
+            "Promo $0.00625/s @480P · $0.01/s @768P until 7 Sep 2026; "
+            "then $0.025 / $0.04."
+        ),
+    ),
     "gemini omni 1.1 i2v": VideoModelSpec(
         key="gemini omni 1.1 i2v",
         label="Video · Gemini Omni Flash 1.1 – Image-to-Video",
@@ -2445,6 +2484,13 @@ _ALIASES: dict[str, str] = {
     "minimax h3 max image-to-video": "minimax h3 max i2v",
     "video · minimax h3 max – image-to-video": "minimax h3 max i2v",
     "minimax/h3-max/image-to-video": "minimax h3 max i2v",
+    "minimax h3 max turbo": "minimax h3 max turbo i2v",
+    "minimax h3 max turbo i2v": "minimax h3 max turbo i2v",
+    "h3 max turbo": "minimax h3 max turbo i2v",
+    "h3 max turbo i2v": "minimax h3 max turbo i2v",
+    "video · h3 max turbo": "minimax h3 max turbo i2v",
+    "h3 max turbo — cheap scout, 768p cap.": "minimax h3 max turbo i2v",
+    "minimax/h3-max-turbo/image-to-video": "minimax h3 max turbo i2v",
     "minimax h3 max reference": "minimax h3 max reference",
     "minimax h3 max r2v": "minimax h3 max reference",
     "h3 max r2v": "minimax h3 max reference",
@@ -2549,6 +2595,7 @@ def model_dropdown_choices() -> list[str]:
         "flux 3 first last",
         "minimax h3 i2v",
         "minimax h3 max i2v",
+        "minimax h3 max turbo i2v",
         "minimax h3 reference",
         "minimax h3 max reference",
         "gemini omni 1.1 i2v",
