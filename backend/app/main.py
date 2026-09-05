@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -55,6 +55,11 @@ from app.character_scene import (  # noqa: E402
     list_scenes,
     resolve_still_file,
     v1_root,
+)
+from app.canvas_store import (  # noqa: E402
+    clear_canvas,
+    load_canvas,
+    save_canvas,
 )
 from app.assets import (  # noqa: E402
     attach_identity_bytes,
@@ -1729,6 +1734,30 @@ def library_pin(item_id: str, body: LibraryPinIn | None = None) -> dict[str, Any
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/canvas")
+def canvas_get() -> dict[str, Any]:
+    return {"ok": True, "item": load_canvas()}
+
+
+@app.put("/canvas")
+def canvas_put(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Canvas body must be an object.")
+    try:
+        item = save_canvas(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@app.delete("/canvas")
+def canvas_delete() -> dict[str, Any]:
+    clear_canvas()
+    return {"ok": True}
 
 
 @app.post("/settings/preferences")

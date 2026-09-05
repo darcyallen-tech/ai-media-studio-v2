@@ -60,6 +60,7 @@ import {
   type SwitchOffer,
   directorAllowed,
   mergeDirectorBlock,
+  type PromptCanvasDraft,
   type PromptNodeData,
   type RefRolePayload,
   type RefSlotState,
@@ -149,6 +150,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const incomingToken = data.incomingPromptToken ?? 0;
+  const skipModalityReset = useRef(false);
   const [duration, setDuration] = useState("");
   const [aspect, setAspect] = useState("");
   const [resolution, setResolution] = useState("");
@@ -315,6 +317,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
 
   useEffect(() => {
     if (isLocked) return;
+    if (skipModalityReset.current) {
+      skipModalityReset.current = false;
+      return;
+    }
     setModality(modesFor(mode)[0]?.id ?? "");
     setError(null);
     setPins([]);
@@ -336,6 +342,85 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     }
     setPrompt(data.incomingPrompt);
   }, [incomingToken, data.incomingPrompt, data.incomingPromptMode]);
+
+  useEffect(() => {
+    if (!data.canvasDraftToken) return;
+    const d = data.canvasDraft;
+    skipModalityReset.current = true;
+    const clearSkip = window.setTimeout(() => {
+      skipModalityReset.current = false;
+    }, 0);
+    if (!d) {
+      setPrompt("");
+      setMode(lock?.mode ?? "image");
+      setModality(lock?.modality ?? "t2i");
+      setModelId("");
+      setDuration("");
+      setAspect("");
+      setResolution("");
+      setSeed("");
+      setNegativePrompt("");
+      setNumImages(1);
+      setAudioOn(null);
+      setVoice("");
+      setDraft(false);
+      setIntelligentCuts(false);
+    } else {
+      if (d.mode) setMode(d.mode);
+      if (d.modality) setModality(d.modality);
+      if (d.prompt != null) setPrompt(d.prompt);
+      if (d.modelId) setModelId(d.modelId);
+      if (d.duration != null) setDuration(d.duration);
+      if (d.aspect != null) setAspect(d.aspect);
+      if (d.resolution != null) setResolution(d.resolution);
+      if (d.seed != null) setSeed(d.seed);
+      if (d.negativePrompt != null) setNegativePrompt(d.negativePrompt);
+      if (typeof d.numImages === "number") setNumImages(d.numImages);
+      if (d.audioOn !== undefined) setAudioOn(d.audioOn);
+      if (d.voice != null) setVoice(d.voice);
+      if (typeof d.draft === "boolean") setDraft(d.draft);
+      if (typeof d.intelligentCuts === "boolean") setIntelligentCuts(d.intelligentCuts);
+    }
+    return () => window.clearTimeout(clearSkip);
+  }, [data.canvasDraftToken]);
+
+  useEffect(() => {
+    if (isLocked || !data.onCanvasDraft) return;
+    const snapshot: PromptCanvasDraft = {
+      prompt,
+      modelId,
+      mode,
+      modality,
+      duration,
+      aspect,
+      resolution,
+      seed,
+      negativePrompt,
+      numImages,
+      audioOn,
+      voice,
+      draft,
+      intelligentCuts,
+    };
+    data.onCanvasDraft(snapshot);
+  }, [
+    isLocked,
+    prompt,
+    modelId,
+    mode,
+    modality,
+    duration,
+    aspect,
+    resolution,
+    seed,
+    negativePrompt,
+    numImages,
+    audioOn,
+    voice,
+    draft,
+    intelligentCuts,
+    data.onCanvasDraft,
+  ]);
 
   const addSourceRef = useRef(data.onAddSource);
   addSourceRef.current = data.onAddSource;

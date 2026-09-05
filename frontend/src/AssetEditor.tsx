@@ -1,12 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { spawnAngleResult } from "./angleSpawn";
 import { errorFromBody, readJson } from "./http";
+import { peekLibraryDrag } from "./libraryDrag";
 import { toast } from "./toast";
 import { openLightbox } from "./lightbox";
 import {
   CORE_SLOTS,
   COSTUME_SHEET_SLOT,
   EXTRA_SLOTS,
+  SCENE_SHEET_SLOT,
+  SCENE_SLOT_LABEL,
+  SCENE_SLOTS,
   SLOT_LABEL,
   collectAssetSheetRefs,
   composeAnglePrompt,
@@ -14,14 +18,22 @@ import {
   composeCharacterIdentity,
   composeCharacterSheetPrompt,
   composeCostumeSheetPrompt,
+  composeSceneSheetPrompt,
+  composeSceneStill,
   pickDefaultResolution,
+  pickSceneAspect,
   pickSheetResolution,
   qualityChoices,
+  sceneSizeChoices,
   sheetR2iRefCap,
   sizeChoices,
   useSheetModels,
 } from "./sheetUi";
-import type { StudioAsset } from "./types";
+import {
+  hasLibraryPayload,
+  parseLibraryPayload,
+  type StudioAsset,
+} from "./types";
 
 type Props = {
   asset: StudioAsset;
@@ -32,7 +44,7 @@ type Props = {
   onSheetOpened?: () => void;
 };
 
-const ALL = [...CORE_SLOTS, ...EXTRA_SLOTS];
+const CHAR_ALL = [...CORE_SLOTS, ...EXTRA_SLOTS];
 
 export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseRef, onSheetOpened }: Props) {
   const [row, setRow] = useState(asset);
@@ -41,7 +53,16 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addSlot, setAddSlot] = useState("");
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const replaceSlotRef = useRef("");
   const models = useSheetModels();
+
+  const isChar = row.kind === "character";
+  const isCostume = row.kind === "costume";
+  const isScene = row.kind === "scene";
+  const slots = isScene ? [...SCENE_SLOTS] : CHAR_ALL;
+  const slotLabel = (slot: string) =>
+    (isScene ? SCENE_SLOT_LABEL[slot] : SLOT_LABEL[slot]) || slot;
 
   useEffect(() => {
     let live = true;
@@ -60,11 +81,9 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   }, [asset.id]);
 
   const ident = row.identity_urls || {};
-  const filled = ALL.filter((s) => ident[s] || row.identity?.[s]);
-  const missing = ALL.filter((s) => !ident[s] && !row.identity?.[s]);
-  const primary = row.primary_slot || "front";
-  const isChar = row.kind === "character";
-  const isCostume = row.kind === "costume";
+  const filled = slots.filter((s) => ident[s] || row.identity?.[s]);
+  const missing = slots.filter((s) => !ident[s] && !row.identity?.[s]);
+  const primary = row.primary_slot || (isScene ? "hero" : "front");
   const hasSheet = Boolean(ident.sheet || row.identity?.sheet);
   const costumeAngles = filled.length;
   const angleCount =
@@ -73,6 +92,14 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     (row.still_path ? 1 : 0);
   const canCostumeSheet = isCostume && angleCount >= 1;
   const canCharacterSheet = isChar && angleCount >= 1;
+  const canSceneSheet = isScene && angleCount >= 1;
+  const displaySlots = isScene
+    ? hasSheet
+      ? [SCENE_SHEET_SLOT, ...slots]
+      : [...slots]
+    : hasSheet
+      ? [COSTUME_SHEET_SLOT, ...filled]
+      : filled;
 
   async function persistMeta() {
     setBusy(true);
@@ -127,10 +154,21 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     try {
       const r2i = models.r2iId || models.t2iId;
       const t2i = models.t2iId;
-      const front = row.identity?.front || "";
-      const source = front;
-      const rowModel = source ? r2i : t2i;
+      const heroOrFront = isScene
+        ? row.identity?.hero || ""
+        : row.identity?.front || "";
+      const source = slot === "hero" || slot === "front" ? heroOrFront : heroOrFront;
+      const rowModel = source && slot !== "hero" && slot !== "front" ? r2i : source ? r2i : t2i;
       const sizeRow = models.r2i.find((m) => m.id === r2i) || models.t2i.find((m) => m.id === t2i);
+      const fields = row.fields || {};
+      const photoreal = String(fields.photoreal || "on").toLowerCase() !== "off";
+      const prompt = isScene
+        ? composeSceneStill(fields.prompt || row.notes || row.name || "", {
+            slot,
+            camera: slot === "hero" ? fields.camera : "",
+            photoreal,
+          })
+        : undefined;
       const res = await fetch("/assets/sheet/angle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,9 +176,14 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
           asset_id: row.id,
           slot,
           model_id: rowModel,
-          source_still: source,
-          resolution: pickDefaultResolution(qualityChoices(sizeRow).length ? qualityChoices(sizeRow) : sizeChoices(sizeRow)),
-          aspect: pickDefaultResolution(sizeChoices(sizeRow)),
+          source_still: slot === "hero" || slot === "front" ? "" : source,
+          prompt,
+          resolution: pickDefaultResolution(
+            qualityChoices(sizeRow).length ? qualityChoices(sizeRow) : sizeChoices(sizeRow),
+          ),
+          aspect: isScene
+            ? pickSceneAspect(sceneSizeChoices(sizeRow))
+            : pickDefaultResolution(sizeChoices(sizeRow)),
         }),
       });
       const body = await readJson(res);
@@ -148,7 +191,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
       const item = body.item as StudioAsset;
       setRow(item);
       onChanged(item);
-      toast(`${SLOT_LABEL[slot] || slot} regenerated.`);
+      toast(`${slotLabel(slot)} regenerated.`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Regenerate failed.";
       setError(msg);
@@ -158,36 +201,112 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
     }
   }
 
+  async function replaceStill(slot: string, file?: File, path?: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      let res: Response;
+      if (file) {
+        const fd = new FormData();
+        fd.append("files", file);
+        res = await fetch(`/assets/${row.id}/slot?slot=${encodeURIComponent(slot)}`, {
+          method: "POST",
+          body: fd,
+        });
+      } else if (path) {
+        res = await fetch(`/assets/${row.id}/slot/path`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slot, path }),
+        });
+      } else {
+        throw new Error("Pick a still to replace.");
+      }
+      const body = await readJson(res);
+      if (!res.ok) throw new Error(errorFromBody(body, "Replace still failed."));
+      const item = body.item as StudioAsset;
+      setRow(item);
+      onChanged(item);
+      toast(`${slotLabel(slot)} still replaced.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Replace still failed.";
+      setError(msg);
+      toast(msg, true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function pickReplace(slot: string) {
+    replaceSlotRef.current = slot;
+    replaceRef.current?.click();
+  }
+
+  function onReplaceFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const slot = replaceSlotRef.current;
+    if (file && slot) void replaceStill(slot, file);
+  }
+
+  function stillFromDrop(event: DragEvent): string | null {
+    const item = peekLibraryDrag() || parseLibraryPayload(event.dataTransfer);
+    const path = item?.path || "";
+    return path || null;
+  }
+
+  function onDropReplace(event: DragEvent, slot: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    const path = stillFromDrop(event);
+    if (!path) {
+      toast("Drop an image still.", true);
+      return;
+    }
+    void replaceStill(slot, undefined, path);
+  }
+
   function spawnMissingAngle(slot: string) {
-    const frontPath = row.identity?.front || "";
-    if (slot !== "front" && !frontPath) {
-      const msg = "Generate Front first.";
+    const frontPath = isScene
+      ? row.identity?.hero || ""
+      : row.identity?.front || "";
+    if (slot !== "front" && slot !== "hero" && !frontPath) {
+      const msg = isScene ? "Generate Hero first." : "Generate Front first.";
       setError(msg);
       toast(msg, true);
       return;
     }
     const t2iRow = models.t2i.find((m) => m.id === models.t2iId) || models.t2i[0];
     const r2iRow = models.r2i.find((m) => m.id === models.r2iId) || models.r2i[0];
-    const frontT2i = slot === "front" && !frontPath;
+    const frontT2i = (slot === "front" || slot === "hero") && !frontPath;
     const spawnR2i =
       isChar && !frontT2i ? extraAngleR2iRow(slot, models.r2i, r2iRow) : r2iRow;
     const sizeRow = frontT2i ? t2iRow : spawnR2i;
-    const sizes = sizeChoices(sizeRow);
+    const sizes = isScene ? sceneSizeChoices(sizeRow) : sizeChoices(sizeRow);
     const quals = qualityChoices(sizeRow);
+    const fields = row.fields || {};
+    const photoreal = String(fields.photoreal || "on").toLowerCase() !== "off";
     const identText =
       row.fields?.identity_prompt ||
       composeCharacterIdentity(row.fields || {}, row.notes || "");
+    const prompt = isScene
+      ? composeSceneStill(fields.prompt || row.notes || row.name || "", {
+          slot,
+          camera: slot === "hero" ? fields.camera : "",
+          photoreal,
+        })
+      : composeAnglePrompt(slot, identText, { hasFront: Boolean(frontPath) });
     try {
       spawnAngleResult({
         builderId: `lib-${row.id}`,
         slot,
-        label: SLOT_LABEL[slot] || slot,
-        prompt: composeAnglePrompt(slot, identText, { hasFront: Boolean(frontPath) }),
+        label: slotLabel(slot),
+        prompt,
         generating: false,
         error: null,
         focus: true,
         assetId: row.id,
-        sourceStill: slot === "front" ? "" : frontPath,
+        sourceStill: slot === "front" || slot === "hero" ? "" : frontPath,
         t2iModel: models.t2iId,
         r2iModel: frontT2i
           ? models.r2iId || models.t2iId
@@ -198,7 +317,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         fields: row.fields,
         resolution: pickDefaultResolution(quals.length ? quals : sizes),
         resolutionChoices: sizes,
-        aspect: pickDefaultResolution(sizes),
+        aspect: isScene ? pickSceneAspect(sizes) : pickDefaultResolution(sizes),
         quality: pickDefaultResolution(quals),
         qualityChoices: quals,
         maxRefs: sheetR2iRefCap(sizeRow),
@@ -213,7 +332,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
   }
 
   function openSheetNode() {
-    const kind = isCostume ? "costume" : "character";
+    const kind = isCostume ? "costume" : isScene ? "scene" : "character";
     const refs = collectAssetSheetRefs(row);
     if (!refs.length) {
       setError("Generate at least one angle first.");
@@ -226,15 +345,35 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
       models.r2i[0];
     const r2iId = r2iRow?.id || models.r2iId || "";
     const cap = sheetR2iRefCap(r2iRow);
-    const sizes = sizeChoices(r2iRow);
+    const sizes = isScene ? sceneSizeChoices(r2iRow) : sizeChoices(r2iRow);
     const quals = qualityChoices(r2iRow);
+    const fields = row.fields || {};
+    const photoreal = String(fields.photoreal || "on").toLowerCase() !== "off";
+    const attached = (isScene ? SCENE_SLOTS : CHAR_ALL)
+      .filter((s) => row.identity?.[s])
+      .map((s) => ({
+        id: s,
+        label: slotLabel(s),
+        path: row.identity?.[s] || "",
+        url: ident[s] || "",
+      }));
     try {
       spawnAngleResult({
         builderId: `lib-${row.id}`,
-        slot: COSTUME_SHEET_SLOT,
-        label: kind === "costume" ? "Costume sheet" : "Character sheet",
-        prompt:
-          kind === "costume"
+        slot: isScene ? SCENE_SHEET_SLOT : COSTUME_SHEET_SLOT,
+        label: isScene
+          ? "Scene sheet"
+          : kind === "costume"
+            ? "Costume sheet"
+            : "Character sheet",
+        prompt: isScene
+          ? composeSceneSheetPrompt(
+              fields.prompt || row.name || "this place",
+              "",
+              attached,
+              { photoreal },
+            )
+          : kind === "costume"
             ? composeCostumeSheetPrompt(row.fields?.wardrobe || row.name || "")
             : composeCharacterSheetPrompt(row.name || "character"),
         generating: false,
@@ -243,19 +382,14 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         assetId: row.id,
         sourceStill: refs[0],
         extraRefs: refs.slice(1),
-        refPreviews: ALL.filter((s) => row.identity?.[s]).map((s) => ({
-          id: s,
-          label: SLOT_LABEL[s] || s,
-          path: row.identity?.[s] || "",
-          url: ident[s] || "",
-        })),
+        refPreviews: attached,
         t2iModel: models.t2iId,
         r2iModel: r2iId,
         modelId: r2iId,
         maxRefs: cap,
         resolution: pickDefaultResolution(quals) || pickSheetResolution(sizes),
         resolutionChoices: sizes,
-        aspect: pickSheetResolution(sizes),
+        aspect: isScene ? pickSceneAspect(sizes) : pickSheetResolution(sizes),
         quality: pickDefaultResolution(quals),
         qualityChoices: quals,
         name: row.name,
@@ -287,6 +421,13 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
           </button>
         </div>
         <div className="node-body">
+          <input
+            ref={replaceRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={onReplaceFile}
+          />
           <label className="builder-field">
             <span className="field-label">Name</span>
             <input className="model" value={name} onChange={(e) => setName(e.target.value)} />
@@ -338,14 +479,31 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                 {hasSheet ? "Regenerate Character Sheet" : "Generate Character Sheet"}
               </button>
             ) : null}
+            {canSceneSheet ? (
+              <button
+                type="button"
+                className="generate"
+                disabled={busy}
+                onClick={() => openSheetNode()}
+              >
+                {hasSheet ? "Regenerate Scene Sheet" : "Generate Scene Sheet"}
+              </button>
+            ) : null}
           </div>
-          {hasSheet ? (
+          {hasSheet && isCostume ? (
             <p className="hint">Costume sheet is the primary Dress ref for this outfit.</p>
+          ) : null}
+          {isScene ? (
+            <p className="hint">
+              Hero is the walk-in wide. Empty yellow thumbs replace a still (drop or click).
+              Double-click a still to enlarge.
+            </p>
           ) : null}
           <p className="field-label">Angles</p>
           <div className="sheet-progress">
-            {(hasSheet ? [COSTUME_SHEET_SLOT, ...filled] : filled).map((slot) => {
-              const src = ident[slot] || row.url;
+            {displaySlots.map((slot) => {
+              const src = ident[slot] || (slot === primary ? row.url : "") || "";
+              const empty = !src;
               return (
                 <div key={slot} className="sheet-angle">
                   {src ? (
@@ -353,37 +511,64 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                       src={src}
                       alt={slot}
                       onDoubleClick={() =>
-                        openLightbox({ src, kind: "image", title: SLOT_LABEL[slot] || slot })
+                        openLightbox({ src, kind: "image", title: slotLabel(slot) })
                       }
                     />
                   ) : (
-                    <div className="sheet-angle-empty">{slot}</div>
+                    <div
+                      className="sheet-angle-empty sheet-angle-replace"
+                      role="button"
+                      title="Replace still"
+                      onClick={() => pickReplace(slot)}
+                      onDragOver={(e) => {
+                        if (peekLibraryDrag() || hasLibraryPayload(e.dataTransfer)) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "copy";
+                        }
+                      }}
+                      onDrop={(e) => onDropReplace(e, slot)}
+                    >
+                      Replace still
+                    </div>
                   )}
                   <span>
-                    {SLOT_LABEL[slot] || slot}
-                    {primary === slot ? " · primary" : ""}
+                    {slotLabel(slot)}
+                    {primary === slot ? (isScene ? " · primary Hero" : " · primary") : ""}
                   </span>
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={busy || primary === slot}
-                    onClick={() => void setPrimary(slot)}
-                  >
-                    Set primary
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={busy}
-                    onClick={() => void regen(slot)}
-                  >
-                    {busy ? "…" : "Regenerate"}
-                  </button>
+                  {empty ? (
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={busy}
+                      onClick={() => spawnMissingAngle(slot)}
+                    >
+                      Generate
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={busy || primary === slot}
+                        onClick={() => void setPrimary(slot)}
+                      >
+                        {isScene && slot === "hero" ? "Set primary Hero" : "Set primary"}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={busy}
+                        onClick={() => void regen(slot)}
+                      >
+                        {busy ? "…" : "Regenerate"}
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}
           </div>
-          {missing.length ? (
+          {!isScene && missing.length ? (
             <div className="params">
               <label className="param">
                 <span>Add angle</span>

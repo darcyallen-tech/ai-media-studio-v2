@@ -542,7 +542,7 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
           </div>
           {error ? <p className="hint warn">{error}</p> : null}
           <p className="hint">
-            Click a Character or Costume to view angles, set primary, and
+            Click a Character, Costume, or Scene to view angles, set primary, and
             regenerate. Drag onto a matching node to attach.
           </p>
           <div className="library-grid">
@@ -560,7 +560,11 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                     onDragStart={(e) => onAssetDragStart(e, asset)}
                     onDragEnd={onDragEnd}
                     onClick={() => {
-                      if (asset.kind === "character" || asset.kind === "costume") {
+                      if (
+                        asset.kind === "character" ||
+                        asset.kind === "costume" ||
+                        asset.kind === "scene"
+                      ) {
                         setEditing(asset);
                         return;
                       }

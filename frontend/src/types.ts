@@ -161,6 +161,23 @@ export type PromptLock = {
   preferModel?: string;
 };
 
+export type PromptCanvasDraft = {
+  prompt?: string;
+  modelId?: string;
+  mode?: Mode;
+  modality?: string;
+  duration?: string;
+  aspect?: string;
+  resolution?: string;
+  seed?: string;
+  negativePrompt?: string;
+  numImages?: number;
+  audioOn?: boolean | null;
+  voice?: string;
+  draft?: boolean;
+  intelligentCuts?: boolean;
+};
+
 export type PromptNodeData = {
   onGenerated: (
     result: GenerateResponse,
@@ -200,6 +217,9 @@ export type PromptNodeData = {
   incomingPrompt?: string | null;
   incomingPromptToken?: number;
   incomingPromptMode?: "replace" | "append";
+  canvasDraft?: PromptCanvasDraft | null;
+  canvasDraftToken?: number;
+  onCanvasDraft?: (draft: PromptCanvasDraft) => void;
   lockTo?: PromptLock | null;
   pins?: FramePin[];
   onPinsChange?: (pins: FramePin[]) => void;

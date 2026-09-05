@@ -59,6 +59,14 @@ import {
   type EdgeStyle,
   type GridSnap,
 } from "./canvasPrefs";
+import {
+  buildSnapshot,
+  deleteCanvas,
+  fetchCanvas,
+  isCanvasSnapshot,
+  putCanvas,
+  type CanvasSnapshot,
+} from "./canvasGraph";
 import { applyTheme, normalizeTheme, readStoredTheme, type ThemeName } from "./theme";
 import {
   ANGLE_GENERATE_EVENT,
@@ -99,6 +107,7 @@ import {
   type HubAsset,
   type HubNodeData,
   type PromptBuilderNodeData,
+  type PromptCanvasDraft,
   type PromptNodeData,
   type RefCatalogEntry,
   type RefNodeData,
@@ -505,6 +514,15 @@ function StudioCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [canvasDraft, setCanvasDraft] = useState<PromptCanvasDraft | null>(null);
+  const [canvasDraftToken, setCanvasDraftToken] = useState(0);
+  const promptDraftRef = useRef<PromptCanvasDraft>({});
+  const lastSnapshotRef = useRef<CanvasSnapshot | null>(null);
+  const skipAutosaveRef = useRef(false);
+  const saveCanvasRef = useRef<(opts?: { quiet?: boolean }) => void>(() => undefined);
+  const onCanvasDraft = useCallback((draft: PromptCanvasDraft) => {
+    promptDraftRef.current = draft;
+  }, []);
   const maskApiRef = useRef<MaskApi | null>(null);
   const toolCompareSourceRef = useRef<Record<string, LibraryItem | null>>({});
   const registerMaskApi = useCallback((api: MaskApi | null) => {
@@ -517,7 +535,7 @@ function StudioCanvas() {
     );
   }, [edgeType, setEdges]);
 
-  const { screenToFlowPosition, getNodes, fitView, setCenter } = useReactFlow();
+  const { screenToFlowPosition, getNodes, getEdges, fitView, setCenter } = useReactFlow();
   const nodesReady = useNodesInitialized();
   const didCenterPrompt = useRef(false);
   const dimChangeTimer = useRef(0);
@@ -543,6 +561,220 @@ function StudioCanvas() {
       maxZoom: 1,
     });
   }, [fitView, getNodes]);
+
+  const snapshotBitsRef = useRef({
+    sourceItem,
+    firstItem,
+    lastItem,
+    characters,
+    scenes,
+    props,
+    costumes,
+    hubTitle,
+    hubNotes,
+    hubIds,
+    shots,
+    studioMode,
+    studioModality,
+    instrumental,
+    framePins,
+    builderSessions,
+    toolSources,
+    gridSnap,
+    edgeStyle,
+  });
+  snapshotBitsRef.current = {
+    sourceItem,
+    firstItem,
+    lastItem,
+    characters,
+    scenes,
+    props,
+    costumes,
+    hubTitle,
+    hubNotes,
+    hubIds,
+    shots,
+    studioMode,
+    studioModality,
+    instrumental,
+    framePins,
+    builderSessions,
+    toolSources,
+    gridSnap,
+    edgeStyle,
+  };
+
+  const applyCanvasSnapshot = useCallback(
+    (snap: CanvasSnapshot) => {
+      skipAutosaveRef.current = true;
+      setPinEdit(null);
+      const slots = snap.slots;
+      setSourceItem(slots.source ?? null);
+      setFirstItem(slots.first ?? null);
+      setLastItem(slots.last ?? null);
+      setCharacters(Array.isArray(slots.characters) ? slots.characters : []);
+      setScenes(Array.isArray(slots.scenes) ? slots.scenes : []);
+      setProps(Array.isArray(slots.props) ? slots.props : []);
+      setCostumes(Array.isArray(slots.costumes) ? slots.costumes : []);
+      setHubTitle(slots.hubTitle || "");
+      setHubNotes(slots.hubNotes || "");
+      setHubIds(Array.isArray(slots.hubIds) ? slots.hubIds : []);
+      setShots(Array.isArray(slots.shots) ? slots.shots : []);
+      setStudioMode(slots.studioMode || "image");
+      setStudioModality(slots.studioModality || "t2i");
+      setInstrumental(Boolean(slots.instrumental));
+      setFramePins(Array.isArray(slots.framePins) ? slots.framePins : []);
+      setBuilderSessions(slots.builderSessions || {});
+      setToolSources(slots.toolSources || {});
+      promptDraftRef.current = snap.promptDraft || {};
+      setCanvasDraft(snap.promptDraft || null);
+      setCanvasDraftToken((n) => n + 1);
+      const restored = (snap.nodes || []).map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        width: n.width ?? undefined,
+        height: n.height ?? undefined,
+        style: n.style,
+        dragHandle: n.dragHandle || ".node-header",
+        data: (n.data || {}) as StudioNode["data"],
+      })) as StudioNode[];
+      if (!restored.some((n) => n.id === "prompt")) {
+        restored.unshift(initialNodes[0]);
+      }
+      setNodes(restored);
+      setEdges(
+        (snap.edges || []).map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle ?? undefined,
+          targetHandle: e.targetHandle ?? undefined,
+          type: e.type,
+          label: e.label ?? undefined,
+        })),
+      );
+      lastSnapshotRef.current = snap;
+      window.setTimeout(() => {
+        skipAutosaveRef.current = false;
+      }, 0);
+    },
+    [setEdges, setNodes],
+  );
+
+  const saveCanvasNow = useCallback(
+    (opts?: { quiet?: boolean }) => {
+      if (skipAutosaveRef.current) return;
+      const bits = snapshotBitsRef.current;
+      const snap = buildSnapshot({
+        nodes: getNodes(),
+        edges: getEdges(),
+        slots: {
+          source: bits.sourceItem,
+          first: bits.firstItem,
+          last: bits.lastItem,
+          characters: bits.characters,
+          scenes: bits.scenes,
+          props: bits.props,
+          costumes: bits.costumes,
+          hubTitle: bits.hubTitle,
+          hubNotes: bits.hubNotes,
+          hubIds: bits.hubIds,
+          shots: bits.shots,
+          studioMode: bits.studioMode,
+          studioModality: bits.studioModality,
+          instrumental: bits.instrumental,
+          framePins: bits.framePins,
+          builderSessions: bits.builderSessions,
+          toolSources: bits.toolSources,
+        },
+        promptDraft: promptDraftRef.current,
+        gridSnap: bits.gridSnap,
+        edgeStyle: bits.edgeStyle,
+      });
+      lastSnapshotRef.current = snap;
+      void putCanvas(snap)
+        .then(() => {
+          if (!opts?.quiet) toast("Canvas saved.");
+        })
+        .catch((err: unknown) => {
+          if (!opts?.quiet) {
+            toast(err instanceof Error ? err.message : "Could not save canvas.", true);
+          }
+        });
+    },
+    [getEdges, getNodes],
+  );
+  saveCanvasRef.current = saveCanvasNow;
+
+  const refreshCanvas = useCallback(() => {
+    const snap = lastSnapshotRef.current;
+    if (!snap || !isCanvasSnapshot(snap)) {
+      toast("Nothing saved yet.");
+      return;
+    }
+    applyCanvasSnapshot(snap);
+    toast("Reloaded last save.");
+  }, [applyCanvasSnapshot]);
+
+  const newCanvas = useCallback(() => {
+    skipAutosaveRef.current = true;
+    setPinEdit(null);
+    setSourceItem(null);
+    setFirstItem(null);
+    setLastItem(null);
+    setCharacters([]);
+    setScenes([]);
+    setProps([]);
+    setCostumes([]);
+    setHubTitle("");
+    setHubNotes("");
+    setHubIds([]);
+    setShots([]);
+    setActiveShotId(null);
+    setStudioMode("image");
+    setStudioModality("t2i");
+    setInstrumental(true);
+    setFramePins([]);
+    setBuilderSessions({});
+    setToolSources({});
+    setAppliedPrompt(null);
+    setMaskReady(false);
+    promptDraftRef.current = {};
+    setCanvasDraft(null);
+    setCanvasDraftToken((n) => n + 1);
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+    lastSnapshotRef.current = null;
+    void deleteCanvas();
+    toast("New canvas.");
+    window.setTimeout(() => {
+      skipAutosaveRef.current = false;
+    }, 0);
+  }, [setEdges, setNodes]);
+
+  useEffect(() => {
+    let live = true;
+    void fetchCanvas().then((snap) => {
+      if (!live || !snap) return;
+      didCenterPrompt.current = true;
+      applyCanvasSnapshot(snap);
+    });
+    return () => {
+      live = false;
+    };
+  }, [applyCanvasSnapshot]);
+
+  useEffect(() => {
+    const flush = () => saveCanvasRef.current({ quiet: true });
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, []);
 
   const closePinEdit = useCallback(() => {
     setPinEdit(null);
@@ -744,6 +976,7 @@ function StudioCanvas() {
           current,
         );
       });
+      saveCanvasRef.current({ quiet: true });
     },
     [addCompareFromResult, closeNode, setEdges, setNodes],
   );
@@ -1028,6 +1261,7 @@ function StudioCanvas() {
           current,
         ),
       );
+      saveCanvasRef.current({ quiet: true });
     },
     [closeNode, setEdges, setNodes],
   );
@@ -2904,6 +3138,9 @@ function StudioCanvas() {
               incomingPrompt: appliedPrompt?.text ?? null,
               incomingPromptToken: appliedPrompt?.token ?? 0,
               incomingPromptMode: appliedPrompt?.mode ?? "replace",
+              canvasDraft,
+              canvasDraftToken,
+              onCanvasDraft,
               onAttachSource: (item) => tryAttachSlot(SOURCE_ID, item),
               pins: framePins,
               onPinsChange: setFramePins,
@@ -3229,6 +3466,28 @@ function StudioCanvas() {
                       }),
                     );
                   }
+                  if (info.slot === "hero" && info.path) {
+                    setNodes((current) =>
+                      current.map((row) => {
+                        if (
+                          row.type !== "result" ||
+                          row.data.builderId !== builderId ||
+                          row.data.slot === "hero"
+                        ) {
+                          return row;
+                        }
+                        return {
+                          ...row,
+                          data: {
+                            ...row.data,
+                            assetId: info.assetId,
+                            sourceStill: info.path,
+                          },
+                        };
+                      }),
+                    );
+                  }
+                  saveCanvasRef.current({ quiet: true });
                 },
                 onClose: () => closeNode(n.id),
               },
@@ -3668,6 +3927,9 @@ function StudioCanvas() {
     toolSources,
     tryAttachSlot,
     upsertSheetAngle,
+    canvasDraft,
+    canvasDraftToken,
+    onCanvasDraft,
   ]);
 
   useEffect(() => {
@@ -3916,6 +4178,33 @@ function StudioCanvas() {
             }}
           >
             Model Guide
+          </button>
+          <button
+            type="button"
+            className="library-toggle"
+            aria-label="Save Canvas"
+            title="Save canvas (nodes, prompts, model picks, asset ids)"
+            onClick={() => saveCanvasNow()}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            className="library-toggle"
+            aria-label="Refresh canvas"
+            title="Reload this graph from the last save"
+            onClick={refreshCanvas}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            className="library-toggle"
+            aria-label="New canvas"
+            title="Clear the canvas"
+            onClick={newCanvas}
+          >
+            New
           </button>
           <div>
             <h1>AI Media Studio V2</h1>

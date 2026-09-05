@@ -27,6 +27,7 @@ import {
   SCENE_SLOTS,
   SCENE_SLOT_LABEL,
   SCENE_EXTRA_CAMERA_GUARD,
+  sceneAngleEnhanceBits,
   sceneSizeChoices,
   sizeChoices,
   SLOT_LABEL,
@@ -524,16 +525,28 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               ? "Keep location lock. No gibberish labels."
               : "Keep identity and wardrobe lock. No gibberish labels.",
           ]
-        : ["[Rewrite this extra-angle prompt only. Keep the locked camera. Do not invent a new location or character.]"];
+        : isSceneAngle
+          ? sceneAngleEnhanceBits(data.slot || "", creativeEnhance)
+          : ["[Rewrite this extra-angle prompt only. Keep the locked camera. Do not invent a new location or character.]"];
+      const stillNow = (result.local_paths && result.local_paths[0]) || "";
+      const heroStill = data.sourceStill || "";
+      const imageUrls = isSceneAngle
+        ? [heroStill, stillNow].filter((p, i, all) => p && all.indexOf(p) === i)
+        : [];
       const res = await fetch("/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: [prompt, "", ...sheetBits].filter(Boolean).join("\n"),
-          model_id: selectedModel?.id || data.r2iModel || data.t2iModel || "",
+          model_id:
+            (isSceneAngle ? angleModel?.id : selectedModel?.id) ||
+            data.r2iModel ||
+            data.t2iModel ||
+            "",
           modality: isSheet || !isHeroT2i ? "r2i" : "t2i",
           mode: "image",
           creative: creativeEnhance,
+          image_urls: imageUrls,
         }),
       });
       const body = await readJson(res);
@@ -541,7 +554,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
       if (!res.ok || !rewritten) {
         throw new Error(errorFromBody(body, "Enhance returned an empty reply."));
       }
-      const kept = isSceneSheet && photorealOn ? ensureScenePhotoreal(rewritten, true) : rewritten;
+      const kept =
+        (isSceneSheet || isSceneAngle) && photorealOn
+          ? ensureScenePhotoreal(rewritten, true)
+          : rewritten;
       setAnglePrompt(kept);
       data.onPrompt?.(kept);
       toast("Sheet prompt enhanced.");

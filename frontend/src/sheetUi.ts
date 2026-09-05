@@ -41,6 +41,47 @@ export const SCENE_VIEWS: Record<string, string> = {
 };
 export const SCENE_EXTRA_CAMERA_GUARD =
   "Do not copy the source camera angle.";
+
+const SCENE_ANGLE_CAMERA_FIRST: Record<string, string> = {
+  opposite:
+    "Camera-first: write what you would see standing at the FAR END of this space, 180 degrees from the Hero still, looking back toward the Hero camera. The landmark must change place in frame.",
+  feature:
+    "Camera-first: write what you would see from a 3/4 view of the hero landmark, camera off the center axis, still chest height. Not a new wide establishing.",
+  detail:
+    "Camera-first: write a tight photograph of one real surface in this scene (stone, timber, stall, fountain basin). Fill the frame. No new wide street.",
+  overview:
+    "Camera-first: write an unlabeled isometric or high top-down of THIS space only. No compass letters, no map labels.",
+};
+
+/** Extra-angle Enhance brief. Creative ON = camera-first from this slot + Hero still. */
+export function sceneAngleEnhanceBits(slot: string, creative: boolean): string[] {
+  const key = (slot || "").trim().toLowerCase();
+  const view = SCENE_VIEWS[key] || "";
+  const cameraFirst = SCENE_ANGLE_CAMERA_FIRST[key];
+  if (creative && cameraFirst) {
+    return [
+      `[Creative Enhance. Slot: ${key}. ${cameraFirst}]`,
+      view,
+      "Look at the attached Hero still (and this angle's still if attached). Keep architecture and materials from Hero. Do not copy Hero composition. Do not invent a new location.",
+      SCENE_EXTRA_CAMERA_GUARD,
+    ];
+  }
+  if (key === "hero") {
+    return creative
+      ? [
+          "[Creative Enhance. Expand this Hero walk-in into a production brief for the same location. Keep camera as a visitor entering the space. Do not invent a new location.]",
+        ]
+      : [
+          "[Scene Enhance. Tight rewrite of this Hero walk-in: keep facts, camera, architecture. Do not invent shops, extra weather, or set dressing.]",
+        ];
+  }
+  return [
+    `[Rewrite this extra-angle prompt only. Slot: ${key || "angle"}. Keep the locked camera. Tight rewrite, facts only. Do not invent a new location or character.]`,
+    view,
+    SCENE_EXTRA_CAMERA_GUARD,
+  ].filter(Boolean);
+}
+
 export const COSTUME_TAGS = [
   "everyday",
   "hero",
@@ -1748,7 +1789,9 @@ export function sheetModel(row: ModelRow | null | undefined) {
     blob.includes("seedream") ||
     blob.includes("nano") ||
     blob.includes("qwen") ||
-    blob.includes("recraft")
+    blob.includes("recraft") ||
+    blob.includes("gpt-image-2") ||
+    blob.includes("gpt image 2")
   ) {
     return true;
   }

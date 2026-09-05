@@ -1448,6 +1448,24 @@ html[data-theme="night"] .ref-chip.pick-on {
   background: #d5dde6;
 }
 
+.sheet-angle-empty.sheet-angle-replace {
+  background: #e8d48a;
+  color: #5a4a12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  cursor: pointer;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+html[data-theme="night"] .sheet-angle-empty.sheet-angle-replace {
+  background: #c9b15a;
+  color: #1c2530;
+}
+
 .sheet-angle-run {
   opacity: 0.8;
 }
