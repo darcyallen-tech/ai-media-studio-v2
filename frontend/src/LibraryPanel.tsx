@@ -95,7 +95,19 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
   const [dropHot, setDropHot] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLElement>(null);
-  const assetClickTimer = useRef(0);
+
+  function openSceneEditor(id: string) {
+    const row = assets.find((a) => a.id === id);
+    if (row) setEditing(row);
+  }
+
+  function openAssetEditor(asset: StudioAsset) {
+    if (asset.kind === "scene") {
+      openSceneEditor(asset.id);
+      return;
+    }
+    setEditing(asset);
+  }
 
   async function reload() {
     try {
@@ -566,10 +578,7 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                         asset.kind === "costume" ||
                         asset.kind === "scene"
                       ) {
-                        window.clearTimeout(assetClickTimer.current);
-                        assetClickTimer.current = window.setTimeout(() => {
-                          setEditing(asset);
-                        }, 220);
+                        openAssetEditor(asset);
                         return;
                       }
                       if (item) onPick(item);
@@ -596,7 +605,6 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        window.clearTimeout(assetClickTimer.current);
                         const src = asset.thumb_url || asset.url;
                         if (!src) return;
                         openLightbox({

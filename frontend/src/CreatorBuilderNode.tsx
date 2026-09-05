@@ -3232,10 +3232,10 @@ async function enhancePrompt(
   if (opts?.scene) {
     if (opts.creative) {
       instruct =
-        "[Creative Enhance. Expand this location brief into a production brief: shops, materials, time of day, weather, extra set dressing that fits the location. Do not add dwarves/orcs unless Notes asked. Embellish content, not style.]";
+        "[Creative Enhance ON. The user wrote a brief. Expand into a production location brief: architecture, materials, lighting direction, what sits on the far wall, entrance behind camera if Opposite. Stay in this location. Add fitting set dressing (bunks, weapon racks, straw, slit windows — whatever belongs here). Photoreal lock one sentence if checked.]";
     } else {
       instruct =
-        "[Scene Enhance. Tight rewrite: keep facts, camera, architecture. Do not invent shops, extra weather, or set dressing. Do not add dwarves/orcs unless Notes asked.]";
+        "[Creative Enhance OFF. Tighten for the selected model. Do not invent shops, doors, or set dressing. Keep facts, camera, architecture.]";
     }
     if (opts.photoreal !== false) {
       instruct +=
@@ -3245,6 +3245,8 @@ async function enhancePrompt(
     }
     if (opts.notes) instruct += `\nNotes: ${opts.notes}`;
   }
+  const creative = Boolean(opts?.creative);
+  console.info(`enhance.creative=${creative ? "true" : "false"}`);
   const res = await fetch("/enhance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3253,7 +3255,7 @@ async function enhancePrompt(
       model_id: modelId,
       modality: "t2i",
       mode: "image",
-      creative: Boolean(opts?.creative),
+      creative,
     }),
   });
   const body = await readJson<GenBody>(res);

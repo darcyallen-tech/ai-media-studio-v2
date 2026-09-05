@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
 from app.create_catalog import resolve_model
 from app.partner_routing import enhance_instructions, evaluate, family_of
 from app.xai_client import XAIConfigError, chat_json, chat_json_vision, still_data_url
+
+log = logging.getLogger("ams.enhance")
 
 SYSTEM = """You rewrite image/video generation prompts.
 
@@ -43,18 +46,20 @@ Rules:
 """
 
 TIGHT_NOTE = (
-    "Creative Enhance is OFF. Tight rewrite for the selected model. Facts only. "
-    "Do not invent shops, extra weather, set dressing, wardrobe micro, or SFX layers. "
+    "Creative Enhance is OFF. Tighten for the selected model. Do not invent shops, "
+    "doors, or set dressing. Facts only: keep the user's location, camera, and architecture. "
     "If a photoreal lock is requested, keep it as one sentence after the rewrite — "
     "do not paste it into the body.\n\n"
 )
 
 CREATIVE_NOTE = (
-    "Creative Enhance is ON. Brief-in, production-brief-out. Invent fitting detail "
-    "(set dressing, camera beat, wardrobe micro, SFX layers) that matches the attached "
-    "refs / scenario. Do not invent a new location, new character, or new plot beat "
-    "the user did not ask for. Photoreal ON means more CONTENT, still photograph not painting. "
-    "Not a filter bypass. Do not change the selected model.\n\n"
+    "Creative Enhance is ON. The user wrote a brief. Expand into a production location "
+    "brief: architecture, materials, lighting direction, what sits on the far wall, "
+    "entrance behind camera if Opposite. Stay in this location. Invent fitting set dressing "
+    "that belongs here (bunks, weapon racks, straw, slit windows, stalls, bottles — "
+    "whatever fits THIS place). Do not invent a new location, character, or plot beat. "
+    "Photoreal lock one sentence if checked. Photoreal ON means more CONTENT, still "
+    "photograph not painting. Not a filter bypass. Do not change the selected model.\n\n"
 )
 
 STORYBOARD_CREATIVE_NOTE = (
@@ -183,9 +188,25 @@ def enhance_prompt_text(
         else ""
     )
     creative_on = bool(creative)
+    flag = "true" if creative_on else "false"
+    log.info("enhance.creative=%s", flag)
+    print(f"enhance.creative={flag}", flush=True)
     creative_note = CREATIVE_NOTE if creative_on else TIGHT_NOTE
     if creative_on and (mode or "").strip().lower() in ("storyboard", "board"):
         creative_note += STORYBOARD_CREATIVE_NOTE
+    system = SYSTEM
+    if creative_on:
+        system = (
+            SYSTEM
+            + "\nCreative Enhance ON: expand the brief. A short tight rewrite is a failure. "
+            "Add concrete production detail that fits the same location."
+        )
+    else:
+        system = (
+            SYSTEM
+            + "\nCreative Enhance OFF: Tighten for the selected model. "
+            "Do not invent shops, doors, or set dressing."
+        )
     user = (
         f"Mode: {mode or 'image'}\n"
         f"Modality: {modality or 't2i'}\n"
@@ -202,31 +223,27 @@ def enhance_prompt_text(
         if readable:
             try:
                 raw = chat_json_vision(
-                    system=SYSTEM,
+                    system=system,
                     user_text=user,
                     image_paths=readable,
-                    temperature=0.35 if not creative_on else 0.5,
+                    temperature=0.35 if not creative_on else 0.7,
                     max_tokens=4000 if creative_on else 2200,
                 )
                 vision_used = True
             except Exception:
-                import logging
-
-                logging.getLogger(__name__).exception(
-                    "Enhance vision failed; falling back to text-only"
-                )
+                log.exception("Enhance vision failed; falling back to text-only")
                 raw = chat_json(
-                    system=SYSTEM,
+                    system=system,
                     user=user,
-                    temperature=0.35 if not creative_on else 0.5,
+                    temperature=0.35 if not creative_on else 0.7,
                     max_tokens=4000 if creative_on else 2200,
                 )
                 vision_used = False
         else:
             raw = chat_json(
-                system=SYSTEM,
+                system=system,
                 user=user,
-                temperature=0.35 if not creative_on else 0.5,
+                temperature=0.35 if not creative_on else 0.7,
                 max_tokens=4000 if creative_on else 2200,
             )
     except XAIConfigError as exc:
@@ -240,6 +257,31 @@ def enhance_prompt_text(
             "vision": False,
         }
     rewritten = _parse_prompt(raw, "")
+    if (
+        rewritten
+        and creative_on
+        and (
+            rewritten.strip() == original.strip()
+            or len(rewritten) < max(80, int(len(original) * 1.25))
+        )
+    ):
+        log.info("enhance.creative=true retry (tight or duplicate rewrite)")
+        try:
+            raw = chat_json(
+                system=system,
+                user=user
+                + "\n\nYour last rewrite was too tight. Creative Enhance is ON. "
+                "Expand into a production brief with concrete set dressing that "
+                "fits this location (architecture, materials, lighting direction, "
+                "far wall, entrance behind camera if Opposite).",
+                temperature=0.75,
+                max_tokens=4000,
+            )
+            retry = _parse_prompt(raw, "")
+            if retry and len(retry) > len(rewritten):
+                rewritten = retry
+        except Exception:
+            log.exception("Enhance creative retry failed")
     if not rewritten:
         return {
             "ok": False,
@@ -291,6 +333,7 @@ def enhance_prompt_text(
         "original": original,
         "error": None,
         "vision": vision_used,
+        "creative": creative_on,
     }
     if decision.switch:
         out["switch"] = decision.switch.as_dict()

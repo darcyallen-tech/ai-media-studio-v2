@@ -533,6 +533,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
       const imageUrls = isSceneAngle
         ? [heroStill, stillNow].filter((p, i, all) => p && all.indexOf(p) === i)
         : [];
+      console.info(`enhance.creative=${creativeEnhance ? "true" : "false"}`);
       const res = await fetch("/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

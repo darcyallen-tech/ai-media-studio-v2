@@ -1741,7 +1741,7 @@ def canvas_get() -> dict[str, Any]:
     return {"ok": True, "item": load_canvas()}
 
 
-@app.put("/canvas")
+@app.api_route("/canvas", methods=["PUT", "POST"])
 def canvas_put(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Canvas body must be an object.")

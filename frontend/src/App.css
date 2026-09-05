@@ -11,25 +11,32 @@
   left: 18px;
   right: 18px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   pointer-events: none;
+  gap: 10px;
 }
 
 .topbar-left {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   pointer-events: auto;
-  max-width: calc(100% - 280px);
+  min-width: 0;
 }
 
 .topbar-canvas {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  min-width: 0;
 }
 
 .topbar-right {

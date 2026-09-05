@@ -251,7 +251,7 @@ export async function fetchCanvas(): Promise<CanvasSnapshot | null> {
 export async function putCanvas(snapshot: CanvasSnapshot): Promise<void> {
   writeLocalCanvas(snapshot);
   const res = await fetch("/canvas", {
-    method: "PUT",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(snapshot),
   });

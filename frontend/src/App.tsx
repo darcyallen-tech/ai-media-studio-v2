@@ -709,12 +709,6 @@ function StudioCanvas() {
   saveCanvasRef.current = saveCanvasNow;
 
   const refreshCanvas = useCallback(() => {
-    const cached = lastSnapshotRef.current;
-    if (cached && isCanvasSnapshot(cached)) {
-      applyCanvasSnapshot(cached);
-      toast("Reloaded last save.");
-      return;
-    }
     void fetchCanvas().then((snap) => {
       if (!snap || !isCanvasSnapshot(snap)) {
         toast("Nothing saved yet.");
@@ -4218,7 +4212,7 @@ function StudioCanvas() {
               New
             </button>
           </div>
-          <div>
+          <div className="topbar-title">
             <h1>AI Media Studio V2</h1>
             <p>Wheel zoom · Middle-drag pan</p>
           </div>

@@ -268,7 +268,7 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
 
   function spawnMissingAngle(slot: string) {
     const frontPath = isScene
-      ? row.identity?.hero || ""
+      ? row.identity?.hero || row.identity?.sheet || row.still_path || ""
       : row.identity?.front || "";
     if (slot !== "front" && slot !== "hero" && !frontPath) {
       const msg = isScene ? "Generate Hero first." : "Generate Front first.";
