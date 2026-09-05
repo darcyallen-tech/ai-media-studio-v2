@@ -3162,7 +3162,7 @@ function PropForm({
           onChange={(e) => setPropPrompt(e.target.value)}
         />
       </label>
-      <ModelPickers models={models} t2iOnly />
+      <ModelPickers models={models} />
       <p className="estimate">{estimate}</p>
       <div className="prompt-actions">
         <button

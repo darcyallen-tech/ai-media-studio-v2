@@ -95,6 +95,7 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
   const [dropHot, setDropHot] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLElement>(null);
+  const assetClickTimer = useRef(0);
 
   async function reload() {
     try {
@@ -565,7 +566,10 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                         asset.kind === "costume" ||
                         asset.kind === "scene"
                       ) {
-                        setEditing(asset);
+                        window.clearTimeout(assetClickTimer.current);
+                        assetClickTimer.current = window.setTimeout(() => {
+                          setEditing(asset);
+                        }, 220);
                         return;
                       }
                       if (item) onPick(item);
@@ -592,6 +596,7 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
+                        window.clearTimeout(assetClickTimer.current);
                         const src = asset.thumb_url || asset.url;
                         if (!src) return;
                         openLightbox({

@@ -12,7 +12,7 @@ export default function CreativeEnhanceToggle({
 }: Props) {
   if (!hasXai) return null;
   return (
-    <div className="creative-enhance">
+    <div className="creative-enhance" data-testid="creative-enhance">
       <label className="param">
         <span>
           <input

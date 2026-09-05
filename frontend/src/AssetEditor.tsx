@@ -412,7 +412,8 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
         className="modal asset-editor"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Edit asset"
+        aria-label={isScene ? "Edit scene" : "Edit asset"}
+        data-testid={isScene ? "scene-asset-editor" : "asset-editor"}
       >
         <div className="node-header">
           <span>{row.label || row.name}</span>
@@ -510,9 +511,13 @@ export default function AssetEditor({ asset, onClose, onChanged, onDress, onUseR
                     <img
                       src={src}
                       alt={slot}
-                      onDoubleClick={() =>
-                        openLightbox({ src, kind: "image", title: slotLabel(slot) })
-                      }
+                      title="Double-click to enlarge"
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        openLightbox({ src, kind: "image", title: slotLabel(slot) });
+                      }}
                     />
                   ) : (
                     <div

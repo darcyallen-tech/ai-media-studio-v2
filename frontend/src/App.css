@@ -18,9 +18,18 @@
 
 .topbar-left {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   pointer-events: auto;
+  max-width: calc(100% - 280px);
+}
+
+.topbar-canvas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .topbar-right {
@@ -318,7 +327,8 @@
 .result-node .node-body {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
@@ -330,6 +340,11 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.result-node.is-angle .media {
+  flex: 0 0 140px;
+  max-height: 160px;
 }
 
 .result-node .media .result-drag {

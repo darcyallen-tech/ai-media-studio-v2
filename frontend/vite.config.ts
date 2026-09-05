@@ -32,6 +32,7 @@ export default defineConfig({
       "/builder": "http://127.0.0.1:8000",
       "/director": "http://127.0.0.1:8000",
       "/shot-builder": "http://127.0.0.1:8000",
+      "/canvas": "http://127.0.0.1:8000",
     },
   },
 });

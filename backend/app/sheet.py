@@ -137,23 +137,24 @@ def strip_scene_enhance_style(_original: str, rewritten: str) -> str:
 SCENE_VIEWS: dict[str, str] = {
     "hero": "Walk-in wide of the space — enter the location as a visitor would.",
     "opposite": (
-        "Same town, same day, same architecture. Camera is now at the FAR END "
-        "of the square, 180 degrees from the hero still. We look BACK toward "
-        "the hero camera position. The fountain/center landmark must change "
-        "place in frame (if it was mid-ground center, it is now closer or "
-        "offset). Do not repeat the hero composition."
+        "Same location, same day, same architecture. Camera is turned 180 degrees "
+        "from the Hero still, looking back toward where the Hero camera stood. "
+        "Describe what is BEHIND the Hero camera (doors, arch, narthex, the street "
+        "or approach you walked in from). The throne/landmark/center object must "
+        "change place in frame. Do not repeat the Hero composition. Do not assume "
+        "a town square."
     ),
     "feature": (
-        "Same space. 3/4 view of the hero landmark (fountain / inn / gate). "
+        "Same space. 3/4 view of the hero landmark. "
         "Camera off the center axis, still chest height. Do not regenerate "
         "the wide establishing."
     ),
     "detail": (
-        "Tight photograph of one real surface in this scene (stone, timber, "
-        "stall, fountain basin). No new wide street."
+        "Tight photograph of one real surface in this scene. "
+        "No new wide establishing."
     ),
     "overview": (
-        "Unlabeled isometric or high top-down of THIS square only. "
+        "Unlabeled isometric or high top-down of THIS space only. "
         "No compass letters, no map labels."
     ),
 }

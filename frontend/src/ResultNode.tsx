@@ -560,7 +560,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
           : rewritten;
       setAnglePrompt(kept);
       data.onPrompt?.(kept);
-      toast("Sheet prompt enhanced.");
+      toast("Prompt enhanced — hit Generate when you want a still.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Enhance failed.";
       setLocalError(msg);
@@ -806,10 +806,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
       (isSheet || isSceneAngle ? modelCostLabel(angleModel) : "");
 
   return (
-    <div className="studio-node result-node">
+    <div className={isAngle ? "studio-node result-node is-angle" : "studio-node result-node"}>
       <NodeResizer
         minWidth={320}
-        minHeight={320}
+        minHeight={420}
         isVisible={Boolean(selected)}
         lineClassName="node-resize-line"
         handleClassName="node-resize-handle"
@@ -1054,6 +1054,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                   <button
                     type="button"
                     className="ghost nodrag enhance"
+                    data-testid="angle-enhance"
                     disabled={busy || data.generating || enhancingPrompt || !anglePrompt.trim()}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => void enhanceSheetPrompt()}

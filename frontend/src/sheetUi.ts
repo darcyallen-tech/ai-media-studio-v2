@@ -31,26 +31,26 @@ export const SCENE_SLOT_LABEL: Record<string, string> = {
 export const SCENE_VIEWS: Record<string, string> = {
   hero: "Walk-in wide of the space — enter the location as a visitor would.",
   opposite:
-    "Same town, same day, same architecture. Camera is now at the FAR END of the square, 180 degrees from the hero still. We look BACK toward the hero camera position. The fountain/center landmark must change place in frame (if it was mid-ground center, it is now closer or offset). Do not repeat the hero composition.",
+    "Same location, same day, same architecture. Camera is turned 180 degrees from the Hero still, looking back toward where the Hero camera stood. Describe what is BEHIND the Hero camera (doors, arch, narthex, the street or approach you walked in from). The throne/landmark/center object must change place in frame. Do not repeat the Hero composition. Do not assume a town square.",
   feature:
-    "Same space. 3/4 view of the hero landmark (fountain / inn / gate). Camera off the center axis, still chest height. Do not regenerate the wide establishing.",
+    "Same space. 3/4 view of the hero landmark. Camera off the center axis, still chest height. Do not regenerate the wide establishing.",
   detail:
-    "Tight photograph of one real surface in this scene (stone, timber, stall, fountain basin). No new wide street.",
+    "Tight photograph of one real surface in this scene. No new wide establishing.",
   overview:
-    "Unlabeled isometric or high top-down of THIS square only. No compass letters, no map labels.",
+    "Unlabeled isometric or high top-down of THIS space only. No compass letters, no map labels.",
 };
 export const SCENE_EXTRA_CAMERA_GUARD =
   "Do not copy the source camera angle.";
 
 const SCENE_ANGLE_CAMERA_FIRST: Record<string, string> = {
   opposite:
-    "Camera-first: write what you would see standing at the FAR END of this space, 180 degrees from the Hero still, looking back toward the Hero camera. The landmark must change place in frame.",
+    "Camera-first: look at the attached Hero still (first image). Write what you would see after a 180-degree turn, standing at the opposite end of THIS space, looking back at the Hero camera. Describe what is BEHIND the Hero camera — doors, arch, narthex, the street or approach you walked in from. The throne/landmark must change place in frame. Do not copy Hero composition. Do not write 'town square' or 'far end of the square' unless the Hero still actually shows a square.",
   feature:
-    "Camera-first: write what you would see from a 3/4 view of the hero landmark, camera off the center axis, still chest height. Not a new wide establishing.",
+    "Camera-first: look at the attached Hero still. Write what you would see from a 3/4 view of the hero landmark, camera off the center axis, still chest height. Not a new wide establishing.",
   detail:
-    "Camera-first: write a tight photograph of one real surface in this scene (stone, timber, stall, fountain basin). Fill the frame. No new wide street.",
+    "Camera-first: look at the attached Hero still. Write a tight photograph of one real surface in this scene. Fill the frame. No new wide establishing.",
   overview:
-    "Camera-first: write an unlabeled isometric or high top-down of THIS space only. No compass letters, no map labels.",
+    "Camera-first: look at the attached Hero still. Write an unlabeled isometric or high top-down of THIS space only. No compass letters, no map labels.",
 };
 
 /** Extra-angle Enhance brief. Creative ON = camera-first from this slot + Hero still. */
@@ -61,8 +61,7 @@ export function sceneAngleEnhanceBits(slot: string, creative: boolean): string[]
   if (creative && cameraFirst) {
     return [
       `[Creative Enhance. Slot: ${key}. ${cameraFirst}]`,
-      view,
-      "Look at the attached Hero still (and this angle's still if attached). Keep architecture and materials from Hero. Do not copy Hero composition. Do not invent a new location.",
+      "First attached image is the Hero still; second (if any) is this angle's current still. Keep architecture and materials from Hero. Do not copy Hero composition. Do not invent a new location. Rewrite the prompt only — do not generate an image.",
       SCENE_EXTRA_CAMERA_GUARD,
     ];
   }

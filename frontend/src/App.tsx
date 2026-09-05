@@ -224,9 +224,9 @@ const LAST_ID = "last";
 const RESULT_ID = "result";
 const RESULT_NODE_BOX = {
   width: 400,
-  height: 520,
+  height: 680,
   minWidth: 320,
-  minHeight: 320,
+  minHeight: 420,
 };
 const MASK_ID = "mask";
 function compareIdFor(resultId: string) {
@@ -709,13 +709,20 @@ function StudioCanvas() {
   saveCanvasRef.current = saveCanvasNow;
 
   const refreshCanvas = useCallback(() => {
-    const snap = lastSnapshotRef.current;
-    if (!snap || !isCanvasSnapshot(snap)) {
-      toast("Nothing saved yet.");
+    const cached = lastSnapshotRef.current;
+    if (cached && isCanvasSnapshot(cached)) {
+      applyCanvasSnapshot(cached);
+      toast("Reloaded last save.");
       return;
     }
-    applyCanvasSnapshot(snap);
-    toast("Reloaded last save.");
+    void fetchCanvas().then((snap) => {
+      if (!snap || !isCanvasSnapshot(snap)) {
+        toast("Nothing saved yet.");
+        return;
+      }
+      applyCanvasSnapshot(snap);
+      toast("Reloaded last save.");
+    });
   }, [applyCanvasSnapshot]);
 
   const newCanvas = useCallback(() => {
@@ -4179,33 +4186,38 @@ function StudioCanvas() {
           >
             Model Guide
           </button>
-          <button
-            type="button"
-            className="library-toggle"
-            aria-label="Save Canvas"
-            title="Save canvas (nodes, prompts, model picks, asset ids)"
-            onClick={() => saveCanvasNow()}
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            className="library-toggle"
-            aria-label="Refresh canvas"
-            title="Reload this graph from the last save"
-            onClick={refreshCanvas}
-          >
-            Refresh
-          </button>
-          <button
-            type="button"
-            className="library-toggle"
-            aria-label="New canvas"
-            title="Clear the canvas"
-            onClick={newCanvas}
-          >
-            New
-          </button>
+          <div className="topbar-canvas" role="toolbar" aria-label="Canvas">
+            <button
+              type="button"
+              className="library-toggle"
+              data-testid="canvas-save"
+              aria-label="Save Canvas"
+              title="Save canvas (nodes, prompts, model picks, asset ids)"
+              onClick={() => saveCanvasNow()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="library-toggle"
+              data-testid="canvas-refresh"
+              aria-label="Refresh canvas"
+              title="Reload this graph from the last save"
+              onClick={refreshCanvas}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="library-toggle"
+              data-testid="canvas-new"
+              aria-label="New canvas"
+              title="Clear the canvas"
+              onClick={newCanvas}
+            >
+              New
+            </button>
+          </div>
           <div>
             <h1>AI Media Studio V2</h1>
             <p>Wheel zoom · Middle-drag pan</p>
