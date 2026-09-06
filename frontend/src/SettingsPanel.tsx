@@ -361,9 +361,9 @@ export default function SettingsPanel({
       <section className="settings-sec">
         <h3>Local Comfy (music)</h3>
         <p className="hint">
-          ACE-Step 1.5 talks to a ComfyUI you already started. Default
-          http://127.0.0.1:8188 (portable); desktop often :8000. Health tries
-          both. This app does not launch Comfy. MiniMax and ElevenLabs stay on fal.
+          ACE-Step 1.5 talks to ComfyUI at this URL only (default
+          http://127.0.0.1:8188). This app on :8000 is not Comfy. MiniMax and
+          ElevenLabs stay on fal.
         </p>
         <label className="settings-field">
           <span>COMFY_URL</span>

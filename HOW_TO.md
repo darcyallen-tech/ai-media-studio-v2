@@ -44,7 +44,7 @@ Each row has a **dashboard** link. Billing links are under the balance lines in 
 
 You can use the app with **fal only**. Add Runware when you want Frame Editor. Add xAI when you want Enhance.
 
-**Local ACE-Step 1.5 (optional).** Start ComfyUI yourself. Desktop default is **:8000**, portable is **:8188**. Settings → COMFY_URL + **Use local Comfy for music**. Health checks both. If neither answers: **No Comfy API. Desktop default is :8000, portable is :8188. Set Comfy URL in Settings.** MiniMax / ElevenLabs stay on fal. Cost $0.00.
+**Local ACE-Step 1.5 (optional).** Start ComfyUI yourself. Settings → COMFY_URL (`http://127.0.0.1:8188`). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
 
 ---
 

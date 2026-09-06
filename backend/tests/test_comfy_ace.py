@@ -11,13 +11,16 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.comfy_ace import (  # noqa: E402
+    DEFAULT_COMFY_URL,
     WORKFLOW_NAME,
     _EXPORT_API,
-    _UI_PORT,
+    format_405,
     format_comfy_error,
     is_api_graph,
     load_workflow,
+    normalize_comfy_url,
     patch_workflow,
+    probe_comfy,
     queue_post_urls,
     queue_prompt,
     ui_to_api,
@@ -26,7 +29,7 @@ from app.comfy_ace import (  # noqa: E402
 
 
 class QueueOrderTests(unittest.TestCase):
-    def test_prompt_then_api_prompt(self):
+    def test_prompt_then_api_prompt_on_comfy_url_only(self):
         rows = queue_post_urls("http://127.0.0.1:8188")
         self.assertEqual(
             [u for u, _ in rows],
@@ -36,17 +39,24 @@ class QueueOrderTests(unittest.TestCase):
             ],
         )
 
-    def test_desktop_8000_tries_8188_prompt_first(self):
+    def test_does_not_fall_back_to_ams_8000(self):
+        rows = queue_post_urls("http://127.0.0.1:8188")
+        self.assertFalse(any(":8000" in u for u, _ in rows))
+
+    def test_8000_stays_on_that_host_only(self):
         rows = queue_post_urls("http://127.0.0.1:8000")
         self.assertEqual(
             [u for u, _ in rows],
             [
-                "http://127.0.0.1:8188/prompt",
                 "http://127.0.0.1:8000/prompt",
                 "http://127.0.0.1:8000/api/prompt",
-                "http://127.0.0.1:8188/api/prompt",
             ],
         )
+
+    def test_relative_and_vite_become_default_8188(self):
+        self.assertEqual(normalize_comfy_url("/prompt"), DEFAULT_COMFY_URL)
+        self.assertEqual(normalize_comfy_url("http://127.0.0.1:5173"), DEFAULT_COMFY_URL)
+        self.assertEqual(normalize_comfy_url(""), DEFAULT_COMFY_URL)
 
 
 class Queue400Tests(unittest.TestCase):
@@ -94,14 +104,56 @@ class Queue400Tests(unittest.TestCase):
         self.assertEqual(text, "bad graph")
         self.assertNotEqual(text, "400")
 
-    def test_all_405_raises_ui_port(self):
+    def test_405_names_host_this_app(self):
+        hits: list[str] = []
+
         def fake_post(url, payload, *, origin, timeout=30.0):
+            hits.append(url)
             return 405, {}
 
         with patch("app.comfy_ace._post_json", side_effect=fake_post):
             with self.assertRaises(RuntimeError) as ctx:
                 queue_prompt("http://127.0.0.1:8000", {"1": {"class_type": "KSampler"}})
-        self.assertEqual(str(ctx.exception), _UI_PORT)
+        msg = str(ctx.exception)
+        self.assertEqual(
+            msg,
+            "405 on http://127.0.0.1:8000/prompt (this app) — set Comfy URL to :8188",
+        )
+        self.assertEqual(msg, format_405("http://127.0.0.1:8000/prompt"))
+        self.assertIn("127.0.0.1:8000", msg)
+        self.assertEqual(
+            hits,
+            [
+                "http://127.0.0.1:8000/prompt",
+                "http://127.0.0.1:8000/api/prompt",
+            ],
+        )
+
+
+class ProbeTests(unittest.TestCase):
+    def test_comfy_json_devices_system(self):
+        with patch(
+            "app.comfy_ace._get",
+            return_value=json.dumps({"system": {"os": "nt"}, "devices": []}).encode(),
+        ):
+            ok, err = probe_comfy("http://127.0.0.1:8188")
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_ams_health_is_not_comfy(self):
+        with patch(
+            "app.comfy_ace._get",
+            return_value=json.dumps({"ok": True, "app": "AI Media Studio V2"}).encode(),
+        ):
+            ok, err = probe_comfy("http://127.0.0.1:8000")
+        self.assertFalse(ok)
+        self.assertIn("AMS /health is not Comfy", err or "")
+
+    def test_html_index_is_not_comfy(self):
+        with patch("app.comfy_ace._get", return_value=b"<!doctype html><title>AMS</title>"):
+            ok, err = probe_comfy("http://127.0.0.1:8000")
+        self.assertFalse(ok)
+        self.assertIn("not Comfy JSON", err or "")
 
     def test_stops_at_first_200(self):
         hits: list[str] = []

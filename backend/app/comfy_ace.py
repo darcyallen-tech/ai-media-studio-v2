@@ -18,15 +18,9 @@ from app.naming import job_media_dir, make_output_stem, timestamp_now, unique_pa
 from app.prefs import load_prefs
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
-DESKTOP_COMFY_URL = "http://127.0.0.1:8000"
-PORTABLE_COMFY_URL = "http://127.0.0.1:8188"
 WORKFLOW_NAME = "audio_ace_step_1_5_split.json"
 _EXPORT_API = "Export (API) from Comfy, replace this file."
-_BOTH_FAIL = (
-    "No Comfy API. Desktop default is :8000, portable is :8188. "
-    "Set Comfy URL in Settings."
-)
-_UI_PORT = "UI port, not API. Try /api/prompt or :8188"
+_AMS_PORTS = frozenset({8000, 8001, 5173})
 _SKIP_UI_TYPES = frozenset(
     {
         "Note",
@@ -90,29 +84,36 @@ _KEY_RE = re.compile(
 )
 
 
+def normalize_comfy_url(raw: str | None) -> str:
+    """Settings COMFY_URL only. Never AMS origin, Vite, or a relative path."""
+    u = str(raw or "").strip().rstrip("/")
+    if not u or u.startswith("/") or u.startswith("?"):
+        return DEFAULT_COMFY_URL
+    if "://" not in u:
+        u = "http://" + u
+    parsed = urllib.parse.urlparse(u)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return DEFAULT_COMFY_URL
+    if parsed.hostname in ("localhost", "127.0.0.1") and parsed.port == 5173:
+        return DEFAULT_COMFY_URL
+    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
 def comfy_url() -> str:
-    raw = str(load_prefs().get("comfy_url") or "").strip() or DEFAULT_COMFY_URL
-    return raw.rstrip("/")
+    return normalize_comfy_url(str(load_prefs().get("comfy_url") or "") or DEFAULT_COMFY_URL)
 
 
 def use_local_comfy_music() -> bool:
     return bool(load_prefs().get("use_local_comfy_music"))
 
 
+def format_405(post_url: str) -> str:
+    return f"405 on {post_url} (this app) — set Comfy URL to :8188"
+
+
 def candidate_urls(preferred: str | None = None) -> list[str]:
-    """Settings URL first, then portable :8188, then desktop :8000."""
-    out: list[str] = []
-
-    def add(raw: str | None) -> None:
-        u = str(raw or "").strip().rstrip("/")
-        if u and u not in out:
-            out.append(u)
-
-    add(preferred)
-    add(comfy_url())
-    add(PORTABLE_COMFY_URL)
-    add(DESKTOP_COMFY_URL)
-    return out
+    """Only Settings COMFY_URL (optional Prompt override). Never :8000 fallback."""
+    return [normalize_comfy_url(preferred or comfy_url())]
 
 
 def _classify_error(exc: BaseException, url: str, path: str) -> str:
@@ -134,46 +135,38 @@ def _classify_error(exc: BaseException, url: str, path: str) -> str:
     return f"{url}{path} {exc}"
 
 
-def _get_status(url: str, timeout: float = 3.0) -> int:
-    req = urllib.request.Request(url, method="GET")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return int(getattr(resp, "status", 200) or 200)
-    except urllib.error.HTTPError as exc:
-        return int(exc.code)
-
-
 def probe_comfy(base: str) -> tuple[bool, str | None]:
-    """Health: GET /system_stats then GET /prompt. 405 on /prompt still counts."""
-    root = base.rstrip("/")
+    """GET {COMFY_URL}/system_stats. Comfy JSON has devices/system. AMS /health is not Comfy."""
+    root = normalize_comfy_url(base)
+    path = "/system_stats"
+    url = root + path
     try:
-        stats = _get_status(root + "/system_stats", timeout=2.5)
+        raw = _get(url, timeout=2.5)
+    except urllib.error.HTTPError as exc:
+        return False, _classify_error(exc, root, path)
     except Exception as exc:
-        return False, _classify_error(exc, root, "/system_stats")
-    if stats == 404:
-        return False, f"{root}/system_stats 404"
-    if stats >= 400 and stats != 405:
-        return False, f"{root}/system_stats {stats}"
+        return False, _classify_error(exc, root, path)
     try:
-        prompt = _get_status(root + "/prompt", timeout=2.5)
-    except Exception as exc:
-        return False, _classify_error(exc, root, "/prompt")
-    if prompt == 404:
-        return False, f"{root}/prompt 404"
-    if prompt >= 500:
-        return False, f"{root}/prompt {prompt}"
+        data = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
+    except json.JSONDecodeError:
+        return False, f"{url} is not Comfy JSON (AMS /health is not Comfy)"
+    if not isinstance(data, dict):
+        return False, f"{url} is not Comfy JSON (AMS /health is not Comfy)"
+    if "devices" not in data and "system" not in data:
+        return False, f"{url} is not Comfy (need devices/system). AMS /health is not Comfy."
     return True, None
 
 
 def resolve_comfy_url(preferred: str | None = None) -> tuple[str | None, str]:
-    """Return (working_url, error). Generate must use working_url."""
-    last = ""
-    for url in candidate_urls(preferred):
-        ok, err = probe_comfy(url)
-        if ok:
-            return url, ""
-        last = err or f"{url} failed"
-    return None, _BOTH_FAIL if last else _BOTH_FAIL
+    """Return (Settings COMFY_URL, error). Never AMS/Vite fallback."""
+    base = normalize_comfy_url(preferred or comfy_url())
+    ok, err = probe_comfy(base)
+    if ok:
+        return base, ""
+    return None, err or (
+        f"No Comfy API at {base}. Set Comfy URL in Settings "
+        f"(default {DEFAULT_COMFY_URL})."
+    )
 
 
 def is_ace_step(spec: Any) -> bool:
@@ -244,28 +237,18 @@ def _post_json(
 
 
 def queue_post_urls(base: str) -> list[tuple[str, str]]:
-    """(post_url, origin_base) — stop at first HTTP 200."""
-    root = base.rstrip("/")
-    rows: list[tuple[str, str]] = []
-
-    def add(origin: str, path: str) -> None:
-        origin = origin.rstrip("/")
-        post = origin + path
-        if (post, origin) not in rows:
-            rows.append((post, origin))
-
-    add(PORTABLE_COMFY_URL, "/prompt")
-    add(root, "/prompt")
-    add(root, "/api/prompt")
-    if root.endswith(":8000"):
-        add(PORTABLE_COMFY_URL, "/api/prompt")
-    return rows
+    """POST {COMFY_URL}/prompt then {COMFY_URL}/api/prompt only."""
+    root = normalize_comfy_url(base)
+    return [(root + "/prompt", root), (root + "/api/prompt", root)]
 
 
 def persist_comfy_url(url: str) -> None:
     from app.prefs import save_prefs
 
-    clean = str(url or "").strip().rstrip("/")
+    clean = normalize_comfy_url(url)
+    parsed = urllib.parse.urlparse(clean)
+    if parsed.port in _AMS_PORTS:
+        return
     if clean:
         save_prefs(comfy_url=clean)
 
@@ -273,7 +256,7 @@ def persist_comfy_url(url: str) -> None:
 def queue_prompt(base: str, graph: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     """POST until 200. Returns (origin_base, post_url, body)."""
     payload = {"prompt": graph, "client_id": str(uuid.uuid4())}
-    saw_405 = False
+    first_405 = ""
     last_err = ""
     for post_url, origin in queue_post_urls(base):
         try:
@@ -287,17 +270,22 @@ def queue_prompt(base: str, graph: dict[str, Any]) -> tuple[str, str, dict[str, 
         if status == 200:
             return origin, post_url, body
         if status == 405:
-            saw_405 = True
-            last_err = f"{post_url} 405"
+            if not first_405:
+                first_405 = post_url
+            last_err = format_405(post_url)
             continue
         if status == 400 or body.get("error") or body.get("node_errors"):
             raise RuntimeError(format_comfy_error(status, body))
         last_err = f"{post_url} {status}"
         if isinstance(body.get("error"), str) and body["error"]:
             last_err = str(body["error"])
-    if saw_405:
-        raise RuntimeError(_UI_PORT)
-    raise RuntimeError(last_err or _BOTH_FAIL)
+    if first_405:
+        raise RuntimeError(format_405(first_405))
+    raise RuntimeError(
+        last_err
+        or f"No Comfy API at {normalize_comfy_url(base)}. Set Comfy URL in Settings "
+        f"(default {DEFAULT_COMFY_URL})."
+    )
 
 
 def parse_bpm(raw: Any, fallback: int = 120) -> int:
@@ -613,12 +601,14 @@ def generate_ace_step(
 ):
     from app.audio_service import AudioResult
 
-    preferred = str(extra.get("comfy_url") or "").strip() or None
+    preferred = str(extra.get("comfy_url") or "").strip() or comfy_url()
     base, health_err = resolve_comfy_url(preferred)
     if not base:
         return AudioResult(
             ok=False,
-            status=health_err or _BOTH_FAIL,
+            status=health_err
+            or f"No Comfy API at {preferred or comfy_url()}. Set Comfy URL in Settings "
+            f"(default {DEFAULT_COMFY_URL}).",
             cost_label="Cost: $0.00",
             model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
             model_key=getattr(spec, "key", "ace step 1.5"),

@@ -73,7 +73,7 @@ Bring your own. Never commit `.env` or `secrets.json`.
 | xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
 | Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
 
-**Local ACE-Step 1.5.** Settings → COMFY_URL (`http://127.0.0.1:8188`; desktop often `:8000`). Health tries `/system_stats` then `/prompt`, then the other port. Generate uses the URL that passed. If both fail: “No Comfy API. Desktop default is :8000, portable is :8188. Set Comfy URL in Settings.” MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
+**Local ACE-Step 1.5.** Settings → COMFY_URL only (`http://127.0.0.1:8188`). Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system`). MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
 
 Packaged Windows app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). From source in production mode: Settings (OS app-data folder above). Dev (`AMS_DEV=1`): Settings or repo-root `.env` (gitignored).
 

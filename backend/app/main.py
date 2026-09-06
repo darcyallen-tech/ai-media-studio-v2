@@ -434,8 +434,8 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                 curl = str(load_prefs().get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")
                 notes = (
                     f"Local ACE-Step 1.5 via Comfy API at {curl}. "
-                    "Portable :8188, desktop :8000. Cost $0.00. "
-                    "Does not launch Comfy. MiniMax / ElevenLabs stay on fal."
+                    "Uses Settings COMFY_URL only (default http://127.0.0.1:8188). "
+                    "Cost $0.00. This app is not Comfy."
                 )
             rows.append(
                 {
@@ -1908,6 +1908,10 @@ def spa_root() -> FileResponse:
 @app.get("/{full_path:path}")
 def spa_fallback(full_path: str) -> FileResponse:
     """Serve the Vite production build (same origin as the API)."""
+    # Never impersonate Comfy. GET /system_stats or /prompt must not be 200 HTML.
+    key = full_path.strip("/")
+    if key in {"prompt", "api/prompt", "system_stats"} or key.startswith("api/prompt"):
+        raise HTTPException(status_code=404, detail="Not Found")
     index = _spa_index()
     if index is None:
         raise HTTPException(

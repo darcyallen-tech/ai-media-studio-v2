@@ -102,6 +102,8 @@ function isComfyAlert(msg: string): boolean {
     /start comfyui first/i.test(msg) ||
     /no comfy api/i.test(msg) ||
     /ui port, not api/i.test(msg) ||
+    /405 on /i.test(msg) ||
+    /set comfy url to :8188/i.test(msg) ||
     /export \(api\) from comfy/i.test(msg) ||
     /connection refused/i.test(msg) ||
     /\b404\b/.test(msg) ||
@@ -1380,7 +1382,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                   />
                 </label>
                 <p className="hint">
-                  Portable :8188 · desktop :8000. Health checks both if this one fails.
+                  Settings COMFY_URL only (default http://127.0.0.1:8188). This app is not Comfy.
                 </p>
                 <label className="param">
                   <span>BPM</span>
