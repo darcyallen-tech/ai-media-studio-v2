@@ -135,6 +135,24 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         pricing_mode="per_sec",
         extra_defaults={},
     ),
+    "ace step 1.5": AudioSpec(
+        key="ace step 1.5",
+        label="ACE-Step 1.5 (local Comfy)",
+        category="music",
+        endpoint="comfy:ace-step-1.5",
+        cost_estimate_usd=0.0,
+        notes=(
+            "Local ACE-Step 1.5 through ComfyUI at COMFY_URL (default http://127.0.0.1:8188). "
+            "Start ComfyUI yourself — this app does not launch it. Cost $0.00. "
+            "MiniMax / ElevenLabs stay on fal as paid fallbacks."
+        ),
+        supports_duration=True,
+        duration_min_s=10.0,
+        duration_max_s=180.0,
+        duration_default_s=30.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={},
+    ),
     "minimax music 2.6": AudioSpec(
         key="minimax music 2.6",
         label="MiniMax Music 2.6",
@@ -646,6 +664,8 @@ def format_audio_cost(
     from app.pricing import format_job_cost, format_usd_amount
 
     amount = estimate_audio_cost(spec, duration_s=duration_s, text=text)
+    if "comfy:" in (spec.endpoint or ""):
+        return "Cost: $0.00"
     if is_flat_per_track(spec):
         # Fal Lyria 3 Pro: "$0.08 per audio" — do not imply duration scaling.
         s = format_usd_amount(amount)

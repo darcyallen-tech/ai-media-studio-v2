@@ -23,6 +23,8 @@ type SettingsBody = {
     edge_style?: string;
     v1_root?: string;
     resolve_inbox?: string;
+    comfy_url?: string;
+    use_local_comfy_music?: boolean;
   };
 };
 
@@ -93,6 +95,8 @@ export default function SettingsPanel({
   const [retentionNever, setRetentionNever] = useState(false);
   const [v1Root, setV1Root] = useState("");
   const [inboxDraft, setInboxDraft] = useState("");
+  const [comfyUrl, setComfyUrl] = useState("http://127.0.0.1:8188");
+  const [useLocalComfy, setUseLocalComfy] = useState(false);
 
   async function loadSettings() {
     const res = await fetch("/settings");
@@ -103,6 +107,8 @@ export default function SettingsPanel({
     setInboxDraft(
       body.preferences?.resolve_inbox || body.paths?.resolve_inbox || "",
     );
+    setComfyUrl(body.preferences?.comfy_url || "http://127.0.0.1:8188");
+    setUseLocalComfy(Boolean(body.preferences?.use_local_comfy_music));
     const days = body.preferences?.retention_days;
     if (days == null) {
       setRetention(90);
@@ -229,6 +235,32 @@ export default function SettingsPanel({
     }
   }
 
+  async function saveComfy() {
+    try {
+      const res = await fetch("/settings/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comfy_url: comfyUrl.trim() || "http://127.0.0.1:8188",
+          use_local_comfy_music: useLocalComfy,
+        }),
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        detail?: string;
+        preferences?: { comfy_url?: string; use_local_comfy_music?: boolean };
+      };
+      if (!res.ok || body.ok === false) {
+        throw new Error(body.detail || "Could not save Comfy settings.");
+      }
+      setComfyUrl(body.preferences?.comfy_url || "http://127.0.0.1:8188");
+      setUseLocalComfy(Boolean(body.preferences?.use_local_comfy_music));
+      toast("Comfy settings saved.");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Save failed.", true);
+    }
+  }
+
   async function savePaths() {
     try {
       const res = await fetch("/settings/preferences", {
@@ -323,6 +355,38 @@ export default function SettingsPanel({
           onClick={() => void saveKeys()}
         >
           {saving ? "Saving…" : "Save keys"}
+        </button>
+      </section>
+
+      <section className="settings-sec">
+        <h3>Local Comfy (music)</h3>
+        <p className="hint">
+          ACE-Step 1.5 talks to a ComfyUI you already started. This app does not
+          launch Comfy. MiniMax and ElevenLabs stay on fal.
+        </p>
+        <label className="settings-field">
+          <span>COMFY_URL</span>
+          <input
+            className="model"
+            value={comfyUrl}
+            placeholder="http://127.0.0.1:8188"
+            onChange={(e) => setComfyUrl(e.target.value)}
+          />
+        </label>
+        <label className="param check">
+          <input
+            type="checkbox"
+            checked={useLocalComfy}
+            onChange={(e) => setUseLocalComfy(e.target.checked)}
+          />
+          Use local Comfy for music
+        </label>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => void saveComfy()}
+        >
+          Save Comfy
         </button>
       </section>
 

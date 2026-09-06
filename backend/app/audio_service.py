@@ -333,6 +333,16 @@ def generate_audio(
     kind = spec.category if spec.category in ("music", "sfx", "voiceover") else "audio"
 
     if spec.category == "music":
+        from app.comfy_ace import generate_ace_step, is_ace_step
+
+        if is_ace_step(spec):
+            return generate_ace_step(
+                prompt=text,
+                duration_s=float(dur or spec.duration_default_s or 30),
+                extra=extra,
+                output_dir=output_dir,
+                spec=spec,
+            )
         if len(text) < 3:
             return AudioResult(ok=False, status="Prompt is too short.")
         instrumental = extra.get("instrumental")

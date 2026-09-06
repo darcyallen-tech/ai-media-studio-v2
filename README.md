@@ -73,6 +73,8 @@ Bring your own. Never commit `.env` or `secrets.json`.
 | xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
 | Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
 
+**Local ACE-Step 1.5.** Settings → COMFY_URL (`http://127.0.0.1:8188`) and **Use local Comfy for music**. Audio → Music includes **ACE-Step 1.5 (local Comfy)**. You start ComfyUI; this app POSTs the pinned API workflow and copies the mp3. Cost $0.00. If Comfy is down: toast “Start ComfyUI first”. MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
+
 Packaged Windows app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). From source in production mode: Settings (OS app-data folder above). Dev (`AMS_DEV=1`): Settings or repo-root `.env` (gitignored).
 
 ---

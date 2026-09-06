@@ -86,7 +86,9 @@ Default video model: Kling O3 Standard V2V edit.
 
 | Kind | Models |
 |------|--------|
-| **Music** | MiniMax Music 3 (default), Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
+| **Music** | MiniMax Music 3 (default), **ACE-Step 1.5 (local Comfy)**, Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
+
+**ACE-Step 1.5 (local Comfy).** Settings → COMFY_URL (default `http://127.0.0.1:8188`) and **Use local Comfy for music**. Generate loads pinned `workflows/ace_step_1_5_api.json` (Comfy API format), patches tags / lyrics / duration / bpm / keyscale / seed from the Music Prompt Builder + Prompt node, POST `/prompt`, poll `/history`, copies the mp3 into outputs. Cost **$0.00**. If 8188 is down the toast is **Start ComfyUI first** — the app does not launch Comfy. MiniMax and ElevenLabs stay on fal as paid fallbacks. Does not embed Comfy UI.
 | **SFX** | ElevenLabs Sound Effects V2, Sonilo Text-to-SFX |
 | **Voiceover** | MiniMax Speech 2.8 HD, MiniMax Speech 2.6 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |
 

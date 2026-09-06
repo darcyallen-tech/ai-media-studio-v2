@@ -15,6 +15,7 @@ DEFAULT_GRID_SNAP = "fine"
 VALID_SNAPS = frozenset({"off", "fine", "medium", "coarse"})
 DEFAULT_EDGE_STYLE = "curved"
 VALID_EDGES = frozenset({"curved", "straight"})
+DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 
 
 def prefs_path():
@@ -44,6 +45,8 @@ def _defaults() -> dict[str, Any]:
         "edge_style": DEFAULT_EDGE_STYLE,
         "v1_root": "",
         "resolve_inbox": "",
+        "comfy_url": DEFAULT_COMFY_URL,
+        "use_local_comfy_music": False,
     }
 
 
@@ -69,6 +72,9 @@ def load_prefs() -> dict[str, Any]:
         "edge_style": _edge(raw.get("edge_style")),
         "v1_root": str(raw.get("v1_root") or "").strip(),
         "resolve_inbox": str(raw.get("resolve_inbox") or "").strip(),
+        "comfy_url": str(raw.get("comfy_url") or DEFAULT_COMFY_URL).strip()
+        or DEFAULT_COMFY_URL,
+        "use_local_comfy_music": bool(raw.get("use_local_comfy_music")),
     }
 
 
@@ -80,6 +86,8 @@ def save_prefs(
     edge_style: str | None = None,
     v1_root: str | None = None,
     resolve_inbox: str | None = None,
+    comfy_url: str | None = None,
+    use_local_comfy_music: bool | None = None,
 ) -> dict[str, Any]:
     current = load_prefs()
     if retention_days is not None:
@@ -94,6 +102,11 @@ def save_prefs(
         current["v1_root"] = str(v1_root).strip()
     if resolve_inbox is not None:
         current["resolve_inbox"] = str(resolve_inbox).strip()
+    if comfy_url is not None:
+        url = str(comfy_url).strip() or DEFAULT_COMFY_URL
+        current["comfy_url"] = url
+    if use_local_comfy_music is not None:
+        current["use_local_comfy_music"] = bool(use_local_comfy_music)
     folder = app_data_dir()
     folder.mkdir(parents=True, exist_ok=True)
     prefs_path().write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")

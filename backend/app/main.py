@@ -270,6 +270,8 @@ class SettingsPrefsIn(BaseModel):
     edge_style: str | None = None
     v1_root: str | None = None
     resolve_inbox: str | None = None
+    comfy_url: str | None = None
+    use_local_comfy_music: bool | None = None
 
 
 class BuilderApplyIn(BaseModel):
@@ -793,12 +795,15 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
         )
     if mode == "audio":
         t0 = time.perf_counter()
+        extra = dict(body.params.extra or {})
+        if body.params.seed is not None:
+            extra["seed"] = body.params.seed
         audio = generate_audio(
             modality=body.modality,
             model_id=body.model_id,
             prompt=body.prompt,
             duration=body.params.duration,
-            extra=dict(body.params.extra or {}),
+            extra=extra,
             output_dir=body.output_dir or OUTPUT_DIR,
         )
         elapsed = time.perf_counter() - t0
@@ -1769,6 +1774,8 @@ def settings_prefs(body: SettingsPrefsIn) -> dict[str, Any]:
         edge_style=body.edge_style,
         v1_root=body.v1_root,
         resolve_inbox=body.resolve_inbox,
+        comfy_url=body.comfy_url,
+        use_local_comfy_music=body.use_local_comfy_music,
     )
     purged = {"purged": 0}
     try:

@@ -167,6 +167,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [creativeEnhance, setCreativeEnhance] = useState(false);
   const hasXai = useXaiKey();
   const [seed, setSeed] = useState("");
+  const [aceLyrics, setAceLyrics] = useState("");
+  const [aceBpm, setAceBpm] = useState("");
+  const [aceKey, setAceKey] = useState("C major");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
   const [draft, setDraft] = useState(false);
@@ -739,6 +742,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
+      if (isAudio && modality === "music") {
+        extra.tags = composed;
+        extra.lyrics = instrumental ? "" : aceLyrics.trim();
+        const bpmN = parseInt(aceBpm, 10);
+        if (aceBpm.trim() && Number.isFinite(bpmN)) extra.bpm = bpmN;
+        if (aceKey.trim()) extra.keyscale = aceKey.trim();
+      }
       if (seedreamBoxes.length) {
         extra.mode = "region_edit";
         extra.boxes = seedreamBoxes.map((b, i) => ({
@@ -851,7 +861,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           setPrompt(body.prompt);
         }
         showSwitch(body.switch, msg);
-        if (!body.switch && (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg))) {
+        if (
+          !body.switch &&
+          (/could not fetch the source/i.test(msg) ||
+            /re-upload retry failed/i.test(msg) ||
+            /start comfyui first/i.test(msg))
+        ) {
           toast(msg, true);
         }
         return;
@@ -862,7 +877,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           setPrompt(body.prompt);
         }
         showSwitch(body.switch, msg);
-        if (!body.switch && (/could not fetch the source/i.test(msg) || /re-upload retry failed/i.test(msg) || /content_policy|partner_validation|422/i.test(msg))) {
+        if (
+          !body.switch &&
+          (/could not fetch the source/i.test(msg) ||
+            /re-upload retry failed/i.test(msg) ||
+            /content_policy|partner_validation|422/i.test(msg) ||
+            /start comfyui first/i.test(msg))
+        ) {
           toast(msg, true);
         }
         return;
@@ -1247,6 +1268,56 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 Instrumental
               </label>
             ) : null}
+            {isAudio && /ace.?step/i.test(`${selectedModel?.id || ""} ${selectedModel?.label || ""}`) ? (
+              <>
+                <label className="param">
+                  <span>BPM</span>
+                  <input
+                    className="model nodrag"
+                    value={aceBpm}
+                    placeholder="from Music Builder tempo"
+                    onChange={(e) => setAceBpm(e.target.value)}
+                  />
+                </label>
+                <label className="param">
+                  <span>Key</span>
+                  <select
+                    className="model nodrag"
+                    value={aceKey}
+                    onChange={(e) => setAceKey(e.target.value)}
+                  >
+                    {[
+                      "C major",
+                      "G major",
+                      "D major",
+                      "A major",
+                      "E major",
+                      "F major",
+                      "A minor",
+                      "E minor",
+                      "D minor",
+                      "C minor",
+                    ].map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {!instrumental ? (
+                  <label className="builder-field">
+                    <span className="field-label">Lyrics</span>
+                    <textarea
+                      className="prompt nodrag nowheel"
+                      rows={3}
+                      placeholder="Optional. Empty = instrumental from tags."
+                      value={aceLyrics}
+                      onChange={(e) => setAceLyrics(e.target.value)}
+                    />
+                  </label>
+                ) : null}
+              </>
+            ) : null}
             {selectedModel?.supports_draft ? (
               <label className="param check">
                 <input
@@ -1289,7 +1360,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </p>
         ) : null}
 
-        {!isFrame && !isStoryboard && !isAudio ? (
+        {!isFrame && !isStoryboard ? (
           <details className="advanced nodrag">
             <summary>Advanced</summary>
             <div className="advanced-body">
