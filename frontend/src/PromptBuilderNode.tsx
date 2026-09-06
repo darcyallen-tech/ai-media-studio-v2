@@ -23,7 +23,7 @@ import {
   regionalTip,
   subgenresFor,
 } from "./musicUi";
-import type { Mode, PromptBuilderNodeData } from "./types";
+import type { AceEnhancePack, Mode, PromptBuilderNodeData } from "./types";
 
 export type PromptBuilderFlowNode = Node<PromptBuilderNodeData, "builder">;
 
@@ -527,18 +527,27 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: raw,
+          model_id: data.modelId || "",
           mode: "audio",
           modality: "music",
           creative: creativeEnhance,
+          instrumental,
         }),
       });
       const body = (await readJson(res)) as {
         ok?: boolean;
         prompt?: string;
+        tags?: string;
+        lyrics?: string;
+        bpm?: number | string;
+        keyscale?: string;
+        timesignature?: string;
+        language?: string;
+        instrumental?: boolean;
         error?: string;
         detail?: string;
       };
-      const rewritten = (body.prompt || "").trim();
+      const rewritten = (body.tags || body.prompt || "").trim();
       if (!res.ok || body.ok === false || !rewritten) {
         throw new Error(
           (typeof body.detail === "string" && body.detail) ||
@@ -546,7 +555,19 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
             "Enhance returned an empty reply.",
         );
       }
-      data.onApply(rewritten);
+      const pack: AceEnhancePack | undefined =
+        body.tags || body.lyrics != null || body.bpm != null
+          ? {
+              tags: body.tags || rewritten,
+              lyrics: body.lyrics,
+              bpm: body.bpm,
+              keyscale: body.keyscale,
+              timesignature: body.timesignature,
+              language: body.language,
+              instrumental: body.instrumental,
+            }
+          : undefined;
+      data.onApply(rewritten, pack);
       toast("Enhanced prompt applied.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Enhance failed.";

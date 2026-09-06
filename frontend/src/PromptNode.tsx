@@ -60,6 +60,7 @@ import {
   type SwitchOffer,
   directorAllowed,
   mergeDirectorBlock,
+  type AceEnhancePack,
   type PromptCanvasDraft,
   type PromptNodeData,
   type RefRolePayload,
@@ -229,6 +230,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [aceBpm, setAceBpm] = useState("");
   const [aceKey, setAceKey] = useState("C major");
   const [aceComfyUrl, setAceComfyUrl] = useState("http://127.0.0.1:8188");
+  const [aceTimeSig, setAceTimeSig] = useState("4");
+  const [aceLanguage, setAceLanguage] = useState("en");
   const [aceSeedRandomize, setAceSeedRandomize] = useState(true);
   const [aceSteps, setAceSteps] = useState("8");
   const [aceCfg, setAceCfg] = useState("1.0");
@@ -424,7 +427,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       return;
     }
     setPrompt(data.incomingPrompt);
-  }, [incomingToken, data.incomingPrompt, data.incomingPromptMode]);
+    const pack = data.incomingAcePack;
+    if (pack) applyAcePack(pack);
+  }, [incomingToken, data.incomingPrompt, data.incomingPromptMode, data.incomingAcePack]);
 
   useEffect(() => {
     if (!data.canvasDraftToken) return;
@@ -707,6 +712,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
     toast(`${offer.target_label} is not in this model list.`, true);
   }
 
+  function applyAcePack(pack: AceEnhancePack) {
+    const tags = (pack.tags || "").trim();
+    if (tags) setPrompt(tags);
+    if (pack.lyrics != null) setAceLyrics(String(pack.lyrics));
+    if (pack.bpm != null && String(pack.bpm).trim()) setAceBpm(String(pack.bpm));
+    if (pack.keyscale) setAceKey(pack.keyscale);
+    if (pack.timesignature) setAceTimeSig(String(pack.timesignature));
+    if (pack.language) setAceLanguage(String(pack.language));
+    if (typeof pack.instrumental === "boolean") setInstrumental(pack.instrumental);
+  }
+
   function showSwitch(offer: SwitchOffer | null | undefined, msg: string) {
     setError(offer?.line || msg);
     if (!offer) return;
@@ -824,12 +840,14 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         : {};
       if (isAudio && modality === "music") {
         extra.tags = composed;
-        extra.lyrics = instrumental ? "" : aceLyrics.trim();
+        extra.lyrics = aceLyrics;
         const bpmN = parseInt(aceBpm, 10);
         if (aceBpm.trim() && Number.isFinite(bpmN)) extra.bpm = bpmN;
         if (aceKey.trim()) extra.keyscale = aceKey.trim();
         if (isAce && aceComfyUrl.trim()) extra.comfy_url = aceComfyUrl.trim();
         if (isAce) {
+          extra.timesignature = aceTimeSig.trim() || "4";
+          extra.language = aceLanguage.trim() || "en";
           extra.seed_randomize = aceSeedRandomize;
           const stepsN = parseInt(aceSteps, 10);
           extra.steps = Number.isFinite(stepsN) ? stepsN : 8;
@@ -1064,11 +1082,19 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             : enhanceImagePaths(data),
           max_prompt: promptCap > 0 ? promptCap : undefined,
           creative: creativeEnhance,
+          instrumental: isAce ? instrumental : undefined,
         }),
       });
       const body = (await readJson(res)) as {
         ok?: boolean;
         prompt?: string;
+        tags?: string;
+        lyrics?: string;
+        bpm?: number | string;
+        keyscale?: string;
+        timesignature?: string;
+        language?: string;
+        instrumental?: boolean;
         error?: string;
         detail?: string;
         vision?: boolean;
@@ -1083,7 +1109,19 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         );
         return;
       }
-      if (body.prompt) setPrompt(body.prompt);
+      if (isAce && (body.tags || body.lyrics != null || body.bpm != null)) {
+        applyAcePack({
+          tags: body.tags || body.prompt,
+          lyrics: body.lyrics,
+          bpm: body.bpm,
+          keyscale: body.keyscale,
+          timesignature: body.timesignature,
+          language: body.language,
+          instrumental: body.instrumental,
+        });
+      } else if (body.prompt) {
+        setPrompt(body.prompt);
+      }
       if (body.switch) showSwitch(body.switch, body.switch.line || body.switch.message);
       else if (body.warning) toast(body.warning, true);
       const sent = isStoryboard

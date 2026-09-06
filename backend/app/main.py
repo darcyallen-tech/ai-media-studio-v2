@@ -299,6 +299,7 @@ class EnhanceIn(BaseModel):
     image_urls: list[str] = Field(default_factory=list)
     max_prompt: int | None = None
     creative: bool = False
+    instrumental: bool | None = None
 
 
 class CreateStateIn(BaseModel):
@@ -684,6 +685,7 @@ def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
         image_urls=list(body.image_urls or []),
         max_prompt=body.max_prompt,
         creative=bool(body.creative),
+        instrumental=body.instrumental,
     )
 
 

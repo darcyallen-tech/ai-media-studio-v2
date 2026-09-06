@@ -106,6 +106,7 @@ import {
   type DirectorNodeData,
   type HubAsset,
   type HubNodeData,
+  type AceEnhancePack,
   type PromptBuilderNodeData,
   type PromptCanvasDraft,
   type PromptNodeData,
@@ -382,12 +383,14 @@ function StudioCanvas() {
   >({});
   const [studioMode, setStudioMode] = useState<Mode>("image");
   const [studioModality, setStudioModality] = useState("t2i");
+  const [studioModelId, setStudioModelId] = useState("");
   const [maskReady, setMaskReady] = useState(false);
   const [instrumental, setInstrumental] = useState(true);
   const [appliedPrompt, setAppliedPrompt] = useState<{
     text: string;
     token: number;
     mode: "replace" | "append";
+    acePack?: AceEnhancePack;
   } | null>(null);
   const [theme, setTheme] = useState<ThemeName>(() => readStoredTheme());
   const [gridSnap, setGridSnap] = useState<GridSnap>(() => readStoredSnap());
@@ -490,11 +493,12 @@ function StudioCanvas() {
 
   const edgeType = edgeStyle === "straight" ? "straight" : "default";
 
-  const applyBuilderPrompt = useCallback((text: string) => {
+  const applyBuilderPrompt = useCallback((text: string, pack?: AceEnhancePack) => {
     setAppliedPrompt((cur) => ({
       text,
       token: (cur?.token ?? 0) + 1,
       mode: "replace",
+      acePack: pack,
     }));
   }, []);
 
@@ -1516,7 +1520,24 @@ function StudioCanvas() {
 
   const addPromptBuilder = useCallback(() => {
     setNodes((current) => {
-      if (current.some((n) => n.id === BUILDER_ID)) return current;
+      const existing = current.find((n) => n.id === BUILDER_ID);
+      if (existing && existing.type === "builder") {
+        return current.map((n) =>
+          n.id === BUILDER_ID && n.type === "builder"
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  mode: studioMode,
+                  modality: studioModality,
+                  modelId: studioModelId,
+                  instrumental,
+                  onApply: applyBuilderPrompt,
+                },
+              }
+            : n,
+        );
+      }
       const prompt = current.find((n) => n.id === "prompt");
       const node: StudioNode = {
         id: BUILDER_ID,
@@ -1529,6 +1550,7 @@ function StudioCanvas() {
         data: {
           mode: studioMode,
           modality: studioModality,
+          modelId: studioModelId,
           onClose: () => closeNode(BUILDER_ID),
           onApply: applyBuilderPrompt,
           instrumental,
@@ -1556,6 +1578,7 @@ function StudioCanvas() {
     setNodes,
     studioMode,
     studioModality,
+    studioModelId,
   ]);
 
   const addDirector = useCallback(() => {
@@ -1604,6 +1627,7 @@ function StudioCanvas() {
       const nextMod = modality === "region" ? "i2i" : modality;
       setStudioMode(mode);
       setStudioModality(nextMod);
+      setStudioModelId(model?.id || "");
       setPlan((prev) => {
         const next = inputPlan(nextMod, model, mode);
         if (
@@ -3139,6 +3163,7 @@ function StudioCanvas() {
               incomingPrompt: appliedPrompt?.text ?? null,
               incomingPromptToken: appliedPrompt?.token ?? 0,
               incomingPromptMode: appliedPrompt?.mode ?? "replace",
+              incomingAcePack: appliedPrompt?.acePack ?? null,
               canvasDraft,
               canvasDraftToken,
               onCanvasDraft,
@@ -3182,6 +3207,7 @@ function StudioCanvas() {
             data: {
               mode: studioMode,
               modality: studioModality,
+              modelId: studioModelId,
               instrumental,
               onClose: () => closeNode(BUILDER_ID),
               onApply: applyBuilderPrompt,
@@ -3924,6 +3950,7 @@ function StudioCanvas() {
     spawnTool,
     studioMode,
     studioModality,
+    studioModelId,
     maskReady,
     toolSources,
     tryAttachSlot,

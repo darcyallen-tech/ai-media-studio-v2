@@ -218,6 +218,7 @@ export type PromptNodeData = {
   incomingPrompt?: string | null;
   incomingPromptToken?: number;
   incomingPromptMode?: "replace" | "append";
+  incomingAcePack?: AceEnhancePack | null;
   canvasDraft?: PromptCanvasDraft | null;
   canvasDraftToken?: number;
   onCanvasDraft?: (draft: PromptCanvasDraft) => void;
@@ -271,12 +272,23 @@ export type MaskNodeData = {
   onContent?: (has: boolean) => void;
 };
 
+export type AceEnhancePack = {
+  tags?: string;
+  lyrics?: string;
+  bpm?: number | string | null;
+  keyscale?: string | null;
+  timesignature?: string | null;
+  language?: string | null;
+  instrumental?: boolean;
+};
+
 export type PromptBuilderNodeData = {
   mode: Mode;
   modality: string;
+  modelId?: string;
   instrumental?: boolean;
   onClose?: () => void;
-  onApply: (text: string) => void;
+  onApply: (text: string, pack?: AceEnhancePack) => void;
 };
 
 export type DirectorNodeData = {

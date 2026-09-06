@@ -169,9 +169,58 @@ def resolve_comfy_url(preferred: str | None = None) -> tuple[str | None, str]:
     )
 
 
+def looks_like_ace(*parts: Any) -> bool:
+    blob = " ".join(str(p or "") for p in parts).lower()
+    return (
+        "ace-step" in blob
+        or "ace step" in blob
+        or blob.startswith("comfy:")
+        or "comfy:ace" in blob
+    )
+
+
 def is_ace_step(spec: Any) -> bool:
-    blob = f"{getattr(spec, 'key', '')} {getattr(spec, 'endpoint', '')} {getattr(spec, 'label', '')}".lower()
-    return "ace-step" in blob or "ace step" in blob or blob.startswith("comfy:")
+    return looks_like_ace(
+        getattr(spec, "key", ""),
+        getattr(spec, "endpoint", ""),
+        getattr(spec, "label", ""),
+    )
+
+
+_TAGS_LYRICS_RE = re.compile(
+    r"TAGS:\s*(.*?)\s*LYRICS:\s*(.*)\s*$",
+    re.I | re.S,
+)
+
+
+def split_tags_lyrics(text: str) -> tuple[str, str]:
+    raw = (text or "").strip()
+    hit = _TAGS_LYRICS_RE.search(raw)
+    if hit:
+        return hit.group(1).strip(), hit.group(2).strip()
+    return raw, ""
+
+
+def structure_only_lyrics(lyrics: str) -> str:
+    """Keep [Section] markers; drop sung lines. Never invent sections."""
+    kept: list[str] = []
+    for line in (lyrics or "").splitlines():
+        s = line.strip()
+        if not s:
+            if kept and kept[-1] != "":
+                kept.append("")
+            continue
+        if s.startswith("[") and "]" in s:
+            kept.append(s[: s.find("]") + 1])
+    text = "\n".join(kept).strip()
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def resolve_ace_lyrics(lyrics: str, *, instrumental: bool) -> str:
+    text = lyrics or ""
+    if not instrumental:
+        return text
+    return structure_only_lyrics(text)
 
 
 def workflow_path() -> Path:
@@ -494,6 +543,8 @@ def patch_workflow(
     sampler_name: str = "er_sde",
     scheduler: str = "linear_quadratic",
     denoise: float = 1.0,
+    timesignature: str = "4",
+    language: str = "en",
 ) -> dict[str, Any]:
     out = deepcopy(graph)
     dur = float(max(1.0, min(2000.0, duration_s)))
@@ -507,6 +558,8 @@ def patch_workflow(
     denoise_f = float(denoise)
     samp = (sampler_name or "er_sde").strip() or "er_sde"
     sched = (scheduler or "linear_quadratic").strip() or "linear_quadratic"
+    tsig = str(timesignature or "4").strip() or "4"
+    lang = str(language or "en").strip() or "en"
     for node in out.values():
         if not isinstance(node, dict):
             continue
@@ -521,6 +574,8 @@ def patch_workflow(
             inputs["bpm"] = bpm_i
             inputs["keyscale"] = key_s
             inputs["seed"] = seed_i
+            inputs["timesignature"] = tsig
+            inputs["language"] = lang
         elif ct.startswith("EmptyAceStep") and "LatentAudio" in ct:
             inputs["seconds"] = dur
         elif ct == "KSampler":
@@ -615,15 +670,21 @@ def generate_ace_step(
             endpoint=preferred or comfy_url(),
             job_kind="music",
         )
-    tags = str(extra.get("tags") or prompt or "").strip()
+    tags = str(extra.get("tags") or "").strip()
+    lyrics = str(extra.get("lyrics") or "")
+    if not tags:
+        tags, from_prompt = split_tags_lyrics(str(prompt or ""))
+        if from_prompt and not lyrics:
+            lyrics = from_prompt
+    tags = tags or str(prompt or "").strip()
     instrumental = extra.get("instrumental")
     if instrumental is None:
         instrumental = True
-    lyrics = str(extra.get("lyrics") or "")
-    if instrumental:
-        lyrics = ""
+    lyrics = resolve_ace_lyrics(lyrics, instrumental=bool(instrumental))
     bpm = parse_bpm(extra.get("bpm") or tags, 120)
     keyscale = parse_keyscale(extra.get("keyscale") or "", "C major")
+    timesignature = str(extra.get("timesignature") or "4").strip() or "4"
+    language = str(extra.get("language") or "en").strip() or "en"
     try:
         seed = int(extra.get("seed") if extra.get("seed") is not None else 0)
     except (TypeError, ValueError):
@@ -661,6 +722,8 @@ def generate_ace_step(
             sampler_name=sampler_name,
             scheduler=scheduler,
             denoise=denoise,
+            timesignature=timesignature,
+            language=language,
         )
         origin, post_url, queued = queue_prompt(base, graph)
         try:

@@ -44,7 +44,7 @@ Each row has a **dashboard** link. Billing links are under the balance lines in 
 
 You can use the app with **fal only**. Add Runware when you want Frame Editor. Add xAI when you want Enhance.
 
-**Local ACE-Step 1.5 (optional).** Start ComfyUI yourself. Settings → COMFY_URL (`http://127.0.0.1:8188`). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
+**Local ACE-Step 1.5 (optional).** Start ComfyUI first — it must already be running. Settings → COMFY_URL (`http://127.0.0.1:8188`). Enhance on ACE-Step rewrites into comma **tags** + `[Section]` **lyrics** (not MiniMax/Suno prose). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
 
 ---
 
