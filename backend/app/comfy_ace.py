@@ -17,8 +17,13 @@ from app.naming import job_media_dir, make_output_stem, timestamp_now, unique_pa
 from app.prefs import load_prefs
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
+DESKTOP_COMFY_URL = "http://127.0.0.1:8000"
+PORTABLE_COMFY_URL = "http://127.0.0.1:8188"
 WORKFLOW_NAME = "ace_step_1_5_api.json"
-_COMFY_DOWN = "Start ComfyUI first"
+_BOTH_FAIL = (
+    "No Comfy API. Desktop default is :8000, portable is :8188. "
+    "Set Comfy URL in Settings."
+)
 _POLL_S = 1.0
 _POLL_MAX_S = 600.0
 _BPM_RE = re.compile(r"(\d{2,3})\s*bpm", re.I)
@@ -35,6 +40,88 @@ def comfy_url() -> str:
 
 def use_local_comfy_music() -> bool:
     return bool(load_prefs().get("use_local_comfy_music"))
+
+
+def candidate_urls(preferred: str | None = None) -> list[str]:
+    """Settings URL first, then portable :8188, then desktop :8000."""
+    out: list[str] = []
+
+    def add(raw: str | None) -> None:
+        u = str(raw or "").strip().rstrip("/")
+        if u and u not in out:
+            out.append(u)
+
+    add(preferred)
+    add(comfy_url())
+    add(PORTABLE_COMFY_URL)
+    add(DESKTOP_COMFY_URL)
+    return out
+
+
+def _classify_error(exc: BaseException, url: str, path: str) -> str:
+    msg = str(getattr(exc, "reason", exc) or exc).lower()
+    code = getattr(exc, "code", None)
+    if isinstance(exc, TimeoutError) or "timed out" in msg or "timeout" in msg:
+        return f"{url}{path} timeout"
+    if code == 404 or "404" in msg:
+        return f"{url}{path} 404"
+    if (
+        "refused" in msg
+        or "10061" in msg
+        or "errno 111" in msg
+        or "winerror 10061" in msg
+    ):
+        return f"{url}{path} connection refused"
+    if code:
+        return f"{url}{path} {code}"
+    return f"{url}{path} {exc}"
+
+
+def _get_status(url: str, timeout: float = 3.0) -> int:
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return int(getattr(resp, "status", 200) or 200)
+    except urllib.error.HTTPError as exc:
+        return int(exc.code)
+
+
+def probe_comfy(base: str) -> tuple[bool, str | None]:
+    """Health: GET /system_stats then GET /prompt. 405 on /prompt still counts."""
+    root = base.rstrip("/")
+    try:
+        stats = _get_status(root + "/system_stats", timeout=2.5)
+    except Exception as exc:
+        return False, _classify_error(exc, root, "/system_stats")
+    if stats == 404:
+        return False, f"{root}/system_stats 404"
+    if stats >= 400 and stats != 405:
+        return False, f"{root}/system_stats {stats}"
+    try:
+        prompt = _get_status(root + "/prompt", timeout=2.5)
+    except Exception as exc:
+        return False, _classify_error(exc, root, "/prompt")
+    if prompt == 404:
+        return False, f"{root}/prompt 404"
+    if prompt >= 500:
+        return False, f"{root}/prompt {prompt}"
+    return True, None
+
+
+def resolve_comfy_url(preferred: str | None = None) -> tuple[str | None, str]:
+    """Return (working_url, error). Generate must use working_url."""
+    last = ""
+    for url in candidate_urls(preferred):
+        ok, err = probe_comfy(url)
+        if ok:
+            return url, ""
+        last = err or f"{url} failed"
+    return None, _BOTH_FAIL if last else _BOTH_FAIL
+
+
+def comfy_up(base: str | None = None) -> bool:
+    url, _err = resolve_comfy_url(base)
+    return bool(url)
 
 
 def is_ace_step(spec: Any) -> bool:
@@ -216,15 +303,17 @@ def generate_ace_step(
     spec: Any,
 ):
     from app.audio_service import AudioResult
-    base = comfy_url()
-    if not comfy_up(base):
+
+    preferred = str(extra.get("comfy_url") or "").strip() or None
+    base, health_err = resolve_comfy_url(preferred)
+    if not base:
         return AudioResult(
             ok=False,
-            status=_COMFY_DOWN,
+            status=health_err or _BOTH_FAIL,
             cost_label="Cost: $0.00",
             model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
             model_key=getattr(spec, "key", "ace step 1.5"),
-            endpoint=base,
+            endpoint=preferred or comfy_url(),
             job_kind="music",
         )
     tags = str(extra.get("tags") or prompt or "").strip()
@@ -256,10 +345,10 @@ def generate_ace_step(
         queued = _post_json(base + "/prompt", {"prompt": graph, "client_id": "ams-v2"})
     except FileNotFoundError as exc:
         return AudioResult(ok=False, status=str(exc), cost_label="Cost: $0.00", job_kind="music")
-    except urllib.error.URLError:
+    except urllib.error.URLError as exc:
         return AudioResult(
             ok=False,
-            status=_COMFY_DOWN,
+            status=_classify_error(exc, base, "/prompt"),
             cost_label="Cost: $0.00",
             model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
             model_key=getattr(spec, "key", "ace step 1.5"),

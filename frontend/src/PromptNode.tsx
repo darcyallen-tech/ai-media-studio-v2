@@ -170,6 +170,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [aceLyrics, setAceLyrics] = useState("");
   const [aceBpm, setAceBpm] = useState("");
   const [aceKey, setAceKey] = useState("C major");
+  const [aceComfyUrl, setAceComfyUrl] = useState("http://127.0.0.1:8188");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
   const [draft, setDraft] = useState(false);
@@ -196,6 +197,21 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const voices = selectedModel?.voices ?? [];
   const promptRequired = modality !== "i2v";
   const isAudio = mode === "audio";
+  const isAce = /ace.?step/i.test(
+    `${selectedModel?.id || ""} ${selectedModel?.label || ""}`,
+  );
+  useEffect(() => {
+    if (!isAce) return;
+    const ac = new AbortController();
+    fetch("/settings", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { preferences?: { comfy_url?: string } } | null) => {
+        const url = (body?.preferences?.comfy_url || "").trim();
+        if (url) setAceComfyUrl(url);
+      })
+      .catch(() => undefined);
+    return () => ac.abort();
+  }, [isAce]);
   const isFrame = mode === "frame";
   const isStoryboard = mode === "storyboard";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
@@ -748,6 +764,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         const bpmN = parseInt(aceBpm, 10);
         if (aceBpm.trim() && Number.isFinite(bpmN)) extra.bpm = bpmN;
         if (aceKey.trim()) extra.keyscale = aceKey.trim();
+        if (isAce && aceComfyUrl.trim()) extra.comfy_url = aceComfyUrl.trim();
       }
       if (seedreamBoxes.length) {
         extra.mode = "region_edit";
@@ -865,7 +882,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           !body.switch &&
           (/could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
-            /start comfyui first/i.test(msg))
+            /start comfyui first/i.test(msg) ||
+            /no comfy api/i.test(msg) ||
+            /connection refused/i.test(msg) ||
+            /\b404\b/.test(msg) ||
+            /timeout/i.test(msg))
         ) {
           toast(msg, true);
         }
@@ -882,7 +903,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           (/could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             /content_policy|partner_validation|422/i.test(msg) ||
-            /start comfyui first/i.test(msg))
+            /start comfyui first/i.test(msg) ||
+            /no comfy api/i.test(msg) ||
+            /connection refused/i.test(msg) ||
+            /\b404\b/.test(msg) ||
+            /timeout/i.test(msg))
         ) {
           toast(msg, true);
         }
@@ -1268,8 +1293,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 Instrumental
               </label>
             ) : null}
-            {isAudio && /ace.?step/i.test(`${selectedModel?.id || ""} ${selectedModel?.label || ""}`) ? (
+            {isAce ? (
               <>
+                <label className="builder-field">
+                  <span className="field-label">Comfy URL</span>
+                  <input
+                    className="model nodrag"
+                    value={aceComfyUrl}
+                    placeholder="http://127.0.0.1:8188"
+                    onChange={(e) => setAceComfyUrl(e.target.value)}
+                  />
+                </label>
+                <p className="hint">
+                  Portable :8188 · desktop :8000. Health checks both if this one fails.
+                </p>
                 <label className="param">
                   <span>BPM</span>
                   <input

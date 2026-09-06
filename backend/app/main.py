@@ -427,6 +427,16 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                 continue
             toks, default_dur = duration_tokens(spec)
             voices = default_voices_for_model(spec) if spec.supports_voice else []
+            notes = spec.notes
+            if spec.key == "ace step 1.5":
+                from app.prefs import load_prefs
+
+                curl = str(load_prefs().get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")
+                notes = (
+                    f"Local ACE-Step 1.5 via Comfy API at {curl}. "
+                    "Portable :8188, desktop :8000. Cost $0.00. "
+                    "Does not launch Comfy. MiniMax / ElevenLabs stay on fal."
+                )
             rows.append(
                 {
                     "id": f"audio:{spec.key}",
@@ -434,7 +444,7 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     "mode": "audio",
                     "modality": spec.category or category,
                     "endpoint": spec.endpoint,
-                    "notes": spec.notes,
+                    "notes": notes,
                     "cost_estimate_usd": spec.cost_estimate_usd,
                     "pricing_mode": spec.resolved_pricing_mode(),
                     "cost": estimate_audio_label(spec.key, spec.category),

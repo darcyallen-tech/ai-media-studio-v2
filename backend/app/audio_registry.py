@@ -142,9 +142,9 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         endpoint="comfy:ace-step-1.5",
         cost_estimate_usd=0.0,
         notes=(
-            "Local ACE-Step 1.5 through ComfyUI at COMFY_URL (default http://127.0.0.1:8188). "
-            "Start ComfyUI yourself — this app does not launch it. Cost $0.00. "
-            "MiniMax / ElevenLabs stay on fal as paid fallbacks."
+            "Local ACE-Step 1.5 via Comfy API. Default COMFY_URL "
+            "http://127.0.0.1:8188 (portable); desktop often :8000. "
+            "Cost $0.00. This app does not launch Comfy."
         ),
         supports_duration=True,
         duration_min_s=10.0,
