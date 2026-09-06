@@ -2,7 +2,7 @@
   "104": {
     "class_type": "UNETLoader",
     "inputs": {
-      "unet_name": "acestep_v1.5_xl_base_bf16.safetensors",
+      "unet_name": "acestep_v1.5_turbo.safetensors",
       "weight_dtype": "default"
     }
   },
@@ -10,7 +10,7 @@
     "class_type": "DualCLIPLoader",
     "inputs": {
       "clip_name1": "qwen_0.6b_ace15.safetensors",
-      "clip_name2": "qwen_4b_ace15.safetensors",
+      "clip_name2": "qwen_1.7b_ace15.safetensors",
       "type": "ace",
       "device": "default"
     }
@@ -32,13 +32,7 @@
       "duration": 30,
       "timesignature": "4",
       "language": "en",
-      "keyscale": "C major",
-      "generate_audio_codes": true,
-      "cfg_scale": 2,
-      "temperature": 0.85,
-      "top_p": 0.9,
-      "top_k": 0,
-      "min_p": 0
+      "keyscale": "C major"
     }
   },
   "98": {
@@ -66,11 +60,11 @@
     "inputs": {
       "model": ["78", 0],
       "seed": 0,
-      "steps": 50,
-      "cfg": 6,
-      "sampler_name": "euler",
-      "scheduler": "simple",
-      "denoise": 1,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "er_sde",
+      "scheduler": "linear_quadratic",
+      "denoise": 1.0,
       "positive": ["94", 0],
       "negative": ["47", 0],
       "latent_image": ["98", 0]
@@ -83,13 +77,12 @@
       "vae": ["106", 0]
     }
   },
-  "111": {
-    "class_type": "SaveAudioAdvanced",
+  "107": {
+    "class_type": "SaveAudioMP3",
     "inputs": {
       "audio": ["18", 0],
       "filename_prefix": "audio/ams_ace_step",
-      "format": "mp3",
-      "format.quality": "V0"
+      "quality": "V0"
     }
   }
 }

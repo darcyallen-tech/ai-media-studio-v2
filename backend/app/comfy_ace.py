@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +25,7 @@ _BOTH_FAIL = (
     "No Comfy API. Desktop default is :8000, portable is :8188. "
     "Set Comfy URL in Settings."
 )
+_UI_PORT = "UI port, not API. Try /api/prompt or :8188"
 _POLL_S = 1.0
 _POLL_MAX_S = 600.0
 _BPM_RE = re.compile(r"(\d{2,3})\s*bpm", re.I)
@@ -119,11 +121,6 @@ def resolve_comfy_url(preferred: str | None = None) -> tuple[str | None, str]:
     return None, _BOTH_FAIL if last else _BOTH_FAIL
 
 
-def comfy_up(base: str | None = None) -> bool:
-    url, _err = resolve_comfy_url(base)
-    return bool(url)
-
-
 def is_ace_step(spec: Any) -> bool:
     blob = f"{getattr(spec, 'key', '')} {getattr(spec, 'endpoint', '')} {getattr(spec, 'label', '')}".lower()
     return "ace-step" in blob or "ace step" in blob or blob.startswith("comfy:")
@@ -146,32 +143,99 @@ def _get(url: str, timeout: float = 3.0) -> bytes:
         return resp.read()
 
 
-def _post_json(url: str, payload: dict[str, Any], timeout: float = 30.0) -> dict[str, Any]:
+def _post_json(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    origin: str,
+    timeout: float = 30.0,
+) -> tuple[int, dict[str, Any]]:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=data,
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Origin": origin,
+        },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            status = int(getattr(resp, "status", 200) or 200)
+    except urllib.error.HTTPError as exc:
+        raw = ""
+        try:
+            raw = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            raw = ""
+        body: dict[str, Any] = {}
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    body = parsed
+            except json.JSONDecodeError:
+                body = {"error": raw[:300]}
+        return int(exc.code), body
     out = json.loads(raw) if raw else {}
-    return out if isinstance(out, dict) else {}
+    return status, out if isinstance(out, dict) else {}
 
 
-def comfy_up(base: str | None = None) -> bool:
-    root = (base or comfy_url()).rstrip("/")
-    try:
-        _get(root + "/system_stats", timeout=2.0)
-        return True
-    except Exception:
-        pass
-    try:
-        _get(root + "/", timeout=2.0)
-        return True
-    except Exception:
-        return False
+def queue_post_urls(base: str) -> list[tuple[str, str]]:
+    """(post_url, origin_base) — stop at first HTTP 200."""
+    root = base.rstrip("/")
+    rows: list[tuple[str, str]] = []
+
+    def add(origin: str, path: str) -> None:
+        origin = origin.rstrip("/")
+        post = origin + path
+        if (post, origin) not in rows:
+            rows.append((post, origin))
+
+    add(root, "/api/prompt")
+    add(root, "/prompt")
+    if root.endswith(":8000"):
+        add(PORTABLE_COMFY_URL, "/prompt")
+        add(PORTABLE_COMFY_URL, "/api/prompt")
+    return rows
+
+
+def persist_comfy_url(url: str) -> None:
+    from app.prefs import save_prefs
+
+    clean = str(url or "").strip().rstrip("/")
+    if clean:
+        save_prefs(comfy_url=clean)
+
+
+def queue_prompt(base: str, graph: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """POST until 200. Returns (origin_base, post_url, body)."""
+    payload = {"prompt": graph, "client_id": str(uuid.uuid4())}
+    saw_405 = False
+    last_err = ""
+    for post_url, origin in queue_post_urls(base):
+        try:
+            status, body = _post_json(post_url, payload, origin=origin)
+        except urllib.error.URLError as exc:
+            last_err = _classify_error(exc, origin, urllib.parse.urlparse(post_url).path)
+            continue
+        except Exception as exc:
+            last_err = str(exc)
+            continue
+        if status == 200:
+            return origin, post_url, body
+        if status == 405:
+            saw_405 = True
+            last_err = f"{post_url} 405"
+            continue
+        last_err = f"{post_url} {status}"
+        if isinstance(body.get("error"), str) and body["error"]:
+            last_err = str(body["error"])
+    if saw_405:
+        raise RuntimeError(_UI_PORT)
+    raise RuntimeError(last_err or _BOTH_FAIL)
 
 
 def parse_bpm(raw: Any, fallback: int = 120) -> int:
@@ -207,6 +271,15 @@ def load_workflow() -> dict[str, Any]:
         data = data["prompt"]
     if not isinstance(data, dict):
         raise ValueError("ACE-Step workflow is not API-format JSON.")
+    if "nodes" in data and "last_node_id" in data:
+        raise ValueError(
+            "ACE-Step workflow is a UI graph. Export (API) from Comfy and pin "
+            "workflows/ace_step_1_5_api.json."
+        )
+    if not any(
+        isinstance(v, dict) and v.get("class_type") for v in data.values()
+    ):
+        raise ValueError("ACE-Step workflow is not Comfy Export (API) JSON.")
     return data
 
 
@@ -219,14 +292,24 @@ def patch_workflow(
     bpm: int,
     keyscale: str,
     seed: int,
+    steps: int = 8,
+    cfg: float = 1.0,
+    sampler_name: str = "er_sde",
+    scheduler: str = "linear_quadratic",
+    denoise: float = 1.0,
 ) -> dict[str, Any]:
     out = deepcopy(graph)
     dur = float(max(1.0, min(2000.0, duration_s)))
     bpm_i = int(max(10, min(300, bpm)))
-    seed_i = int(seed) if seed and seed >= 0 else 0
+    seed_i = int(seed) if int(seed) >= 0 else 0
     tags_s = (tags or "").strip() or "instrumental music track"
     lyrics_s = lyrics or ""
     key_s = (keyscale or "C major").strip() or "C major"
+    steps_i = int(max(1, min(150, steps)))
+    cfg_f = float(cfg)
+    denoise_f = float(denoise)
+    samp = (sampler_name or "er_sde").strip() or "er_sde"
+    sched = (scheduler or "linear_quadratic").strip() or "linear_quadratic"
     for node in out.values():
         if not isinstance(node, dict):
             continue
@@ -234,7 +317,7 @@ def patch_workflow(
         inputs = node.setdefault("inputs", {})
         if not isinstance(inputs, dict):
             continue
-        if "TextEncodeAceStepAudio" in ct:
+        if ct == "TextEncodeAceStepAudio1.5" or ct.startswith("TextEncodeAceStepAudio"):
             inputs["tags"] = tags_s
             inputs["lyrics"] = lyrics_s
             inputs["duration"] = dur
@@ -245,11 +328,11 @@ def patch_workflow(
             inputs["seconds"] = dur
         elif ct == "KSampler":
             inputs["seed"] = seed_i
-        elif ct == "PrimitiveInt":
-            inputs["value"] = seed_i
-        elif ct in ("PrimitiveFloat", "PrimitiveNode") and "value" in inputs:
-            if isinstance(inputs.get("value"), (int, float)):
-                inputs["value"] = dur
+            inputs["steps"] = steps_i
+            inputs["cfg"] = cfg_f
+            inputs["sampler_name"] = samp
+            inputs["scheduler"] = sched
+            inputs["denoise"] = denoise_f
     return out
 
 
@@ -331,6 +414,22 @@ def generate_ace_step(
         seed = 0
     if seed < 0:
         seed = 0
+    if extra.get("seed_randomize"):
+        seed = int(uuid.uuid4().int % (2**32))
+    try:
+        steps = int(extra.get("steps") if extra.get("steps") is not None else 8)
+    except (TypeError, ValueError):
+        steps = 8
+    try:
+        cfg = float(extra.get("cfg") if extra.get("cfg") is not None else 1.0)
+    except (TypeError, ValueError):
+        cfg = 1.0
+    sampler_name = str(extra.get("sampler_name") or "er_sde").strip() or "er_sde"
+    scheduler = str(extra.get("scheduler") or "linear_quadratic").strip() or "linear_quadratic"
+    try:
+        denoise = float(extra.get("denoise") if extra.get("denoise") is not None else 1.0)
+    except (TypeError, ValueError):
+        denoise = 1.0
     t0 = time.perf_counter()
     try:
         graph = patch_workflow(
@@ -341,10 +440,30 @@ def generate_ace_step(
             bpm=bpm,
             keyscale=keyscale,
             seed=seed,
+            steps=steps,
+            cfg=cfg,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            denoise=denoise,
         )
-        queued = _post_json(base + "/prompt", {"prompt": graph, "client_id": "ams-v2"})
+        origin, post_url, queued = queue_prompt(base, graph)
+        try:
+            persist_comfy_url(origin)
+        except Exception:
+            pass
+        base = origin
     except FileNotFoundError as exc:
         return AudioResult(ok=False, status=str(exc), cost_label="Cost: $0.00", job_kind="music")
+    except RuntimeError as exc:
+        return AudioResult(
+            ok=False,
+            status=str(exc),
+            cost_label="Cost: $0.00",
+            model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
+            model_key=getattr(spec, "key", "ace step 1.5"),
+            endpoint=base,
+            job_kind="music",
+        )
     except urllib.error.URLError as exc:
         return AudioResult(
             ok=False,
@@ -423,7 +542,7 @@ def generate_ace_step(
         status=f"ACE-Step 1.5 (local Comfy) OK. Saved {dest.name}. Cost: $0.00.",
         metrics_line=f"{render_s:.1f}s · Cost: $0.00",
         cost_label="Cost: $0.00",
-        notes=["Local Comfy ACE-Step 1.5 — not billed."],
+        notes=[f"Queued Comfy at {post_url}", "Local ACE-Step 1.5 — not billed."],
         render_seconds=render_s,
         model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
         model_key=getattr(spec, "key", "ace step 1.5"),

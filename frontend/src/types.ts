@@ -73,6 +73,7 @@ export type GenerateResponse = {
   model_key?: string;
   switch?: SwitchOffer | null;
   prompt?: string | null;
+  notes?: string[];
 };
 
 export type LibraryItem = {

@@ -88,7 +88,8 @@ Default video model: Kling O3 Standard V2V edit.
 |------|--------|
 | **Music** | MiniMax Music 3 (default), **ACE-Step 1.5 (local Comfy)**, Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
 
-**ACE-Step 1.5 (local Comfy).** Settings → COMFY_URL (default `http://127.0.0.1:8188`, desktop often `:8000`) and **Use local Comfy for music**. The ACE model blurb shows the URL (editable). Health is GET `/system_stats` then GET `/prompt` on that URL, then `:8188`, then `:8000`. Generate uses the URL that passed. Real errors toast (connection refused / 404 / timeout). If both ports fail: **No Comfy API. Desktop default is :8000, portable is :8188. Set Comfy URL in Settings.** Does not launch Comfy. MiniMax / ElevenLabs stay on fal. Cost **$0.00**.
+**ACE-Step 1.5 (local Comfy).** Settings → COMFY_URL (default `http://127.0.0.1:8188`, desktop often `:8000`) and **Use local Comfy for music**. The ACE model blurb shows the URL (editable). Health is GET `/system_stats` then GET `/prompt` on that URL, then `:8188`, then `:8000`. Generate uses the URL that passed. Real errors toast (connection refused / 404 / timeout). If both ports fail: **No Comfy API. Desktop default is :8000, portable is :8188. Set Comfy URL in Settings.** Does not launch Comfy. MiniMax / ElevenLabs stay on fal. Cost **$0.00**. Queue POSTs `/api/prompt` then `/prompt` (JSON + Origin + `client_id`); first 200 is toasted and persisted as Comfy URL. **405** toasts **UI port, not API. Try /api/prompt or :8188**. Pinned Comfy Export (API) workflow. ACE Advanced: seed/randomize, steps 8, CFG 1.0, sampler `er_sde`, scheduler `linear_quadratic`, denoise 1.0.
+
 | **SFX** | ElevenLabs Sound Effects V2, Sonilo Text-to-SFX |
 | **Voiceover** | MiniMax Speech 2.8 HD, MiniMax Speech 2.6 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |
 

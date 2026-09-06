@@ -74,6 +74,58 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "audio", label: "Audio" },
 ];
 
+const ACE_SAMPLERS = [
+  "er_sde",
+  "euler",
+  "euler_ancestral",
+  "heun",
+  "dpmpp_2m",
+  "dpmpp_sde",
+  "dpmpp_2m_sde",
+  "dpmpp_3m_sde",
+  "ddim",
+  "uni_pc",
+] as const;
+
+const ACE_SCHEDULERS = [
+  "linear_quadratic",
+  "simple",
+  "normal",
+  "karras",
+  "exponential",
+  "sgm_uniform",
+  "beta",
+] as const;
+
+function isComfyAlert(msg: string): boolean {
+  return (
+    /start comfyui first/i.test(msg) ||
+    /no comfy api/i.test(msg) ||
+    /ui port, not api/i.test(msg) ||
+    /connection refused/i.test(msg) ||
+    /\b404\b/.test(msg) ||
+    /timeout/i.test(msg)
+  );
+}
+
+function queuedComfyUrl(notes: unknown): string {
+  if (!Array.isArray(notes)) return "";
+  for (const row of notes) {
+    const hit = String(row || "").match(/queued comfy at\s+(\S+)/i);
+    if (hit?.[1]) return hit[1];
+  }
+  return "";
+}
+
+function originOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return url.replace(/\/(?:api\/)?prompt\/?$/i, "");
+  }
+}
+
 const MODALITIES: Record<Mode, { id: string; label: string }[]> = {
   image: [
     { id: "t2i", label: "T2I" },
@@ -171,6 +223,12 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [aceBpm, setAceBpm] = useState("");
   const [aceKey, setAceKey] = useState("C major");
   const [aceComfyUrl, setAceComfyUrl] = useState("http://127.0.0.1:8188");
+  const [aceSeedRandomize, setAceSeedRandomize] = useState(true);
+  const [aceSteps, setAceSteps] = useState("8");
+  const [aceCfg, setAceCfg] = useState("1.0");
+  const [aceSampler, setAceSampler] = useState("er_sde");
+  const [aceScheduler, setAceScheduler] = useState("linear_quadratic");
+  const [aceDenoise, setAceDenoise] = useState("1.0");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
   const [draft, setDraft] = useState(false);
@@ -765,6 +823,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         if (aceBpm.trim() && Number.isFinite(bpmN)) extra.bpm = bpmN;
         if (aceKey.trim()) extra.keyscale = aceKey.trim();
         if (isAce && aceComfyUrl.trim()) extra.comfy_url = aceComfyUrl.trim();
+        if (isAce) {
+          extra.seed_randomize = aceSeedRandomize;
+          const stepsN = parseInt(aceSteps, 10);
+          extra.steps = Number.isFinite(stepsN) ? stepsN : 8;
+          const cfgN = parseFloat(aceCfg);
+          extra.cfg = Number.isFinite(cfgN) ? cfgN : 1.0;
+          extra.sampler_name = aceSampler.trim() || "er_sde";
+          extra.scheduler = aceScheduler.trim() || "linear_quadratic";
+          const denN = parseFloat(aceDenoise);
+          extra.denoise = Number.isFinite(denN) ? denN : 1.0;
+        }
       }
       if (seedreamBoxes.length) {
         extra.mode = "region_edit";
@@ -860,7 +929,9 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             num_images: numImages > 1 ? numImages : null,
             seed: (() => {
               const n = parseInt(seed, 10);
-              return seed.trim() && Number.isFinite(n) ? n : null;
+              if (seed.trim() && Number.isFinite(n)) return n;
+              if (isAce && !aceSeedRandomize) return 0;
+              return null;
             })(),
             draft,
             extra,
@@ -882,11 +953,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           !body.switch &&
           (/could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
-            /start comfyui first/i.test(msg) ||
-            /no comfy api/i.test(msg) ||
-            /connection refused/i.test(msg) ||
-            /\b404\b/.test(msg) ||
-            /timeout/i.test(msg))
+            isComfyAlert(msg))
         ) {
           toast(msg, true);
         }
@@ -903,15 +970,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           (/could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             /content_policy|partner_validation|422/i.test(msg) ||
-            /start comfyui first/i.test(msg) ||
-            /no comfy api/i.test(msg) ||
-            /connection refused/i.test(msg) ||
-            /\b404\b/.test(msg) ||
-            /timeout/i.test(msg))
+            isComfyAlert(msg))
         ) {
           toast(msg, true);
         }
         return;
+      }
+      const queuedUrl = queuedComfyUrl(body.notes);
+      if (queuedUrl) {
+        toast(queuedUrl);
+        const origin = originOf(queuedUrl);
+        if (origin) setAceComfyUrl(origin);
       }
       data.onGenerated(body, {
         source:
@@ -1401,62 +1470,151 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           <details className="advanced nodrag">
             <summary>Advanced</summary>
             <div className="advanced-body">
-              <label className="param">
-                <span>Seed</span>
-                <input
-                  className="model nodrag"
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="optional"
-                  value={seed}
-                  onChange={(e) => setSeed(e.target.value)}
-                />
-              </label>
-              <label className="param">
-                <span>Negative prompt</span>
-                <input
-                  className="model nodrag"
-                  type="text"
-                  placeholder="optional"
-                  value={negativePrompt}
-                  onChange={(e) => setNegativePrompt(e.target.value)}
-                />
-              </label>
-              {Math.max(
-                1,
-                Number(selectedModel?.size_limits?.max_num_images) || 1,
-              ) > 1 ? (
-                <label className="param">
-                  <span>Images</span>
-                  <select
-                    className="model nodrag"
-                    value={String(numImages)}
-                    onChange={(e) =>
-                      setNumImages(
-                        Math.max(1, Math.min(4, Number(e.target.value) || 1)),
-                      )
-                    }
-                  >
-                    {Array.from(
-                      {
-                        length: Math.min(
-                          4,
-                          Math.max(
-                            1,
-                            Number(selectedModel?.size_limits?.max_num_images) ||
-                              1,
-                          ),
-                        ),
-                      },
-                      (_, i) => i + 1,
-                    ).map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+              {isAce ? (
+                <>
+                  <label className="param">
+                    <span>Seed</span>
+                    <input
+                      className="model nodrag"
+                      type="number"
+                      inputMode="numeric"
+                      placeholder={aceSeedRandomize ? "random" : "0"}
+                      value={seed}
+                      disabled={aceSeedRandomize}
+                      onChange={(e) => setSeed(e.target.value)}
+                    />
+                  </label>
+                  <label className="param check">
+                    <input
+                      type="checkbox"
+                      checked={aceSeedRandomize}
+                      onChange={(e) => setAceSeedRandomize(e.target.checked)}
+                    />
+                    Randomize
+                  </label>
+                  <label className="param">
+                    <span>Steps</span>
+                    <input
+                      className="model nodrag"
+                      type="number"
+                      min={1}
+                      max={150}
+                      value={aceSteps}
+                      onChange={(e) => setAceSteps(e.target.value)}
+                    />
+                  </label>
+                  <label className="param">
+                    <span>CFG</span>
+                    <input
+                      className="model nodrag"
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      value={aceCfg}
+                      onChange={(e) => setAceCfg(e.target.value)}
+                    />
+                  </label>
+                  <label className="param">
+                    <span>Sampler</span>
+                    <select
+                      className="model nodrag"
+                      value={aceSampler}
+                      onChange={(e) => setAceSampler(e.target.value)}
+                    >
+                      {ACE_SAMPLERS.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="param">
+                    <span>Scheduler</span>
+                    <select
+                      className="model nodrag"
+                      value={aceScheduler}
+                      onChange={(e) => setAceScheduler(e.target.value)}
+                    >
+                      {ACE_SCHEDULERS.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="param">
+                    <span>Denoise</span>
+                    <input
+                      className="model nodrag"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={1}
+                      value={aceDenoise}
+                      onChange={(e) => setAceDenoise(e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label className="param">
+                    <span>Seed</span>
+                    <input
+                      className="model nodrag"
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="optional"
+                      value={seed}
+                      onChange={(e) => setSeed(e.target.value)}
+                    />
+                  </label>
+                  <label className="param">
+                    <span>Negative prompt</span>
+                    <input
+                      className="model nodrag"
+                      type="text"
+                      placeholder="optional"
+                      value={negativePrompt}
+                      onChange={(e) => setNegativePrompt(e.target.value)}
+                    />
+                  </label>
+                  {Math.max(
+                    1,
+                    Number(selectedModel?.size_limits?.max_num_images) || 1,
+                  ) > 1 ? (
+                    <label className="param">
+                      <span>Images</span>
+                      <select
+                        className="model nodrag"
+                        value={String(numImages)}
+                        onChange={(e) =>
+                          setNumImages(
+                            Math.max(1, Math.min(4, Number(e.target.value) || 1)),
+                          )
+                        }
+                      >
+                        {Array.from(
+                          {
+                            length: Math.min(
+                              4,
+                              Math.max(
+                                1,
+                                Number(selectedModel?.size_limits?.max_num_images) ||
+                                  1,
+                              ),
+                            ),
+                          },
+                          (_, i) => i + 1,
+                        ).map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </>
+              )}
             </div>
           </details>
         ) : null}
