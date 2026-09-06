@@ -1659,6 +1659,7 @@ html[data-theme="night"] .sheet-angle-empty.sheet-angle-replace {
 
 .hint.warn {
   color: #a33a3a;
+  white-space: pre-wrap;
 }
 
 .prompt-actions {

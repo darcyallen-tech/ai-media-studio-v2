@@ -20,12 +20,67 @@ from app.prefs import load_prefs
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 DESKTOP_COMFY_URL = "http://127.0.0.1:8000"
 PORTABLE_COMFY_URL = "http://127.0.0.1:8188"
-WORKFLOW_NAME = "ace_step_1_5_api.json"
+WORKFLOW_NAME = "audio_ace_step_1_5_split.json"
+_EXPORT_API = "Export (API) from Comfy, replace this file."
 _BOTH_FAIL = (
     "No Comfy API. Desktop default is :8000, portable is :8188. "
     "Set Comfy URL in Settings."
 )
 _UI_PORT = "UI port, not API. Try /api/prompt or :8188"
+_SKIP_UI_TYPES = frozenset(
+    {
+        "Note",
+        "MarkdownNote",
+        "Reroute",
+        "PrimitiveNode",
+        "PrimitiveInt",
+        "PrimitiveFloat",
+        "PrimitiveString",
+        "PrimitiveBoolean",
+    }
+)
+_WIDGET_NAMES: dict[str, list[str]] = {
+    "UNETLoader": ["unet_name", "weight_dtype"],
+    "CLIPLoader": ["clip_name", "type", "device"],
+    "DualCLIPLoader": ["clip_name1", "clip_name2", "type", "device"],
+    "VAELoader": ["vae_name"],
+    "KSampler": [
+        "seed",
+        "control_after_generate",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "denoise",
+    ],
+    "ModelSamplingAuraFlow": ["shift"],
+    "TextEncodeAceStepAudio1.5": [
+        "tags",
+        "lyrics",
+        "seed",
+        "bpm",
+        "duration",
+        "timesignature",
+        "language",
+        "keyscale",
+        "generate_audio_codes",
+        "cfg_scale",
+        "temperature",
+        "top_p",
+        "top_k",
+        "min_p",
+    ],
+    "TextEncodeAceStepAudio": ["lyrics", "lyrics_strength", "tags"],
+    "EmptyAceStep1.5LatentAudio": ["seconds", "batch_size"],
+    "EmptyAceStepLatentAudio": ["seconds", "batch_size"],
+    "SaveAudioMP3": ["filename_prefix", "quality"],
+    "SaveAudio": ["filename_prefix"],
+    "SaveAudioAdvanced": ["filename_prefix", "format", "format.quality"],
+    "VAEDecodeAudio": [],
+    "ConditioningZeroOut": [],
+}
+_SKIP_WIDGETS = frozenset({"control_after_generate"})
+_AUDIO_EXT = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"}
 _POLL_S = 1.0
 _POLL_MAX_S = 600.0
 _BPM_RE = re.compile(r"(\d{2,3})\s*bpm", re.I)
@@ -127,14 +182,19 @@ def is_ace_step(spec: Any) -> bool:
 
 
 def workflow_path() -> Path:
-    here = Path(__file__).resolve().parent / "workflows" / WORKFLOW_NAME
-    if here.is_file():
-        return here
+    """Project root first, then workflows/ (checkout + packaged)."""
+    roots = [
+        PROJECT_ROOT,
+        PROJECT_ROOT / "workflows",
+        Path(__file__).resolve().parent / "workflows",
+    ]
     if is_frozen():
-        alt = PROJECT_ROOT / "app" / "workflows" / WORKFLOW_NAME
-        if alt.is_file():
-            return alt
-    return here
+        roots.append(PROJECT_ROOT / "app" / "workflows")
+    for root in roots:
+        hit = root / WORKFLOW_NAME
+        if hit.is_file():
+            return hit
+    return PROJECT_ROOT / WORKFLOW_NAME
 
 
 def _get(url: str, timeout: float = 3.0) -> bytes:
@@ -194,10 +254,10 @@ def queue_post_urls(base: str) -> list[tuple[str, str]]:
         if (post, origin) not in rows:
             rows.append((post, origin))
 
-    add(root, "/api/prompt")
+    add(PORTABLE_COMFY_URL, "/prompt")
     add(root, "/prompt")
+    add(root, "/api/prompt")
     if root.endswith(":8000"):
-        add(PORTABLE_COMFY_URL, "/prompt")
         add(PORTABLE_COMFY_URL, "/api/prompt")
     return rows
 
@@ -230,6 +290,8 @@ def queue_prompt(base: str, graph: dict[str, Any]) -> tuple[str, str, dict[str, 
             saw_405 = True
             last_err = f"{post_url} 405"
             continue
+        if status == 400 or body.get("error") or body.get("node_errors"):
+            raise RuntimeError(format_comfy_error(status, body))
         last_err = f"{post_url} {status}"
         if isinstance(body.get("error"), str) and body["error"]:
             last_err = str(body["error"])
@@ -262,6 +324,153 @@ def parse_keyscale(raw: Any, fallback: str = "C major") -> str:
     return fallback
 
 
+def is_ui_graph(data: dict[str, Any]) -> bool:
+    return isinstance(data.get("nodes"), list) and isinstance(data.get("links"), list)
+
+
+def is_api_graph(data: dict[str, Any]) -> bool:
+    nodes = [
+        v
+        for k, v in data.items()
+        if str(k).isdigit() and isinstance(v, dict) and v.get("class_type")
+    ]
+    return bool(nodes)
+
+
+def format_comfy_error(status: int, body: dict[str, Any]) -> str:
+    """error.message + node_errors — never a bare '400'."""
+    lines: list[str] = []
+    err = body.get("error")
+    if isinstance(err, dict):
+        msg = str(err.get("message") or "").strip()
+        details = str(err.get("details") or "").strip()
+        etype = str(err.get("type") or "").strip()
+        if msg:
+            lines.append(msg)
+        if details and details not in lines:
+            lines.append(details)
+        if not lines and etype:
+            lines.append(etype)
+    elif isinstance(err, str) and err.strip():
+        lines.append(err.strip())
+    node_errors = body.get("node_errors")
+    if isinstance(node_errors, dict) and node_errors:
+        for nid, info in node_errors.items():
+            cls = ""
+            bits: list[str] = []
+            if isinstance(info, dict):
+                cls = str(info.get("class_type") or "").strip()
+                errs = info.get("errors")
+                if isinstance(errs, list):
+                    for item in errs:
+                        if isinstance(item, dict):
+                            em = str(item.get("message") or "").strip()
+                            ed = str(item.get("details") or "").strip()
+                            piece = em
+                            if ed and ed != em:
+                                piece = f"{em}: {ed}" if em else ed
+                            if piece:
+                                bits.append(piece)
+                        elif item:
+                            bits.append(str(item))
+                elif info.get("message"):
+                    bits.append(str(info["message"]))
+            elif info:
+                bits.append(str(info))
+            label = f"node {nid}"
+            if cls:
+                label += f" ({cls})"
+            extra = "; ".join(bits) if bits else json.dumps(info, ensure_ascii=False)[:500]
+            lines.append(f"{label}: {extra}")
+    if not lines:
+        blob = json.dumps(body, ensure_ascii=False)[:800] if body else ""
+        return f"Comfy {status}: {blob}" if blob else f"Comfy {status}"
+    return "\n".join(lines)
+
+
+def _primitive_value(node: dict[str, Any]) -> Any:
+    vals = node.get("widgets_values")
+    if isinstance(vals, list) and vals:
+        return vals[0]
+    return 0
+
+
+def _follow_link(
+    src_id: Any,
+    src_slot: Any,
+    nodes_by_id: dict[Any, dict[str, Any]],
+    links_by_id: dict[Any, tuple[Any, Any]],
+) -> tuple[str, Any] | tuple[str, int]:
+    node = nodes_by_id.get(src_id)
+    if not isinstance(node, dict):
+        return str(src_id), int(src_slot or 0)
+    ntype = str(node.get("type") or "")
+    if ntype == "Reroute":
+        ins = node.get("inputs") or []
+        first = ins[0] if ins else None
+        lid = first.get("link") if isinstance(first, dict) else None
+        if lid in links_by_id:
+            nxt_src, nxt_slot = links_by_id[lid]
+            return _follow_link(nxt_src, nxt_slot, nodes_by_id, links_by_id)
+    if ntype in _SKIP_UI_TYPES and ntype != "Reroute":
+        return ("__value__", _primitive_value(node))
+    return str(src_id), int(src_slot or 0)
+
+
+def ui_to_api(data: dict[str, Any]) -> dict[str, Any]:
+    """Comfy UI graph (nodes + links) → API map {id: {class_type, inputs}}."""
+    raw_nodes = data.get("nodes") or []
+    raw_links = data.get("links") or []
+    nodes_by_id: dict[Any, dict[str, Any]] = {}
+    for node in raw_nodes:
+        if isinstance(node, dict) and node.get("id") is not None:
+            nodes_by_id[node["id"]] = node
+    links_by_id: dict[Any, tuple[Any, Any]] = {}
+    for link in raw_links:
+        if isinstance(link, (list, tuple)) and len(link) >= 5:
+            links_by_id[link[0]] = (link[1], link[2])
+    out: dict[str, Any] = {}
+    for node in raw_nodes:
+        if not isinstance(node, dict):
+            continue
+        nid = node.get("id")
+        ctype = str(node.get("type") or "")
+        if nid is None or not ctype or ctype in _SKIP_UI_TYPES:
+            continue
+        inputs: dict[str, Any] = {}
+        linked: set[str] = set()
+        for inp in node.get("inputs") or []:
+            if not isinstance(inp, dict):
+                continue
+            name = str(inp.get("name") or "").strip()
+            lid = inp.get("link")
+            if not name or lid is None or lid not in links_by_id:
+                continue
+            src, slot = links_by_id[lid]
+            resolved = _follow_link(src, slot, nodes_by_id, links_by_id)
+            if resolved[0] == "__value__":
+                inputs[name] = resolved[1]
+            else:
+                inputs[name] = [resolved[0], resolved[1]]
+            linked.add(name)
+        widgets = node.get("widgets_values")
+        names = list(_WIDGET_NAMES.get(ctype, []))
+        if isinstance(widgets, list) and names:
+            wi = 0
+            for wname in names:
+                if wi >= len(widgets):
+                    break
+                val = widgets[wi]
+                wi += 1
+                if wname in _SKIP_WIDGETS or wname in linked:
+                    continue
+                inputs[wname] = val
+        out[str(nid)] = {"class_type": ctype, "inputs": inputs}
+    if not is_api_graph(out):
+        raise ValueError(_EXPORT_API)
+    return out
+
+
 def load_workflow() -> dict[str, Any]:
     path = workflow_path()
     if not path.is_file():
@@ -270,16 +479,16 @@ def load_workflow() -> dict[str, Any]:
     if isinstance(data, dict) and isinstance(data.get("prompt"), dict):
         data = data["prompt"]
     if not isinstance(data, dict):
-        raise ValueError("ACE-Step workflow is not API-format JSON.")
-    if "nodes" in data and "last_node_id" in data:
-        raise ValueError(
-            "ACE-Step workflow is a UI graph. Export (API) from Comfy and pin "
-            "workflows/ace_step_1_5_api.json."
-        )
-    if not any(
-        isinstance(v, dict) and v.get("class_type") for v in data.values()
-    ):
-        raise ValueError("ACE-Step workflow is not Comfy Export (API) JSON.")
+        raise ValueError(_EXPORT_API)
+    if is_ui_graph(data):
+        try:
+            data = ui_to_api(data)
+        except ValueError:
+            raise
+        except Exception:
+            raise ValueError(_EXPORT_API) from None
+    elif not is_api_graph(data):
+        raise ValueError(_EXPORT_API)
     return data
 
 
@@ -324,7 +533,7 @@ def patch_workflow(
             inputs["bpm"] = bpm_i
             inputs["keyscale"] = key_s
             inputs["seed"] = seed_i
-        elif ct == "EmptyAceStep1.5LatentAudio":
+        elif ct.startswith("EmptyAceStep") and "LatentAudio" in ct:
             inputs["seconds"] = dur
         elif ct == "KSampler":
             inputs["seed"] = seed_i
@@ -336,32 +545,49 @@ def patch_workflow(
     return out
 
 
-def _history_files(hist: dict[str, Any]) -> list[dict[str, str]]:
+def _file_meta(item: dict[str, Any]) -> dict[str, str] | None:
+    name = str(item.get("filename") or "").strip()
+    if not name:
+        return None
+    return {
+        "filename": name,
+        "subfolder": str(item.get("subfolder") or ""),
+        "type": str(item.get("type") or "output"),
+    }
+
+
+def _history_files(
+    hist: dict[str, Any],
+    graph: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
     files: list[dict[str, str]] = []
+    preferred: list[dict[str, str]] = []
+    save_ids = {
+        str(nid)
+        for nid, node in (graph or {}).items()
+        if isinstance(node, dict)
+        and str(node.get("class_type") or "").startswith("SaveAudio")
+    }
     outputs = hist.get("outputs") if isinstance(hist, dict) else None
     if not isinstance(outputs, dict):
         return files
-    for node_out in outputs.values():
+    for nid, node_out in outputs.items():
         if not isinstance(node_out, dict):
             continue
-        for key in ("audio", "mp3", "flac", "wav", "images"):
-            items = node_out.get(key)
+        bucket = preferred if str(nid) in save_ids else files
+        for key, items in node_out.items():
             if not isinstance(items, list):
                 continue
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                name = str(item.get("filename") or "").strip()
-                if not name:
+                meta = _file_meta(item)
+                if not meta:
                     continue
-                files.append(
-                    {
-                        "filename": name,
-                        "subfolder": str(item.get("subfolder") or ""),
-                        "type": str(item.get("type") or "output"),
-                    }
-                )
-    return files
+                ext = Path(meta["filename"]).suffix.lower()
+                if key in ("audio", "mp3", "flac", "wav") or ext in _AUDIO_EXT:
+                    bucket.append(meta)
+    return preferred or files
 
 
 def _download_view(base: str, meta: dict[str, str], dest: Path) -> None:
@@ -454,6 +680,16 @@ def generate_ace_step(
         base = origin
     except FileNotFoundError as exc:
         return AudioResult(ok=False, status=str(exc), cost_label="Cost: $0.00", job_kind="music")
+    except ValueError as exc:
+        return AudioResult(
+            ok=False,
+            status=str(exc),
+            cost_label="Cost: $0.00",
+            model=getattr(spec, "label", "ACE-Step 1.5 (local Comfy)"),
+            model_key=getattr(spec, "key", "ace step 1.5"),
+            endpoint=base,
+            job_kind="music",
+        )
     except RuntimeError as exc:
         return AudioResult(
             ok=False,
@@ -483,8 +719,14 @@ def generate_ace_step(
         )
     prompt_id = str(queued.get("prompt_id") or queued.get("promptId") or "").strip()
     if not prompt_id:
-        err = queued.get("error") or queued.get("node_errors") or "Comfy returned no prompt_id."
-        return AudioResult(ok=False, status=str(err), cost_label="Cost: $0.00", job_kind="music")
+        if queued.get("error") or queued.get("node_errors"):
+            return AudioResult(
+                ok=False,
+                status=format_comfy_error(400, queued),
+                cost_label="Cost: $0.00",
+                job_kind="music",
+            )
+        return AudioResult(ok=False, status="Comfy returned no prompt_id.", cost_label="Cost: $0.00", job_kind="music")
     deadline = time.monotonic() + _POLL_MAX_S
     hist: dict[str, Any] = {}
     while time.monotonic() < deadline:
@@ -495,7 +737,7 @@ def generate_ace_step(
             continue
         if isinstance(raw, dict):
             hist = raw.get(prompt_id) if isinstance(raw.get(prompt_id), dict) else raw
-        if hist.get("status", {}).get("completed") or _history_files(hist):
+        if hist.get("status", {}).get("completed") or _history_files(hist, graph):
             status = hist.get("status") if isinstance(hist.get("status"), dict) else {}
             if status.get("status_str") == "error":
                 msg = status.get("messages") or "Comfy job failed."
@@ -505,9 +747,9 @@ def generate_ace_step(
                     cost_label="Cost: $0.00",
                     job_kind="music",
                 )
-            if _history_files(hist):
+            if _history_files(hist, graph):
                 break
-    files = _history_files(hist)
+    files = _history_files(hist, graph)
     if not files:
         return AudioResult(
             ok=False,
@@ -518,7 +760,10 @@ def generate_ace_step(
     stamp = timestamp_now()
     media_dir = job_media_dir(output_dir, stamp=stamp)
     stem = make_output_stem(tags, "ace-step-1.5", stamp=stamp, kind="music")
-    dest = unique_path(media_dir, stem, ".mp3")
+    ext = Path(files[0]["filename"]).suffix.lower()
+    if ext not in _AUDIO_EXT:
+        ext = ".mp3"
+    dest = unique_path(media_dir, stem, ext)
     try:
         _download_view(base, files[0], dest)
     except Exception as exc:

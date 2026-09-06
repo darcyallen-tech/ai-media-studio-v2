@@ -102,9 +102,13 @@ function isComfyAlert(msg: string): boolean {
     /start comfyui first/i.test(msg) ||
     /no comfy api/i.test(msg) ||
     /ui port, not api/i.test(msg) ||
+    /export \(api\) from comfy/i.test(msg) ||
     /connection refused/i.test(msg) ||
     /\b404\b/.test(msg) ||
-    /timeout/i.test(msg)
+    /timeout/i.test(msg) ||
+    /node_errors/i.test(msg) ||
+    /prompt outputs failed/i.test(msg) ||
+    /node \d+/i.test(msg)
   );
 }
 
@@ -951,7 +955,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         showSwitch(body.switch, msg);
         if (
           !body.switch &&
-          (/could not fetch the source/i.test(msg) ||
+          (isAce ||
+            /could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             isComfyAlert(msg))
         ) {
@@ -967,7 +972,8 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         showSwitch(body.switch, msg);
         if (
           !body.switch &&
-          (/could not fetch the source/i.test(msg) ||
+          (isAce ||
+            /could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             /content_policy|partner_validation|422/i.test(msg) ||
             isComfyAlert(msg))
