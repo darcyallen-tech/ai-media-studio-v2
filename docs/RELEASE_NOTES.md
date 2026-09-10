@@ -1,5 +1,16 @@
 # AI Media Studio V2 — release notes
 
+## Local Comfy character pipeline
+
+Character Builder Front / extra angles / Confirm run on a local ComfyUI instance (Settings **COMFY_URL**, default `http://127.0.0.1:8188`). No fal or xAI keys for those three buttons.
+
+- Front: Z-Image Turbo T2I at ~2 MP 9:16 (`workflows/comfy/ZimageTurbo T2I.json`)
+- Side, ¾ front, ¾ back, Back, Close-up, Top: Qwen R2I Multiangle, IMAGE1 = Front (`Qwen R2I - Multiple Angles Generator.json`)
+- Confirm: SeedVR2 upscale, long-edge cap 3840, writes `*_4k.png` beside the 2 MP still. Qwen keeps using 2 MP Front.
+- Comfy must already be running. Offline toast: “ComfyUI is not running. Start Comfy, then retry.”
+- **16 GB VRAM recommended.** Workflows built on an RTX 5070 Ti.
+- ACE-Step JSON in `workflows/comfy/` is not wired from this pipeline. Binding map: `docs/COMFY_BINDINGS.md`.
+
 ## 2.0.0-rc4 (Windows)
 
 Windows zip: `AIMediaStudioV2-2.0.0-rc4-windows.zip`. Double-click `AIMediaStudioV2.exe` (keep `_internal` next to it). Keys stay in Settings / `%LOCALAPPDATA%\AI Media Studio V2`.

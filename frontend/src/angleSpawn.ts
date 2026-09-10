@@ -13,6 +13,7 @@ export type AngleSpawnDetail = SheetAnglePatch & {
   notes?: string;
   t2iResolution?: string;
   r2iResolution?: string;
+  localPipeline?: "comfy-character";
 };
 
 export type AngleGenerateDetail = {

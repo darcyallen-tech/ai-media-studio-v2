@@ -44,7 +44,9 @@ Each row has a **dashboard** link. Billing links are under the balance lines in 
 
 You can use the app with **fal only**. Add Runware when you want Frame Editor. Add xAI when you want Enhance.
 
-**Local ACE-Step 1.5 (optional).** Start ComfyUI first — it must already be running. Settings → COMFY_URL (`http://127.0.0.1:8188`). Enhance on ACE-Step rewrites into comma **tags** + `[Section]` **lyrics** (not MiniMax/Suno prose). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
+**Local Comfy character pipeline (optional).** Start ComfyUI first — it must already be running. Settings → COMFY_URL (`http://127.0.0.1:8188`) → **Test connection**. Character **Generate Front** is Z-Image (~2 MP 9:16). Side / ¾ / Back / Close-up / Top need Front first (Qwen Multiangle). **Confirm** on a Result still is SeedVR 4K (`*_4k.png`); later angles still use the 2 MP Front. No fal/xAI keys for those three. **16 GB VRAM recommended.** Workflows: `workflows/comfy/`. If Comfy is down: “ComfyUI is not running. Start Comfy, then retry.”
+
+**Local ACE-Step 1.5 (optional).** Same Comfy URL. Enhance on ACE-Step rewrites into comma **tags** + `[Section]` **lyrics** (not MiniMax/Suno prose). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
 
 ---
 

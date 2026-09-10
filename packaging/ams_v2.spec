@@ -16,6 +16,7 @@ backend = os.path.join(repo, "backend")
 frontend_dist = os.path.join(repo, "frontend", "dist")
 prompts = os.path.join(backend, "app", "prompts")
 workflows = os.path.join(backend, "app", "workflows")
+comfy_workflows = os.path.join(repo, "workflows", "comfy")
 entry = os.path.join(SPECPATH, "entry.py")
 
 if not os.path.isfile(os.path.join(frontend_dist, "index.html")):
@@ -27,6 +28,7 @@ datas: list = [
     (frontend_dist, os.path.join("frontend", "dist")),
     (prompts, os.path.join("app", "prompts")),
     (workflows, os.path.join("app", "workflows")),
+    (comfy_workflows, os.path.join("workflows", "comfy")),
 ]
 binaries: list = []
 hiddenimports: list = []

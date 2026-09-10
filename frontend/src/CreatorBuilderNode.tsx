@@ -517,6 +517,7 @@ function CharacterForm({
         notes: session.notes,
         t2iResolution: session.t2iResolution,
         r2iResolution: session.r2iResolution,
+        localPipeline: "comfy-character",
       });
       setError(null);
       data.onSession?.(session);

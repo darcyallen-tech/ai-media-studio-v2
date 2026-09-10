@@ -1662,6 +1662,19 @@ html[data-theme="night"] .sheet-angle-empty.sheet-angle-replace {
   white-space: pre-wrap;
 }
 
+.comfy-status {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.comfy-status.on {
+  color: #2a7a3a;
+}
+
+.comfy-status.off {
+  color: #a33a3a;
+}
+
 .prompt-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2154,6 +2167,14 @@ html[data-theme="night"] .meta {
 }
 
 html[data-theme="night"] .hint.warn {
+  color: #e07070;
+}
+
+html[data-theme="night"] .comfy-status.on {
+  color: #6dca7a;
+}
+
+html[data-theme="night"] .comfy-status.off {
   color: #e07070;
 }
 

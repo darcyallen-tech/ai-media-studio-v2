@@ -24,6 +24,8 @@ AI Media Studio V2 is a **node canvas** for stills, video, audio, and a clip Fra
 
 Without a fal key, Create and Tools stay blocked. Without Runware, Frame Editor stays blocked. The rest of the app still opens.
 
+**Local Comfy character pipeline** (no API keys): Character Builder Front runs Z-Image Turbo T2I at ~2 MP 9:16. Other angles run Qwen R2I Multiangle from the Front still. **Confirm** on a Result node runs SeedVR2 (long-edge cap 3840) and writes `*_4k.png` beside the 2 MP file — later angles still use the 2 MP Front. Workflows live in `workflows/comfy/`. ComfyUI must already be running at Settings COMFY_URL (`http://127.0.0.1:8188`). **16 GB VRAM recommended.** Workflows were built on an RTX 5070 Ti. ACE-Step JSON in that folder is not wired here.
+
 ---
 
 ## Compare + Mask

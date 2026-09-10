@@ -1,0 +1,190 @@
+{
+  "1": {
+    "inputs": {
+      "seed": 2526547485,
+      "resolution": [
+        "2",
+        0
+      ],
+      "max_resolution": 3840,
+      "batch_size": 1,
+      "uniform_batch_size": false,
+      "color_correction": "lab",
+      "temporal_overlap": 0,
+      "prepend_frames": 0,
+      "input_noise_scale": 0,
+      "latent_noise_scale": 0.02,
+      "offload_device": "cpu",
+      "enable_debug": false,
+      "image": [
+        "56",
+        0
+      ],
+      "dit": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "SeedVR2VideoUpscaler",
+    "_meta": {
+      "title": "SeedVR2 Video Upscaler (v2.5.24)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "value": "a*b",
+      "a": [
+        "4",
+        0
+      ],
+      "b": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "SimpleMath+",
+    "_meta": {
+      "title": "Upscale to Shortest Edge (pixels)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda:0",
+      "encode_tiled": false,
+      "encode_tile_size": 1024,
+      "encode_tile_overlap": 128,
+      "decode_tiled": false,
+      "decode_tile_size": 1024,
+      "decode_tile_overlap": 128,
+      "tile_debug": "false",
+      "offload_device": "none",
+      "cache_model": false
+    },
+    "class_type": "SeedVR2LoadVAEModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load VAE Model"
+    }
+  },
+  "4": {
+    "inputs": {
+      "if_condition": [
+        "8",
+        0
+      ],
+      "when_TRUE": [
+        "9",
+        0
+      ],
+      "when_FALSE": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "LayerUtility: If ",
+    "_meta": {
+      "title": "IfElse"
+    }
+  },
+  "5": {
+    "inputs": {
+      "value": 2
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Upscale Factor"
+    }
+  },
+  "7": {
+    "inputs": {
+      "model": "seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors",
+      "device": "cuda:0",
+      "blocks_to_swap": 16,
+      "swap_io_components": false,
+      "offload_device": "cpu",
+      "cache_model": false,
+      "attention_mode": "sdpa"
+    },
+    "class_type": "SeedVR2LoadDiTModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load DiT Model"
+    }
+  },
+  "8": {
+    "inputs": {
+      "cmp": "a <= b",
+      "a": [
+        "9",
+        0
+      ],
+      "b": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "ImpactCompare",
+    "_meta": {
+      "title": "ImpactCompare"
+    }
+  },
+  "9": {
+    "inputs": {
+      "image": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Get Image Size"
+    }
+  },
+  "52": {
+    "inputs": {
+      "compare_view": {
+        "__value__": [
+          "",
+          ""
+        ]
+      },
+      "image_a": [
+        "54",
+        0
+      ],
+      "image_b": [
+        "56",
+        0
+      ]
+    },
+    "class_type": "ImageCompare",
+    "_meta": {
+      "title": "Image Compare (Before/After)"
+    }
+  },
+  "54": {
+    "inputs": {
+      "filename_prefix": "ComfyUI-upscaled",
+      "images": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "56": {
+    "inputs": {
+      "image": "ComfyUI_01499_.png [output]"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  }
+}

@@ -54,6 +54,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     data.sheetKind === "character" ||
     data.sheetKind === "scene" ||
     data.sheetKind === "prop";
+  const isComfyChar = data.localPipeline === "comfy-character";
   const models = useSheetModels();
   const [liveCompose, setLiveCompose] = useState<typeof models.r2i>([]);
   useEffect(() => {
@@ -173,6 +174,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   const [estimateBusy, setEstimateBusy] = useState(isSheet || isSceneAngle);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [creativeEnhance, setCreativeEnhance] = useState(false);
+  const [angleEnhanced, setAngleEnhanced] = useState(false);
+  const [comfyPhase, setComfyPhase] = useState("");
+  const [comfyElapsed, setComfyElapsed] = useState(0);
+  const comfyStartRef = useRef(0);
   const hasXai = useXaiKey();
   const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
   const [pickedSlots, setPickedSlots] = useState<string[]>([]);
@@ -243,6 +248,20 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     if (!data.generating) setBusy(false);
   }, [data.generating]);
   useEffect(() => {
+    if (!busy || !isComfyChar) return;
+    comfyStartRef.current = Date.now();
+    setComfyElapsed(0);
+    const id = window.setInterval(() => {
+      setComfyElapsed((Date.now() - comfyStartRef.current) / 1000);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [busy, isComfyChar]);
+  useEffect(() => {
+    if (isComfyChar) {
+      setEstimate("Local · $0.00");
+      setEstimateBusy(false);
+      return;
+    }
     const costModel = isSheet ? selectedModel : isSceneAngle ? angleModel : null;
     if (!costModel?.id || !(isSheet || isSceneAngle)) {
       setEstimate("");
@@ -298,6 +317,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     fluxEdit,
     isHeroT2i,
     angleModel?.id,
+    isComfyChar,
   ]);
   useEffect(() => {
     if (!isSheetPicker) {
@@ -560,6 +580,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
           ? ensureScenePhotoreal(rewritten, true)
           : rewritten;
       setAnglePrompt(kept);
+      setAngleEnhanced(true);
       data.onPrompt?.(kept);
       toast("Prompt enhanced — hit Generate when you want a still.");
     } catch (err: unknown) {
@@ -596,10 +617,123 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     }
   }
 
+  async function runComfyCharacter(kind: "front" | "angle" | "confirm") {
+    const slot = data.slot || "front";
+    const prompt = anglePrompt.trim();
+    if (kind !== "confirm" && !prompt) {
+      setLocalError("Angle prompt is empty.");
+      return;
+    }
+    if (kind === "angle" && slot !== "front" && !data.sourceStill) {
+      const msg = "Generate Front first.";
+      setLocalError(msg);
+      toast(msg, true);
+      return;
+    }
+    if (kind === "confirm" && !copyPath && !data.sourceStill) {
+      setLocalError("Generate first.");
+      return;
+    }
+    setBusy(true);
+    setLocalError(null);
+    setComfyPhase("Queued in Comfy…");
+    data.onBusy?.(true, null);
+    let failMsg: string | null = null;
+    try {
+      let assetId = data.assetId || "";
+      if (!assetId) {
+        const created = await fetch("/assets/sheet/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "character",
+            name: data.name || "Character",
+            fields: data.fields || {},
+            notes: "",
+          }),
+        });
+        const draft = await readJson(created);
+        const item = (draft.item || null) as { id?: string } | null;
+        if (!created.ok || !item?.id) {
+          throw new Error(errorFromBody(draft, "Could not create character draft."));
+        }
+        assetId = item.id;
+      }
+      const job =
+        kind === "confirm" ? "confirm" : slot === "front" ? "front" : "angle";
+      const res = await fetch("/comfy/character", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job,
+          asset_id: assetId,
+          slot,
+          prompt,
+          source_still:
+            kind === "confirm"
+              ? copyPath || data.sourceStill || ""
+              : slot === "front"
+                ? ""
+                : data.sourceStill || "",
+          enhanced: angleEnhanced,
+        }),
+      });
+      const body = await readJson(res);
+      const item = (body.item || null) as {
+        identity?: Record<string, string>;
+        identity_urls?: Record<string, string>;
+        still_path?: string;
+        url?: string;
+        prompt?: string;
+        cost?: string;
+        path?: string;
+        preview_path?: string;
+        qwen_source?: string;
+        confirmed_4k?: boolean;
+        duration_sec?: number;
+      } | null;
+      if (!res.ok || !item) {
+        throw new Error(errorFromBody(body, "Comfy generate failed."));
+      }
+      const qwenPath =
+        item.qwen_source || item.identity?.[slot] || item.path || "";
+      const previewPath = item.preview_path || item.path || qwenPath;
+      const url = item.url || item.identity_urls?.[slot] || "";
+      const shown = url
+        ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`
+        : "";
+      if (shown) setLocalUrl(shown);
+      data.onGenerated?.({
+        slot,
+        assetId,
+        path: qwenPath,
+        url: shown,
+        prompt: item.prompt || prompt,
+        cost: item.cost || "Local · $0.00",
+        resolution: size || data.resolution,
+        previewPath,
+        previewUrl: shown,
+      });
+    } catch (err: unknown) {
+      failMsg = err instanceof Error ? err.message : "Comfy generate failed.";
+      setLocalError(failMsg);
+      toast(failMsg, true);
+    } finally {
+      setBusy(false);
+      setComfyPhase("");
+      data.onBusy?.(false, failMsg);
+    }
+  }
+
   async function runAngleJob(ev?: { preventDefault?: () => void; stopPropagation?: () => void }) {
     ev?.preventDefault?.();
     ev?.stopPropagation?.();
     if (busy || data.generating) return;
+    if (isComfyChar) {
+      const slot = data.slot || "front";
+      await runComfyCharacter(slot === "front" ? "front" : "angle");
+      return;
+    }
     const prompt = anglePrompt.trim();
     const slot = data.slot || "front";
     if (!prompt) {
@@ -824,7 +958,11 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
       <div className="node-body nodrag">
         <p className="meta">
           <span>
-            {data.generating ? "Generating…" : costLine || "—"}
+            {data.generating || (isComfyChar && busy)
+              ? isComfyChar
+                ? `${comfyPhase || "Queued in Comfy…"}${comfyElapsed >= 1 ? ` ${comfyElapsed.toFixed(0)}s` : ""}`
+                : "Generating…"
+              : costLine || "—"}
           </span>
           {result.duration_sec ? (
             <span>{formatDuration(result.duration_sec)}</span>
@@ -1030,7 +1168,11 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               </label>
             ) : null}
             <p className="estimate">
-              {isSheet
+              {isComfyChar
+                ? busy
+                  ? `${comfyPhase || "Queued in Comfy…"}${comfyElapsed >= 1 ? ` ${comfyElapsed.toFixed(0)}s` : ""}`
+                  : estimate || result.cost || "Local · $0.00"
+                : isSheet
                 ? `${estimateBusy ? "—" : estimate || modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
                 : estimateBusy
                   ? "—"
@@ -1081,11 +1223,24 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                 onClick={(e) => void runAngleJob(e)}
               >
                 {busy || data.generating
-                  ? "Generating…"
+                  ? isComfyChar
+                    ? comfyPhase || "Queued in Comfy…"
+                    : "Generating…"
                   : hasStill
                     ? "Regenerate"
                     : "Generate"}
               </button>
+              {isComfyChar && hasStill ? (
+                <button
+                  type="button"
+                  className="ghost nodrag"
+                  disabled={busy || data.generating}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => void runComfyCharacter("confirm")}
+                >
+                  {busy && comfyPhase ? comfyPhase : "Confirm (SeedVR 4K)"}
+                </button>
+              ) : null}
               {isSheet && hasStill ? (
                 <button
                   type="button"

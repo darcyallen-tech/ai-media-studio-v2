@@ -97,6 +97,8 @@ export default function SettingsPanel({
   const [inboxDraft, setInboxDraft] = useState("");
   const [comfyUrl, setComfyUrl] = useState("http://127.0.0.1:8188");
   const [useLocalComfy, setUseLocalComfy] = useState(false);
+  const [comfyStatus, setComfyStatus] = useState<"Connected" | "Offline" | "">("");
+  const [comfyTesting, setComfyTesting] = useState(false);
 
   async function loadSettings() {
     const res = await fetch("/settings");
@@ -261,6 +263,32 @@ export default function SettingsPanel({
     }
   }
 
+  async function testComfy() {
+    setComfyTesting(true);
+    try {
+      await saveComfy();
+      const res = await fetch("/comfy/status");
+      const body = (await res.json()) as {
+        status?: string;
+        error?: string;
+        ok?: boolean;
+      };
+      const status = body.status === "Connected" ? "Connected" : "Offline";
+      setComfyStatus(status);
+      if (status !== "Connected") {
+        toast(
+          body.error || "ComfyUI is not running. Start Comfy, then retry.",
+          true,
+        );
+      }
+    } catch {
+      setComfyStatus("Offline");
+      toast("ComfyUI is not running. Start Comfy, then retry.", true);
+    } finally {
+      setComfyTesting(false);
+    }
+  }
+
   async function savePaths() {
     try {
       const res = await fetch("/settings/preferences", {
@@ -359,11 +387,11 @@ export default function SettingsPanel({
       </section>
 
       <section className="settings-sec">
-        <h3>Local Comfy (music)</h3>
+        <h3>Local Comfy</h3>
         <p className="hint">
-          ACE-Step 1.5 talks to ComfyUI at this URL only (default
-          http://127.0.0.1:8188). This app on :8000 is not Comfy. MiniMax and
-          ElevenLabs stay on fal.
+          Character Front / angles / Confirm and ACE-Step talk to ComfyUI at this
+          URL only (default http://127.0.0.1:8188). Start Comfy first. This app
+          on :8000 is not Comfy.
         </p>
         <label className="settings-field">
           <span>COMFY_URL</span>
@@ -374,6 +402,25 @@ export default function SettingsPanel({
             onChange={(e) => setComfyUrl(e.target.value)}
           />
         </label>
+        <div className="source-row">
+          <button
+            type="button"
+            className="ghost"
+            disabled={comfyTesting}
+            onClick={() => void testComfy()}
+          >
+            {comfyTesting ? "Testing…" : "Test connection"}
+          </button>
+          {comfyStatus ? (
+            <span
+              className={
+                comfyStatus === "Connected" ? "comfy-status on" : "comfy-status off"
+              }
+            >
+              {comfyStatus}
+            </span>
+          ) : null}
+        </div>
         <label className="param check">
           <input
             type="checkbox"

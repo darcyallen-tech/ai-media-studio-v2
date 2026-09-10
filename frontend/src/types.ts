@@ -354,6 +354,7 @@ export type ResultNodeData = {
   name?: string;
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
+  localPipeline?: "comfy-character";
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;
@@ -373,6 +374,8 @@ export type ResultNodeData = {
     prompt: string;
     cost?: string;
     resolution?: string;
+    previewPath?: string;
+    previewUrl?: string;
   }) => void;
   onClose?: () => void;
   onTool?: (kind: ToolKind) => void;
@@ -480,6 +483,7 @@ export type SheetAnglePatch = {
   prompt?: string;
   url?: string;
   path?: string;
+  previewPath?: string;
   cost?: string;
   generating?: boolean;
   error?: string | null;
@@ -500,6 +504,7 @@ export type SheetAnglePatch = {
   name?: string;
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
+  localPipeline?: "comfy-character";
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;

@@ -73,7 +73,9 @@ Bring your own. Never commit `.env` or `secrets.json`.
 | xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
 | Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
 
-**Local ACE-Step 1.5.** Settings → COMFY_URL only (`http://127.0.0.1:8188`). Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system`). MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
+**Local Comfy (no keys).** Settings → COMFY_URL (`http://127.0.0.1:8188`). Character Front = Z-Image ~2 MP; other angles = Qwen Multiangle from Front; Confirm = SeedVR2 4K (2 MP kept as Qwen source). Workflows in `workflows/comfy/`. Comfy must be running. **16 GB VRAM recommended** (graphs built on RTX 5070 Ti). ACE-Step file in that folder is not wired from this pipeline.
+
+**Local ACE-Step 1.5.** Same COMFY_URL. Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system`). MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
 
 Packaged Windows app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). From source in production mode: Settings (OS app-data folder above). Dev (`AMS_DEV=1`): Settings or repo-root `.env` (gitignored).
 

@@ -274,6 +274,16 @@ class SettingsPrefsIn(BaseModel):
     use_local_comfy_music: bool | None = None
 
 
+class ComfyCharacterIn(BaseModel):
+    job: str = "front"
+    asset_id: str
+    slot: str = "front"
+    prompt: str = ""
+    source_still: str = ""
+    enhanced: bool = False
+    seed: int | None = None
+
+
 class BuilderApplyIn(BaseModel):
     scenario_key: str
     fields: dict[str, Any] = Field(default_factory=dict)
@@ -1381,6 +1391,37 @@ def assets_sheet_create(body: AssetSheetCreateIn) -> dict[str, Any]:
             parent_id=body.parent_id,
             fields=dict(body.fields or {}),
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": row}
+
+
+@app.get("/comfy/status")
+def comfy_status() -> dict[str, Any]:
+    from app.comfy_client import health as comfy_health
+
+    return {"ok": True, **comfy_health()}
+
+
+@app.post("/comfy/character")
+def comfy_character_job(body: ComfyCharacterIn) -> dict[str, Any]:
+    from app.comfy_client import COMFY_DOWN, ComfyError
+    from app.comfy_character import run_character_job
+
+    try:
+        row = run_character_job(
+            job=body.job,
+            asset_id=body.asset_id,
+            slot=body.slot,
+            prompt=body.prompt,
+            source_still=body.source_still,
+            enhanced=bool(body.enhanced),
+            seed=body.seed,
+        )
+    except ComfyError as exc:
+        msg = str(exc) or COMFY_DOWN
+        code = 503 if "not running" in msg.lower() else 400
+        raise HTTPException(status_code=code, detail=msg) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "item": row}

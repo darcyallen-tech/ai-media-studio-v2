@@ -1932,6 +1932,7 @@ function StudioCanvas() {
                   maxRefs: patch.maxRefs ?? n.data.maxRefs,
                   modelId: patch.modelId ?? n.data.modelId,
                   sheetKind: patch.sheetKind ?? n.data.sheetKind,
+                  localPipeline: patch.localPipeline ?? n.data.localPipeline,
                   characterId: patch.characterId ?? n.data.characterId,
                   costumeId: patch.costumeId ?? n.data.costumeId,
                   refPreviews: patch.refPreviews ?? n.data.refPreviews,
@@ -1944,7 +1945,7 @@ function StudioCanvas() {
             });
           }
           const url = patch.url ?? prev?.result?.result_paths?.[0] ?? "";
-          const path = patch.path ?? prev?.result?.local_paths?.[0] ?? "";
+          const path = patch.previewPath ?? patch.path ?? prev?.result?.local_paths?.[0] ?? "";
           const title = patch.label || prev?.title || SLOT_LABEL[slot] || slot;
           const node: StudioNode = {
             id: angleId,
@@ -1975,6 +1976,7 @@ function StudioCanvas() {
               maxRefs: patch.maxRefs ?? prev?.maxRefs,
               modelId: patch.modelId ?? prev?.modelId,
               sheetKind: patch.sheetKind ?? prev?.sheetKind,
+              localPipeline: patch.localPipeline ?? prev?.localPipeline,
               characterId: patch.characterId ?? prev?.characterId,
               costumeId: patch.costumeId ?? prev?.costumeId,
               refPreviews: patch.refPreviews ?? prev?.refPreviews,
@@ -2034,7 +2036,8 @@ function StudioCanvas() {
                   upsertSheetAngleRef.current(builderId, info.slot, {
                     slot: info.slot,
                     path: info.path,
-                    url: info.url,
+                    previewPath: info.previewPath,
+                    url: info.previewUrl || info.url,
                     prompt: info.prompt,
                     cost: info.cost,
                     resolution: info.resolution,

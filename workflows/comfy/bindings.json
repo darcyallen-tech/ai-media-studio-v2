@@ -1,0 +1,26 @@
+{
+  "zimage_t2i": {
+    "file": "ZimageTurbo T2I.json",
+    "prompt": ["CLIPTextEncode", "text"],
+    "aspect_ratio": ["ResolutionSelector", "aspect_ratio"],
+    "megapixels": ["ResolutionSelector", "megapixels"],
+    "seed": ["RandomNoise", "noise_seed"]
+  },
+  "qwen_angle": {
+    "file": "Qwen R2I - Multiple Angles Generator.json",
+    "image": ["IMAGE1", "image"],
+    "h_angle": ["QwenMultiangleCameraNode", "horizontal_angle"],
+    "v_angle": ["QwenMultiangleCameraNode", "vertical_angle"],
+    "zoom": ["QwenMultiangleCameraNode", "zoom"],
+    "prompt": ["TextEncodeQwenImageEditPlus", "prompt"],
+    "seed": ["KSampler", "seed"]
+  },
+  "seedvr_confirm": {
+    "file": "SeedVR2 Image Upscale.json",
+    "image": ["LoadImage", "image"],
+    "max_resolution": ["SeedVR2VideoUpscaler", "max_resolution"],
+    "batch_size": ["SeedVR2VideoUpscaler", "batch_size"],
+    "temporal_overlap": ["SeedVR2VideoUpscaler", "temporal_overlap"],
+    "prepend_frames": ["SeedVR2VideoUpscaler", "prepend_frames"]
+  }
+}
