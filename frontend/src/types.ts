@@ -355,6 +355,7 @@ export type ResultNodeData = {
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   localPipeline?: "comfy-character";
+  confirmModel?: string;
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;
@@ -505,6 +506,7 @@ export type SheetAnglePatch = {
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
   localPipeline?: "comfy-character";
+  confirmModel?: string;
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;

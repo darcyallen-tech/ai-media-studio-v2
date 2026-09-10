@@ -80,6 +80,9 @@ import {
   sizeChoices,
   useSheetEstimate,
   useSheetModels,
+  isLocalComfyModel,
+  LOCAL_COMFY_CONFIRM,
+  LOCAL_SEEDVR_ID,
 } from "./sheetUi";
 import type {
   CreatorBuilderNodeData,
@@ -306,7 +309,8 @@ function CharacterForm({
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"generate" | "upload" | "ref">("generate");
   const [refStill, setRefStill] = useState("");
-  const models = useSheetModels();
+  const models = useSheetModels({ localComfy: true });
+  const [confirmId, setConfirmId] = useState(LOCAL_SEEDVR_ID);
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const haveFront = Boolean(data.doneSlots?.front);
   const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
@@ -322,17 +326,27 @@ function CharacterForm({
   const [frontQuality, setFrontQuality] = useState("");
   const [angleQuality, setAngleQuality] = useState("");
   useEffect(() => {
-    setFrontRes((cur) =>
-      frontSizes.includes(cur) ? cur : pickDefaultResolution(frontSizes),
-    );
+    setFrontRes((cur) => {
+      if (frontSizes.includes(cur)) return cur;
+      if (isLocalComfyModel(t2iRow)) {
+        if (frontSizes.includes("9:16")) return "9:16";
+        if (frontSizes.includes("2 MP")) return "2 MP";
+      }
+      return pickDefaultResolution(frontSizes);
+    });
     setFrontQuality((cur) =>
       frontQualities.includes(cur) ? cur : pickDefaultResolution(frontQualities),
     );
   }, [models.t2iId, frontSizeKey]);
   useEffect(() => {
-    setAngleRes((cur) =>
-      angleSizes.includes(cur) ? cur : pickDefaultResolution(angleSizes),
-    );
+    setAngleRes((cur) => {
+      if (angleSizes.includes(cur)) return cur;
+      if (isLocalComfyModel(r2iRow)) {
+        if (angleSizes.includes("9:16")) return "9:16";
+        if (angleSizes.includes("2 MP")) return "2 MP";
+      }
+      return pickDefaultResolution(angleSizes);
+    });
     setAngleQuality((cur) =>
       angleQualities.includes(cur) ? cur : pickDefaultResolution(angleQualities),
     );
@@ -517,7 +531,11 @@ function CharacterForm({
         notes: session.notes,
         t2iResolution: session.t2iResolution,
         r2iResolution: session.r2iResolution,
-        localPipeline: "comfy-character",
+        localPipeline:
+          isLocalComfyModel(models.t2iId) || isLocalComfyModel(spawnR2iId)
+            ? "comfy-character"
+            : undefined,
+        confirmModel: confirmId,
       });
       setError(null);
       data.onSession?.(session);
@@ -922,7 +940,13 @@ function CharacterForm({
           onChange={(e) => setWardrobe(e.target.value)}
         />
       </label>
-      <ModelPickers models={models} />
+      <ModelPickers
+        models={models}
+        localComfy
+        comfyOk={models.comfyOk}
+        confirmId={confirmId}
+        onConfirmId={setConfirmId}
+      />
       <div className="params">
         <label className="param">
           <span>Front size</span>
@@ -3436,10 +3460,18 @@ function ModelPickers({
   models,
   t2iOnly,
   r2iOnly,
+  localComfy,
+  comfyOk,
+  confirmId,
+  onConfirmId,
 }: {
   models: ReturnType<typeof useSheetModels>;
   t2iOnly?: boolean;
   r2iOnly?: boolean;
+  localComfy?: boolean;
+  comfyOk?: boolean;
+  confirmId?: string;
+  onConfirmId?: (id: string) => void;
 }) {
   const t2i = Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [];
   const r2i = Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [];
@@ -3457,7 +3489,12 @@ function ModelPickers({
           >
             {t2i.length === 0 ? <option value="">Loading models…</option> : null}
             {t2i.map((m) => (
-              <option key={m.id} value={m.id}>
+              <option
+                key={m.id}
+                value={m.id}
+                disabled={isLocalComfyModel(m) && !comfyOk}
+                title={isLocalComfyModel(m) && !comfyOk ? "Start ComfyUI" : undefined}
+              >
                 {m.label || m.id}
               </option>
             ))}
@@ -3474,10 +3511,34 @@ function ModelPickers({
           >
             {r2i.length === 0 ? <option value="">Loading models…</option> : null}
             {r2i.map((m) => (
-              <option key={m.id} value={m.id}>
+              <option
+                key={m.id}
+                value={m.id}
+                disabled={isLocalComfyModel(m) && !comfyOk}
+                title={isLocalComfyModel(m) && !comfyOk ? "Start ComfyUI" : undefined}
+              >
                 {m.label || m.id}
               </option>
             ))}
+          </select>
+        </label>
+      ) : null}
+      {localComfy && onConfirmId ? (
+        <label className="param">
+          <span>Confirm / upscale</span>
+          <select
+            className="model"
+            value={confirmId || LOCAL_SEEDVR_ID}
+            onChange={(e) => onConfirmId(e.target.value)}
+            title={!comfyOk ? "Start ComfyUI" : undefined}
+          >
+            <option
+              value={LOCAL_COMFY_CONFIRM.id}
+              disabled={!comfyOk}
+              title={!comfyOk ? "Start ComfyUI" : undefined}
+            >
+              {LOCAL_COMFY_CONFIRM.label}
+            </option>
           </select>
         </label>
       ) : null}

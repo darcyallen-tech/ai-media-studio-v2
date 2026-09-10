@@ -12,6 +12,7 @@ import {
   defaultSheetRefSlots,
   modelCostLabel,
   isFlux2EditModel,
+  isLocalComfyModel,
   isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
@@ -54,7 +55,11 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     data.sheetKind === "character" ||
     data.sheetKind === "scene" ||
     data.sheetKind === "prop";
-  const isComfyChar = data.localPipeline === "comfy-character";
+  const isComfyFront = isLocalComfyModel(data.t2iModel);
+  const isComfyAngle = isLocalComfyModel(data.modelId || data.r2iModel);
+  const isComfyConfirm = isLocalComfyModel(data.confirmModel);
+  const isComfyChar =
+    (data.slot || "front") === "front" ? isComfyFront : isComfyAngle;
   const models = useSheetModels();
   const [liveCompose, setLiveCompose] = useState<typeof models.r2i>([]);
   useEffect(() => {
@@ -1230,7 +1235,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                     ? "Regenerate"
                     : "Generate"}
               </button>
-              {isComfyChar && hasStill ? (
+              {isComfyConfirm && hasStill ? (
                 <button
                   type="button"
                   className="ghost nodrag"

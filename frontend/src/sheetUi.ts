@@ -1,6 +1,80 @@
 import { useEffect, useState } from "react";
 import type { ModelRow } from "./types";
 
+export const LOCAL_ZIMAGE_ID = "local_zimage_turbo";
+export const LOCAL_QWEN_ID = "local_qwen_edit_2511_multiangle";
+export const LOCAL_SEEDVR_ID = "local_seedvr2";
+export const LOCAL_COMFY_SIZES = ["9:16", "2 MP", "2K"] as const;
+
+export function isLocalComfyModel(
+  rowOrId: ModelRow | string | null | undefined,
+): boolean {
+  const id = (typeof rowOrId === "string" ? rowOrId : rowOrId?.id || "").toLowerCase();
+  const ep = (
+    typeof rowOrId === "object" && rowOrId ? rowOrId.endpoint || "" : ""
+  ).toLowerCase();
+  return id.startsWith("local_") || ep.startsWith("comfy:") || ep.includes("comfy:");
+}
+
+const LOCAL_COMFY_T2I: ModelRow = {
+  id: LOCAL_ZIMAGE_ID,
+  label: "Local · Z-Image Turbo",
+  mode: "image",
+  modality: "t2i",
+  endpoint: "comfy:zimage-turbo",
+  cost_estimate_usd: 0,
+  cost: "Local · $0.00",
+  aspect_choices: [...LOCAL_COMFY_SIZES],
+  default_aspect: "9:16",
+  resolution_choices: ["2 MP", "2K"],
+  default_resolution: "2 MP",
+  notes: "Local Comfy Z-Image Turbo (~2 MP 9:16). Start ComfyUI.",
+};
+
+const LOCAL_COMFY_R2I: ModelRow = {
+  id: LOCAL_QWEN_ID,
+  label: "Local · Qwen Edit 2511 Multiangle",
+  mode: "image",
+  modality: "r2i",
+  endpoint: "comfy:qwen-multiangle",
+  cost_estimate_usd: 0,
+  cost: "Local · $0.00",
+  aspect_choices: [...LOCAL_COMFY_SIZES],
+  default_aspect: "9:16",
+  resolution_choices: ["2 MP", "2K"],
+  default_resolution: "2 MP",
+  notes: "Local Comfy Qwen Edit 2511 Multiangle. IMAGE1 = Front. Start ComfyUI.",
+};
+
+export const LOCAL_COMFY_CONFIRM: ModelRow = {
+  id: LOCAL_SEEDVR_ID,
+  label: "Local · SeedVR2",
+  mode: "image",
+  modality: "r2i",
+  endpoint: "comfy:seedvr2",
+  cost_estimate_usd: 0,
+  cost: "Local · $0.00",
+  notes: "Local Comfy SeedVR2 Confirm upscale (3840 long edge). Start ComfyUI.",
+};
+
+export function useComfyStatus() {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    const ping = () => {
+      fetch("/comfy/status")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { status?: string; ok?: boolean } | null) => {
+          setOk(body?.status === "Connected");
+        })
+        .catch(() => setOk(false));
+    };
+    ping();
+    const id = window.setInterval(ping, 15000);
+    return () => window.clearInterval(id);
+  }, []);
+  return ok;
+}
+
 export const CORE_SLOTS = ["front", "side", "closeup"] as const;
 export const COSTUME_SLOTS = ["front", "side", "back"] as const;
 export const COSTUME_SHEET_SLOT = "sheet";
@@ -1552,6 +1626,7 @@ export function extraAngleR2iRow(
   rows: ModelRow[] | undefined | null,
   fallback?: ModelRow | null,
 ): ModelRow | undefined {
+  if (isLocalComfyModel(fallback)) return fallback || undefined;
   if (isQwenDefaultAngleSlot(slot)) {
     const qwen = pickQwenImage3(rows);
     if (qwen) return qwen;
@@ -1650,6 +1725,7 @@ export function aspectChoices(row: ModelRow | null | undefined): string[] {
 }
 
 export function qualityChoices(row: ModelRow | null | undefined): string[] {
+  if (isLocalComfyModel(row)) return [];
   if (isFlux2EditModel(row)) return [];
   const raw = uniqueChoices((row?.resolution_choices ?? []).map((s) => String(s).trim()));
   if (isFlux2T2iModel(row)) {
@@ -1664,6 +1740,7 @@ export function qualityChoices(row: ModelRow | null | undefined): string[] {
 
 export function sizeChoices(row: ModelRow | null | undefined): string[] {
   if (!row) return [];
+  if (isLocalComfyModel(row)) return [...LOCAL_COMFY_SIZES];
   if (isFlux2EditModel(row)) return ["auto"];
   const dropVideo = (s: string) => Boolean(s) && !VIDEO_SIZE_TOKEN.test(s);
   const qualities = qualityChoices(row).filter(dropVideo);
@@ -1731,6 +1808,7 @@ export function pickDefaultResolution(choices: string[]): string {
     "2k",
     "portrait_16_9",
     "9:16",
+    "2 mp",
     "portrait_4_3",
     "9:16 portrait",
     "3:4 portrait",
@@ -1783,6 +1861,7 @@ function modelRefCap(row: ModelRow | null | undefined): number {
 export function sheetModel(row: ModelRow | null | undefined) {
   if (!row || typeof row !== "object") return false;
   const blob = modelBlob(row);
+  if (isLocalComfyModel(row)) return true;
   if (
     blob.includes("flux") ||
     blob.includes("seedream") ||
@@ -1852,20 +1931,29 @@ function pickModelId(cur: string, preferred: string | undefined, rows: ModelRow[
   return rows[0]?.id || "";
 }
 
-export function useSheetModels() {
+export function useSheetModels(opts?: { localComfy?: boolean }) {
+  const localComfy = Boolean(opts?.localComfy);
+  const comfyOk = useComfyStatus();
   const [t2i, setT2i] = useState<ModelRow[]>([]);
   const [r2i, setR2i] = useState<ModelRow[]>([]);
   const [composeR2i, setComposeR2i] = useState<ModelRow[]>([]);
   const [t2iId, setT2iIdRaw] = useState("");
   const [r2iId, setR2iIdRaw] = useState("");
+  const [t2iTouched, setT2iTouched] = useState(false);
+  const [r2iTouched, setR2iTouched] = useState(false);
   useEffect(() => {
     const ac = new AbortController();
     fetch("/models?mode=image&modality=t2i", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : { models: [] }))
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
         const rows = asModelRows(body.models).filter(sheetModel);
-        setT2i(rows);
-        setT2iIdRaw((cur) => pickModelId(cur, body.default_id, rows));
+        const list = localComfy ? [LOCAL_COMFY_T2I, ...rows] : rows;
+        setT2i(list);
+        setT2iIdRaw((cur) => {
+          if (cur && list.some((r) => r.id === cur)) return cur;
+          if (localComfy && comfyOk) return LOCAL_ZIMAGE_ID;
+          return pickModelId(cur, body.default_id, rows);
+        });
       })
       .catch((err: unknown) => {
         console.error("T2I catalog load failed", err);
@@ -1876,15 +1964,28 @@ export function useSheetModels() {
         const all = asModelRows(body.models);
         const rows = all.filter(sheetModel);
         const compose = all.filter(sheetComposeModel);
-        setR2i(rows);
+        const list = localComfy ? [LOCAL_COMFY_R2I, ...rows] : rows;
+        setR2i(list);
         setComposeR2i(compose);
-        setR2iIdRaw((cur) => pickModelId(cur, body.default_id, rows));
+        setR2iIdRaw((cur) => {
+          if (cur && list.some((r) => r.id === cur)) return cur;
+          if (localComfy && comfyOk) return LOCAL_QWEN_ID;
+          return pickModelId(cur, body.default_id, rows);
+        });
       })
       .catch((err: unknown) => {
         console.error("R2I catalog load failed", err);
       });
     return () => ac.abort();
-  }, []);
+  }, [localComfy, comfyOk]);
+  useEffect(() => {
+    if (!localComfy || !comfyOk || t2iTouched) return;
+    setT2iIdRaw(LOCAL_ZIMAGE_ID);
+  }, [localComfy, comfyOk, t2iTouched]);
+  useEffect(() => {
+    if (!localComfy || !comfyOk || r2iTouched) return;
+    setR2iIdRaw(LOCAL_QWEN_ID);
+  }, [localComfy, comfyOk, r2iTouched]);
   const t2iSafe = t2i.some((r) => r.id === t2iId) ? t2iId : t2i[0]?.id || "";
   const r2iSafe = r2i.some((r) => r.id === r2iId) ? r2iId : r2i[0]?.id || "";
   return {
@@ -1893,10 +1994,15 @@ export function useSheetModels() {
     composeR2i,
     t2iId: t2iSafe,
     r2iId: r2iSafe,
-    setT2iId: (id: string) =>
-      setT2iIdRaw(t2i.some((r) => r.id === id) ? id : t2i[0]?.id || ""),
-    setR2iId: (id: string) =>
-      setR2iIdRaw(r2i.some((r) => r.id === id) ? id : r2i[0]?.id || ""),
+    comfyOk,
+    setT2iId: (id: string) => {
+      setT2iTouched(true);
+      setT2iIdRaw(t2i.some((r) => r.id === id) ? id : t2i[0]?.id || "");
+    },
+    setR2iId: (id: string) => {
+      setR2iTouched(true);
+      setR2iIdRaw(r2i.some((r) => r.id === id) ? id : r2i[0]?.id || "");
+    },
   };
 }
 
@@ -1953,6 +2059,10 @@ export function useSheetEstimate(
   }
   const [estimate, setEstimate] = useState(local || "Est. cost: —");
   useEffect(() => {
+    if (isLocalComfyModel(t2iId) || isLocalComfyModel(r2iId)) {
+      setEstimate("Est. cost: $0.00");
+      return;
+    }
     setEstimate(local || "Est. cost: —");
     const ac = new AbortController();
     fetch("/assets/sheet/estimate", {

@@ -73,7 +73,7 @@ Bring your own. Never commit `.env` or `secrets.json`.
 | xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
 | Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
 
-**Local Comfy (no keys).** Settings → COMFY_URL (`http://127.0.0.1:8188`). Character Front = Z-Image ~2 MP; other angles = Qwen Multiangle from Front; Confirm = SeedVR2 4K (2 MP kept as Qwen source). Workflows in `workflows/comfy/`. Comfy must be running. **16 GB VRAM recommended** (graphs built on RTX 5070 Ti). ACE-Step file in that folder is not wired from this pipeline.
+**Local Comfy (no keys).** Settings → COMFY_URL (`http://127.0.0.1:8188`). Pick **Local · Z-Image Turbo** (Front) and **Local · Qwen Edit 2511 Multiangle** (angles) when Comfy is running; Confirm is **Local · SeedVR2**. Cloud Flux/Nano/etc. still use fal. **16 GB VRAM recommended** (graphs built on RTX 5070 Ti). ACE-Step file in `workflows/comfy/` is not wired from this pipeline.
 
 **Local ACE-Step 1.5.** Same COMFY_URL. Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system`). MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
 
