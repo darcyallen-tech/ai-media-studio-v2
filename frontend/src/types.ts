@@ -11,6 +11,8 @@ export type ModelRow = {
   label: string;
   mode?: string;
   modality?: string;
+  provider?: string;
+  workflow?: string;
   notes?: string;
   endpoint?: string;
   cost_estimate_usd?: number;

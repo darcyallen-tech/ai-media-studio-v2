@@ -1235,7 +1235,8 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                     ? "Regenerate"
                     : "Generate"}
               </button>
-              {isComfyConfirm && hasStill ? (
+              {(isComfyConfirm || isComfyChar || isLocalComfyModel(data.confirmModel)) &&
+              hasStill ? (
                 <button
                   type="button"
                   className="ghost nodrag"
@@ -1243,7 +1244,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => void runComfyCharacter("confirm")}
                 >
-                  {busy && comfyPhase ? comfyPhase : "Confirm (SeedVR 4K)"}
+                  {busy && comfyPhase ? comfyPhase : "Confirm 4K (SeedVR)"}
                 </button>
               ) : null}
               {isSheet && hasStill ? (

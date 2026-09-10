@@ -381,6 +381,64 @@ def _state_from_body(body: CreateStateIn) -> CreateState:
     )
 
 
+def _local_comfy_model_rows(mode: str | None, modality: str | None) -> list[dict[str, Any]]:
+    """Local Comfy rows so Character Builder dropdowns cannot miss them."""
+    if (mode or "").strip().lower() not in ("image", ""):
+        return []
+    zimage = {
+        "id": "local_zimage_t2i",
+        "label": "Local · Z-Image Turbo",
+        "provider": "comfy",
+        "workflow": "ZimageTurbo T2I.json",
+        "endpoint": "comfy:zimage-turbo",
+        "mode": "image",
+        "modality": "t2i",
+        "cost_estimate_usd": 0,
+        "cost": "Local · $0.00",
+        "aspect_choices": ["9:16", "2 MP", "2K"],
+        "default_aspect": "9:16",
+        "resolution_choices": ["2 MP", "2K"],
+        "default_resolution": "2 MP",
+        "notes": "Local Comfy Z-Image Turbo. Start ComfyUI.",
+    }
+    qwen = {
+        "id": "local_qwen_angle",
+        "label": "Local · Qwen Edit 2511 Multiangle",
+        "provider": "comfy",
+        "workflow": "Qwen R2I - Multiple Angles Generator.json",
+        "endpoint": "comfy:qwen-multiangle",
+        "mode": "image",
+        "modality": "r2i",
+        "cost_estimate_usd": 0,
+        "cost": "Local · $0.00",
+        "aspect_choices": ["9:16", "2 MP", "2K"],
+        "default_aspect": "9:16",
+        "resolution_choices": ["2 MP", "2K"],
+        "default_resolution": "2 MP",
+        "notes": "Local Comfy Qwen Multiangle. IMAGE1 = Front. Start ComfyUI.",
+    }
+    seedvr = {
+        "id": "local_seedvr",
+        "label": "Local · SeedVR2",
+        "provider": "comfy",
+        "workflow": "SeedVR2 Image Upscale.json",
+        "endpoint": "comfy:seedvr2",
+        "mode": "image",
+        "modality": "r2i",
+        "cost_estimate_usd": 0,
+        "cost": "Local · $0.00",
+        "notes": "Local Comfy SeedVR2 Confirm 4K. Start ComfyUI.",
+    }
+    m = (modality or "").strip().lower()
+    if m == "t2i":
+        return [zimage]
+    if m in ("r2i", "i2i"):
+        return [qwen]
+    if not m:
+        return [zimage, qwen, seedvr]
+    return []
+
+
 def _jsonable(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
         return {k: _jsonable(v) for k, v in asdict(value).items()}
@@ -584,11 +642,16 @@ def list_models_endpoint(
         )
     entries = list_models_for_ui(want_mode, modality)
     default = default_model_for(want_mode, modality)
+    models = [_jsonable(e) for e in entries]
+    local = _local_comfy_model_rows(want_mode, modality)
+    if local:
+        seen = {str(row.get("id") or "") for row in models if isinstance(row, dict)}
+        models = [row for row in local if row["id"] not in seen] + models
     return {
         "mode": want_mode,
         "modality": modality,
         "default_id": default.id if default else (entries[0].id if entries else None),
-        "models": [_jsonable(e) for e in entries],
+        "models": models,
     }
 
 

@@ -83,6 +83,7 @@ import {
   isLocalComfyModel,
   LOCAL_COMFY_CONFIRM,
   LOCAL_SEEDVR_ID,
+  withLocalComfyModels,
 } from "./sheetUi";
 import type {
   CreatorBuilderNodeData,
@@ -3473,8 +3474,14 @@ function ModelPickers({
   confirmId?: string;
   onConfirmId?: (id: string) => void;
 }) {
-  const t2i = Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [];
-  const r2i = Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [];
+  const t2i = withLocalComfyModels(
+    Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [],
+    "t2i",
+  );
+  const r2i = withLocalComfyModels(
+    Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [],
+    "r2i",
+  );
   const t2iId = t2i.some((m) => m.id === models?.t2iId) ? models.t2iId : t2i[0]?.id || "";
   const r2iId = r2i.some((m) => m.id === models?.r2iId) ? models.r2iId : r2i[0]?.id || "";
   return (

@@ -6,6 +6,7 @@ import {
   SLOT_LABEL,
   useSheetEstimate,
   useSheetModels,
+  withLocalComfyModels,
 } from "./sheetUi";
 import type { AssetRole, StudioAsset } from "./types";
 
@@ -512,7 +513,7 @@ function CharacterBuilder({
                 onChange={(e) => models.setT2iId(e.target.value)}
                 disabled={!models.t2i.length || busy}
               >
-                {models.t2i.map((m) => (
+                {withLocalComfyModels(models.t2i, "t2i").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>
@@ -527,7 +528,7 @@ function CharacterBuilder({
                 onChange={(e) => models.setR2iId(e.target.value)}
                 disabled={!models.r2i.length || busy}
               >
-                {models.r2i.map((m) => (
+                {withLocalComfyModels(models.r2i, "r2i").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>

@@ -1,26 +1,39 @@
 import { useEffect, useState } from "react";
 import type { ModelRow } from "./types";
 
-export const LOCAL_ZIMAGE_ID = "local_zimage_turbo";
-export const LOCAL_QWEN_ID = "local_qwen_edit_2511_multiangle";
-export const LOCAL_SEEDVR_ID = "local_seedvr2";
+export const LOCAL_ZIMAGE_ID = "local_zimage_t2i";
+export const LOCAL_QWEN_ID = "local_qwen_angle";
+export const LOCAL_SEEDVR_ID = "local_seedvr";
 export const LOCAL_COMFY_SIZES = ["9:16", "2 MP", "2K"] as const;
 
 export function isLocalComfyModel(
   rowOrId: ModelRow | string | null | undefined,
 ): boolean {
+  if (rowOrId && typeof rowOrId === "object") {
+    const prov = String(rowOrId.provider || "").toLowerCase();
+    if (prov === "comfy") return true;
+  }
   const id = (typeof rowOrId === "string" ? rowOrId : rowOrId?.id || "").toLowerCase();
   const ep = (
     typeof rowOrId === "object" && rowOrId ? rowOrId.endpoint || "" : ""
   ).toLowerCase();
-  return id.startsWith("local_") || ep.startsWith("comfy:") || ep.includes("comfy:");
+  return (
+    id.startsWith("local_") ||
+    id === LOCAL_ZIMAGE_ID ||
+    id === LOCAL_QWEN_ID ||
+    id === LOCAL_SEEDVR_ID ||
+    ep.startsWith("comfy:") ||
+    ep.includes("comfy:")
+  );
 }
 
-const LOCAL_COMFY_T2I: ModelRow = {
+export const LOCAL_COMFY_T2I: ModelRow = {
   id: LOCAL_ZIMAGE_ID,
   label: "Local · Z-Image Turbo",
   mode: "image",
   modality: "t2i",
+  provider: "comfy",
+  workflow: "ZimageTurbo T2I.json",
   endpoint: "comfy:zimage-turbo",
   cost_estimate_usd: 0,
   cost: "Local · $0.00",
@@ -31,11 +44,13 @@ const LOCAL_COMFY_T2I: ModelRow = {
   notes: "Local Comfy Z-Image Turbo (~2 MP 9:16). Start ComfyUI.",
 };
 
-const LOCAL_COMFY_R2I: ModelRow = {
+export const LOCAL_COMFY_R2I: ModelRow = {
   id: LOCAL_QWEN_ID,
   label: "Local · Qwen Edit 2511 Multiangle",
   mode: "image",
   modality: "r2i",
+  provider: "comfy",
+  workflow: "Qwen R2I - Multiple Angles Generator.json",
   endpoint: "comfy:qwen-multiangle",
   cost_estimate_usd: 0,
   cost: "Local · $0.00",
@@ -51,11 +66,26 @@ export const LOCAL_COMFY_CONFIRM: ModelRow = {
   label: "Local · SeedVR2",
   mode: "image",
   modality: "r2i",
+  provider: "comfy",
+  workflow: "SeedVR2 Image Upscale.json",
   endpoint: "comfy:seedvr2",
   cost_estimate_usd: 0,
   cost: "Local · $0.00",
   notes: "Local Comfy SeedVR2 Confirm upscale (3840 long edge). Start ComfyUI.",
 };
+
+/** Always prepend Local Comfy rows so a stale GET /models cannot hide them. */
+export function withLocalComfyModels(
+  rows: ModelRow[] | undefined | null,
+  kind: "t2i" | "r2i",
+): ModelRow[] {
+  const extras = kind === "t2i" ? [LOCAL_COMFY_T2I] : [LOCAL_COMFY_R2I];
+  const seen = new Set(extras.map((e) => e.id));
+  const rest = (Array.isArray(rows) ? rows : []).filter(
+    (r) => r?.id && !seen.has(r.id),
+  );
+  return [...extras, ...rest];
+}
 
 export function useComfyStatus() {
   const [ok, setOk] = useState(false);
@@ -1934,8 +1964,8 @@ function pickModelId(cur: string, preferred: string | undefined, rows: ModelRow[
 export function useSheetModels(opts?: { localComfy?: boolean }) {
   const localComfy = Boolean(opts?.localComfy);
   const comfyOk = useComfyStatus();
-  const [t2i, setT2i] = useState<ModelRow[]>([]);
-  const [r2i, setR2i] = useState<ModelRow[]>([]);
+  const [t2i, setT2i] = useState<ModelRow[]>(() => withLocalComfyModels([], "t2i"));
+  const [r2i, setR2i] = useState<ModelRow[]>(() => withLocalComfyModels([], "r2i"));
   const [composeR2i, setComposeR2i] = useState<ModelRow[]>([]);
   const [t2iId, setT2iIdRaw] = useState("");
   const [r2iId, setR2iIdRaw] = useState("");
@@ -1947,7 +1977,7 @@ export function useSheetModels(opts?: { localComfy?: boolean }) {
       .then((res) => (res.ok ? res.json() : { models: [] }))
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
         const rows = asModelRows(body.models).filter(sheetModel);
-        const list = localComfy ? [LOCAL_COMFY_T2I, ...rows] : rows;
+        const list = withLocalComfyModels(rows, "t2i");
         setT2i(list);
         setT2iIdRaw((cur) => {
           if (cur && list.some((r) => r.id === cur)) return cur;
@@ -1964,7 +1994,7 @@ export function useSheetModels(opts?: { localComfy?: boolean }) {
         const all = asModelRows(body.models);
         const rows = all.filter(sheetModel);
         const compose = all.filter(sheetComposeModel);
-        const list = localComfy ? [LOCAL_COMFY_R2I, ...rows] : rows;
+        const list = withLocalComfyModels(rows, "r2i");
         setR2i(list);
         setComposeR2i(compose);
         setR2iIdRaw((cur) => {
