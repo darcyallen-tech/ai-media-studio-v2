@@ -2,7 +2,7 @@
 
 A free desktop app for stills, video, audio, and a clip Frame Editor. You work on a node canvas, pick a model, and generate. You bring your own API keys (fal for almost everything; optional xAI for prompt enhance; optional Runware for Frame Editor / Aleph). You pay those providers for usage. This app does not sell credits.
 
-Version **2.0.0-rc4**.
+Version **2.0.0-rc5**.
 
 **Windows** has a Release zip with an `.exe`. **macOS and Linux** run from source (no packaged binary yet).
 
@@ -16,11 +16,11 @@ Image catalog includes **Meta Muse Image** (T2I + Edit, ~$0.01) and **Bria Fibo 
 
 ## Windows (Release zip)
 
-Current package: **`AIMediaStudioV2-2.0.0-rc4-windows.zip`** (GitHub Releases). Includes Muse Image (T2I + Edit, Match source, partner-URL fallback), MiniMax H3 Max, Gemini Omni Flash 1.1, Compare Source, the Mask node, Fibo Edit 1.5, and Wan 3.0.
+Current package: **`AIMediaStudioV2-2.0.0-rc5-windows.zip`** (GitHub Releases). Includes YuE2 local music (T2M / Cover / Rerender-from-ABC), Qwen Image 2.1 T2I + multi-ref edit / multi-angle R2I, ACE-Step 1.5 music workflows, MiniMax H3, and prior Muse / Gemini / Wan lanes.
 
-The older **2.0.0-rc3** GitHub asset is stale. It does **not** include Muse fallback / Match source, H3 Max, or Gemini Omni Flash 1.1. Do not download `AIMediaStudioV2-2.0.0-rc3-windows.zip` if you want those. The rc2 zip is also stale (no Compare, no Mask node).
+The older **2.0.0-rc4** GitHub asset is stale relative to this tree (no YuE2 AIMS lane / Qwen 2.1 pack from this cut). Prefer the rc5 zip.
 
-1. Download the **2.0.0-rc4** Windows zip for this repo (GitHub Releases). Unzip it.
+1. Download the **2.0.0-rc5** Windows zip for this repo (GitHub Releases). Unzip it.
 2. Run `AIMediaStudioV2.exe` or `AMS_V2.bat`. Keep the `_internal` folder next to the exe.
 3. Open **Settings**, paste your keys, **Save keys**.
 
