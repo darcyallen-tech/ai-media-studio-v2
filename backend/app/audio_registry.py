@@ -152,6 +152,61 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
         pricing_mode="flat_per_track",
         extra_defaults={},
     ),
+    "yue2 text to music": AudioSpec(
+        key="yue2 text to music",
+        label="YuE2 Text-to-Music (local Comfy)",
+        category="music",
+        endpoint="comfy:yue2-t2m",
+        cost_estimate_usd=0.0,
+        notes=(
+            "Local YuE2 text-to-music via Settings COMFY_URL only "
+            "(default http://127.0.0.1:8188). Plans ABC, then renders WAV. "
+            "Cost $0.00. No fal fallback. ~8 GB VRAM peak. "
+            "YuE2 weights are CC-BY-NC (personal/testing; not for selling tracks as-is)."
+        ),
+        supports_duration=True,
+        duration_min_s=10.0,
+        duration_max_s=900.0,
+        duration_default_s=240.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={},
+    ),
+    "yue2 cover": AudioSpec(
+        key="yue2 cover",
+        label="YuE2 Cover (local Comfy)",
+        category="music",
+        endpoint="comfy:yue2-cover",
+        cost_estimate_usd=0.0,
+        notes=(
+            "Local YuE2 cover via Settings COMFY_URL. Reference audio → SheetSage2 "
+            "melody → YuE2. Cost $0.00. No fal fallback. "
+            "CC-BY-NC weights (personal/testing; not for selling tracks as-is)."
+        ),
+        supports_duration=True,
+        duration_min_s=10.0,
+        duration_max_s=900.0,
+        duration_default_s=120.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={},
+    ),
+    "yue2 rerender abc": AudioSpec(
+        key="yue2 rerender abc",
+        label="YuE2 Re-render from ABC (local Comfy)",
+        category="music",
+        endpoint="comfy:yue2-rerender",
+        cost_estimate_usd=0.0,
+        notes=(
+            "Local YuE2 re-render from a pasted ABC score via Settings COMFY_URL. "
+            "No ABC planner. Cost $0.00. No fal fallback. "
+            "CC-BY-NC weights (personal/testing; not for selling tracks as-is)."
+        ),
+        supports_duration=True,
+        duration_min_s=10.0,
+        duration_max_s=900.0,
+        duration_default_s=120.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={},
+    ),
     "minimax music 2.6": AudioSpec(
         key="minimax music 2.6",
         label="MiniMax Music 2.6",

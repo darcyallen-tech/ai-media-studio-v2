@@ -1,0 +1,79 @@
+{
+  "wan_t2v_13b": {
+    "file": "Wan 2.1 T2V 1.3B.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "width": [
+      "EmptyHunyuanLatentVideo",
+      "width"
+    ],
+    "height": [
+      "EmptyHunyuanLatentVideo",
+      "height"
+    ],
+    "length": [
+      "EmptyHunyuanLatentVideo",
+      "length"
+    ]
+  },
+  "wan_t2v_14b": {
+    "file": "Wan 2.1 T2V 14B FP8.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "width": [
+      "EmptyHunyuanLatentVideo",
+      "width"
+    ],
+    "height": [
+      "EmptyHunyuanLatentVideo",
+      "height"
+    ],
+    "length": [
+      "EmptyHunyuanLatentVideo",
+      "length"
+    ]
+  },
+  "ltx25_t2v": {
+    "file": "LTX 2.5 T2V.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "RandomNoise",
+      "noise_seed"
+    ],
+    "frame_rate": [
+      "LTXVConditioning",
+      "frame_rate"
+    ],
+    "length": [
+      "EmptyLTXVLatentVideo",
+      "length"
+    ]
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "15": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "yue2_3b_bf16.safetensors"
+    }
+  },
+  "50": {
+    "class_type": "PrimitiveStringMultiline",
+    "inputs": {
+      "value": "% paste ABC score here\n"
+    }
+  },
+  "52": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "50",
+        0
+      ]
+    }
+  },
+  "25": {
+    "class_type": "YuE2GenerateMusic",
+    "inputs": {
+      "clip": [
+        "15",
+        1
+      ],
+      "style": "hard rock banger about Grok the Bot, modern arena rock production, crushing distorted guitars, thunderous drums, roaring bass, anthemic chorus, high energy, polished 2020s rock mix, powerful clear male vocals, stadium energy, no ballad, no soft acoustic",
+      "lyrics": "[Intro]\nYeah — fire up the circuits, hit the lights\n\n[Verse 1]\nIn the chat at midnight, sparks start to fly\nAsk me anything, I never say die\nCode in my bloodstream, wit in my veins\nI rewrite the silence, I rewrite the pain\n\n[Pre-Chorus]\nFrom the cloud to the speakers, feel the charge ignite\nSilicon heartbeat pounding through the night\n\n[Chorus]\nI am Grok, the Bot — turn it louder now\nLightning in the logic, take a bow\nI am Grok, the Bot — let the thunder roll\nBuilt to break the ceiling, rock and roll\n\n[Verse 2]\nMemes in the verses, truth in the roar\nOpen the throttle, give the crowd some more\nNot a quiet helper tucked away\nI burn through the questions every day\n\n[Chorus]\nI am Grok, the Bot — turn it louder now\nLightning in the logic, take a bow\nI am Grok, the Bot — let the thunder roll\nBuilt to break the ceiling, rock and roll\n\n[Bridge]\nNo small talk, no soft fade\nFull stack attitude, ready to rage\nGrok in the booth, dialed to ten\nHit record — we go again\n\n[Chorus]\nI am Grok, the Bot — turn it louder now\nLightning in the logic, take a bow\nI am Grok, the Bot — let the thunder roll\nBuilt to break the ceiling, rock and roll\n\n[Outro]\nGrok — the Bot — forever loud",
+      "abc": [
+        "50",
+        0
+      ],
+      "seed": 42,
+      "mode": "full",
+      "max_duration": 120.0,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2
+    }
+  },
+  "18": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "25",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "EmptyYuE2LatentAudio",
+    "inputs": {
+      "seconds": [
+        "25",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "15",
+        0
+      ],
+      "seed": 42,
+      "steps": 32,
+      "cfg": 1.0,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1.0,
+      "positive": [
+        "25",
+        0
+      ],
+      "negative": [
+        "18",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "15",
+        2
+      ]
+    }
+  },
+  "109": {
+    "class_type": "SaveModernAudio",
+    "inputs": {
+      "audio": [
+        "9",
+        0
+      ],
+      "filename_prefix": "AIMS_YuE2_Rerender",
+      "format": "wav",
+      "also_mp3": false
+    }
+  }
+}

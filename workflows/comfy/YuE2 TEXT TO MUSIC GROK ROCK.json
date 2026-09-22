@@ -1,0 +1,198 @@
+{
+  "5": {
+    "inputs": {
+      "seconds": [
+        "25",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyYuE2LatentAudio",
+    "_meta": {
+      "title": "Empty YuE2 Latent Audio"
+    }
+  },
+  "8": {
+    "inputs": {
+      "seed": 75658374410674,
+      "steps": 32,
+      "cfg": 1,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": [
+        "15",
+        0
+      ],
+      "positive": [
+        "25",
+        0
+      ],
+      "negative": [
+        "18",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "15",
+        2
+      ]
+    },
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "14": {
+    "inputs": {
+      "source": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview as Text"
+    }
+  },
+  "15": {
+    "inputs": {
+      "ckpt_name": "yue2_3b_bf16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "18": {
+    "inputs": {
+      "conditioning": [
+        "25",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Conditioning Zero Out"
+    }
+  },
+  "24": {
+    "inputs": {
+      "style": [
+        "113",
+        0
+      ],
+      "lyrics": [
+        "114",
+        0
+      ],
+      "seed": 540483891150566,
+      "mode": "full",
+      "max_abc_tokens": 8192,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 30,
+      "repetition_penalty": 1.005,
+      "penalty_window": 100,
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "class_type": "YuE2GenerateABC",
+    "_meta": {
+      "title": "YuE2 Generate ABC"
+    }
+  },
+  "25": {
+    "inputs": {
+      "style": [
+        "113",
+        0
+      ],
+      "lyrics": [
+        "114",
+        0
+      ],
+      "abc": [
+        "24",
+        0
+      ],
+      "seed": 1010466031629823,
+      "mode": "full",
+      "max_duration": 300,
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2,
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "class_type": "YuE2GenerateMusic",
+    "_meta": {
+      "title": "YuE2 Generate Music"
+    }
+  },
+  "52": {
+    "inputs": {
+      "source": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview as Text"
+    }
+  },
+  "109": {
+    "inputs": {
+      "filename_prefix": "AIMS_YuE2_T2M",
+      "format": "wav",
+      "also_mp3": false,
+      "audio": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "SaveModernAudio",
+    "_meta": {
+      "title": "Save Audio (AIMS WAV)"
+    }
+  },
+  "113": {
+    "inputs": {
+      "value": "indie pop with rock roots, mountain homecoming song about peace and freedom, subtle deep-house undercurrent, soft four-on-the-floor tick under organic drums, warm acoustic guitar fingerpicking and strummed choruses, light acoustic guitar solo section, earthy deep male lead vocal throughout verses bridge and choruses, female backup vocals answering on pre-chorus, female harmonies stacked with male lead on chorus only, nature ambience intro and outro: wind through pines, distant birds, soft forest air, cabin-at-dusk reverb, analog warmth, spacious intimate mix, muted kick with gentle sidechain, no EDM drop, no hard rock distortion, no aggressive vocals, cinematic folk-pop energy"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Style"
+    }
+  },
+  "114": {
+    "inputs": {
+      "value": "[Intro]\n(nature ambience: wind in the pines, distant birds, soft acoustic guitar enters)\n\n[Verse 1]\n(male lead)\nI traded neon for the ridgeline glow\nLeft the deadlines where the valley goes\nPack on my shoulder, quiet in my chest\nEvery switchback feels like coming to rest\n\n[Verse 2]\n(male lead)\nNo more proving what I think I should be\nJust the open trail and a sky that lets me breathe\nFreedom ain’t a highway — it’s a slower kind of true\nMountains don’t ask questions; they just let you through\n\n[Pre-Chorus]\n(male lead with female backup vocals)\nAnd I don’t need a kingdom\nI don’t need a crown\n(female backup)\nooh — let it go now\n(male lead)\nI only need the high ground\nTo lay my worry down\n\n[Chorus]\n(male lead with female harmonies)\nI feel at home in the mountains\nWhere the air knows my name\nPeace in the freedom I’m counting\nLike rainfall washing shame\nI feel at home in the mountains\nWide open, finally free\nCity noise fading behind me\nAnd the quiet returns me to me\n\n[Verse 3]\n(male lead)\nCampfire gold on a weatherworn coat\nOld weight lifting with the woodsmoke\nI breathe it out, I let it climb\nEcho answers soft this time\n\n[Pre-Chorus]\n(male lead with female backup vocals)\nAnd I don’t need a kingdom\nI don’t need a crown\n(female backup)\nooh — hold me close now\n(male lead)\nI only need the high ground\nTo lay my worry down\n\n[Chorus]\n(male lead with female harmonies)\nI feel at home in the mountains\nWhere the air knows my name\nPeace in the freedom I’m counting\nLike rainfall washing shame\nI feel at home in the mountains\nWide open, finally free\nCity noise fading behind me\nAnd the quiet returns me to me\n\n[Instrumental - light acoustic guitar solo]\n(fingerpicked acoustic solo over soft house pulse and nature bed, warm and unhurried)\n\n[Bridge]\n(male lead)\nIf peace is a place, I found it here\nIf freedom’s a feeling, it rings clear\nNo map required, no borrowed throne\nI’m not escaping — I’m coming home\n\n[Final Chorus]\n(male lead with female harmonies, slightly bigger)\nI feel at home in the mountains\nWhere the air knows my name\nPeace in the freedom I’m counting\nI walk lighter than I came\nI feel at home in the mountains\nLet the night remix my soul\nStars above, roots below me\nAnd the quiet makes me whole\n\n[Outro]\n(acoustic guitar fades, soft house tick fades, wind and distant birds remain, then silence)"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Lyrics"
+    }
+  }
+}

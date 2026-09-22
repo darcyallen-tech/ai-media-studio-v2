@@ -12,7 +12,6 @@ import {
   defaultSheetRefSlots,
   modelCostLabel,
   isFlux2EditModel,
-  isLocalComfyModel,
   isMuseEditModel,
   pickSheetResolution,
   qualityChoices,
@@ -36,6 +35,10 @@ import {
   pickSceneAspect,
   sortSheetComposeModels,
   useSheetModels,
+  ANGLE_CAM_PRESETS,
+  LOCAL_WORKFLOWS,
+  comfyCostLine,
+  qwenCameraReadout,
   type SheetAngleChip,
 } from "./sheetUi";
 import {
@@ -47,6 +50,30 @@ import {
 
 export type ResultFlowNode = Node<ResultNodeData, "result">;
 
+function abcFromResult(result: GenerateResponse): string {
+  const direct = (result.abc || "").trim();
+  if (direct) return direct;
+  for (const row of result.notes || []) {
+    const text = String(row || "");
+    if (text.startsWith("ABC:\n")) return text.slice(4).trim();
+  }
+  return "";
+}
+
+function downloadYueAbc(abc: string, mediaPath?: string) {
+  const base = (mediaPath || "AIMS_YuE2").split(/[/\\]/).pop() || "AIMS_YuE2";
+  const stem = base.replace(/\.[^.]+$/, "") || "AIMS_YuE2";
+  const name = stem.startsWith("AIMS_YuE2") ? `${stem}.abc` : `AIMS_YuE2_${stem}.abc`;
+  const blob = new Blob([abc], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+  toast("ABC download started. The score is also saved beside the WAV.");
+}
+
 export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>) {
   const isSheet =
     data.slot === "sheet" ||
@@ -55,11 +82,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     data.sheetKind === "character" ||
     data.sheetKind === "scene" ||
     data.sheetKind === "prop";
-  const isComfyFront = isLocalComfyModel(data.t2iModel);
-  const isComfyAngle = isLocalComfyModel(data.modelId || data.r2iModel);
-  const isComfyConfirm = isLocalComfyModel(data.confirmModel);
-  const isComfyChar =
-    (data.slot || "front") === "front" ? isComfyFront : isComfyAngle;
+  const isComfyChar = data.localPipeline === "comfy-character";
   const models = useSheetModels();
   const [liveCompose, setLiveCompose] = useState<typeof models.r2i>([]);
   useEffect(() => {
@@ -179,10 +202,24 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   const [estimateBusy, setEstimateBusy] = useState(isSheet || isSceneAngle);
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [creativeEnhance, setCreativeEnhance] = useState(false);
-  const [angleEnhanced, setAngleEnhanced] = useState(false);
+
   const [comfyPhase, setComfyPhase] = useState("");
   const [comfyElapsed, setComfyElapsed] = useState(0);
   const comfyStartRef = useRef(0);
+  const camPreset =
+    ANGLE_CAM_PRESETS[data.slot || ""] || ANGLE_CAM_PRESETS.side;
+  const [hAngle, setHAngle] = useState(
+    Number.isFinite(data.hAngle) ? Number(data.hAngle) : camPreset.h,
+  );
+  const [vAngle, setVAngle] = useState(
+    Number.isFinite(data.vAngle) ? Number(data.vAngle) : camPreset.v,
+  );
+  const [zoom, setZoom] = useState(
+    Number.isFinite(data.zoom) ? Number(data.zoom) : camPreset.zoom,
+  );
+  const [defaultPrompts, setDefaultPrompts] = useState(
+    data.defaultPrompts !== false,
+  );
   const hasXai = useXaiKey();
   const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
   const [pickedSlots, setPickedSlots] = useState<string[]>([]);
@@ -201,6 +238,12 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   useEffect(() => {
     setAnglePrompt(data.prompt || "");
   }, [data.prompt]);
+  useEffect(() => {
+    if (Number.isFinite(data.hAngle)) setHAngle(Number(data.hAngle));
+    if (Number.isFinite(data.vAngle)) setVAngle(Number(data.vAngle));
+    if (Number.isFinite(data.zoom)) setZoom(Number(data.zoom));
+    if (data.defaultPrompts !== undefined) setDefaultPrompts(data.defaultPrompts !== false);
+  }, [data.hAngle, data.vAngle, data.zoom, data.defaultPrompts, data.slot]);
   useEffect(() => {
     if (data.fields && typeof data.fields === "object") setSheetFields(data.fields);
   }, [data.fields]);
@@ -263,7 +306,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   }, [busy, isComfyChar]);
   useEffect(() => {
     if (isComfyChar) {
-      setEstimate("Local · $0.00");
+      const slot = data.slot || "front";
+      const wf =
+        slot === "front" ? LOCAL_WORKFLOWS.front : LOCAL_WORKFLOWS.angle;
+      setEstimate(comfyCostLine(wf));
       setEstimateBusy(false);
       return;
     }
@@ -401,6 +447,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   }, [isSheetPicker, cap, angleChips, isSceneSheet]);
 
   const result = data.result;
+  const yueAbc = abcFromResult(result);
   const paths = (result.result_paths ?? []).length
     ? result.result_paths ?? []
     : localUrl
@@ -585,7 +632,6 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
           ? ensureScenePhotoreal(rewritten, true)
           : rewritten;
       setAnglePrompt(kept);
-      setAngleEnhanced(true);
       data.onPrompt?.(kept);
       toast("Prompt enhanced — hit Generate when you want a still.");
     } catch (err: unknown) {
@@ -622,11 +668,28 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     }
   }
 
+  function pushCamera(
+    next: Partial<{
+      hAngle: number;
+      vAngle: number;
+      zoom: number;
+      defaultPrompts: boolean;
+    }>,
+  ) {
+    const cam = {
+      hAngle: next.hAngle ?? hAngle,
+      vAngle: next.vAngle ?? vAngle,
+      zoom: next.zoom ?? zoom,
+      defaultPrompts: next.defaultPrompts ?? defaultPrompts,
+    };
+    data.onCamera?.(cam);
+  }
+
   async function runComfyCharacter(kind: "front" | "angle" | "confirm") {
     const slot = data.slot || "front";
-    const prompt = anglePrompt.trim();
-    if (kind !== "confirm" && !prompt) {
-      setLocalError("Angle prompt is empty.");
+    const prompt = slot === "front" ? anglePrompt.trim() : "";
+    if (kind === "front" && !prompt) {
+      setLocalError("Apply selection first — Front prompt is empty.");
       return;
     }
     if (kind === "angle" && slot !== "front" && !data.sourceStill) {
@@ -680,7 +743,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               : slot === "front"
                 ? ""
                 : data.sourceStill || "",
-          enhanced: angleEnhanced,
+          h_angle: hAngle,
+          v_angle: vAngle,
+          zoom,
+          default_prompts: defaultPrompts,
         }),
       });
       const body = await readJson(res);
@@ -696,7 +762,16 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
         qwen_source?: string;
         confirmed_4k?: boolean;
         duration_sec?: number;
+        workflow?: string;
       } | null;
+      if (res.status === 404) {
+        throw new Error(
+          errorFromBody(
+            body,
+            "POST /comfy/character 404 — Local Comfy client missing, not falling back to fal.",
+          ),
+        );
+      }
       if (!res.ok || !item) {
         throw new Error(errorFromBody(body, "Comfy generate failed."));
       }
@@ -714,7 +789,16 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
         path: qwenPath,
         url: shown,
         prompt: item.prompt || prompt,
-        cost: item.cost || "Local · $0.00",
+        cost:
+          item.cost ||
+          comfyCostLine(
+            item.workflow ||
+              (kind === "confirm"
+                ? LOCAL_WORKFLOWS.confirm
+                : slot === "front"
+                  ? LOCAL_WORKFLOWS.front
+                  : LOCAL_WORKFLOWS.angle),
+          ),
         resolution: size || data.resolution,
         previewPath,
         previewUrl: shown,
@@ -734,7 +818,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     ev?.preventDefault?.();
     ev?.stopPropagation?.();
     if (busy || data.generating) return;
-    if (isComfyChar) {
+    if (data.localPipeline === "comfy-character") {
       const slot = data.slot || "front";
       await runComfyCharacter(slot === "front" ? "front" : "angle");
       return;
@@ -1027,6 +1111,46 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
             </p>
           ) : null}
         </div>
+        {yueAbc ? (
+          <div className="yue-abc">
+            <span className="field-label">ABC</span>
+            <textarea className="prompt nodrag nowheel" rows={6} readOnly value={yueAbc} />
+            <div className="yue-abc-actions">
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() => {
+                  void navigator.clipboard.writeText(yueAbc).then(
+                    () => toast("ABC copied."),
+                    () => toast("Could not copy ABC.", true),
+                  );
+                }}
+              >
+                Copy
+              </button>
+              <button type="button" className="ghost nodrag" onClick={() => downloadYueAbc(yueAbc, paths[0])}>
+                Save .abc
+              </button>
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("aims-yue-rerender", { detail: { abc: yueAbc } }),
+                  );
+                  toast("ABC is in Re-render. Generate to render that score.");
+                }}
+              >
+                Use for re-render
+              </button>
+            </div>
+            <p className="hint">
+              {result.abc_path
+                ? "Saved beside the WAV. Copy, save another .abc, or use it for re-render."
+                : "Copy the score, or use it for re-render."}
+            </p>
+          </div>
+        ) : null}
         {isAngle ? (
           <>
             {isSheetPicker && angleChips.length ? (
@@ -1176,28 +1300,101 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               {isComfyChar
                 ? busy
                   ? `${comfyPhase || "Queued in Comfy…"}${comfyElapsed >= 1 ? ` ${comfyElapsed.toFixed(0)}s` : ""}`
-                  : estimate || result.cost || "Local · $0.00"
+                  : estimate || result.cost || comfyCostLine(
+                      (data.slot || "front") === "front"
+                        ? LOCAL_WORKFLOWS.front
+                        : LOCAL_WORKFLOWS.angle,
+                    )
                 : isSheet
                 ? `${estimateBusy ? "—" : estimate || modelCostLabel(selectedModel)} · ${packedRefCount()} / ${cap || "—"} refs`
                 : estimateBusy
                   ? "—"
                   : estimate || result.cost || modelCostLabel(angleModel)}
             </p>
-            <label className="builder-field">
-              <span className="field-label">{isSheet ? "Sheet prompt" : "Angle prompt"}</span>
-              <textarea
-                className="prompt nowheel"
-                rows={4}
-                value={anglePrompt}
-                disabled={data.generating}
-                onChange={(e) => {
-                  setAnglePrompt(e.target.value);
-                  data.onPrompt?.(e.target.value);
-                }}
-              />
-            </label>
+            {isComfyChar && (data.slot || "front") !== "front" && !isSheet ? (
+              <div className="cam-sliders">
+                <label>
+                  <span>Horizontal Angle {hAngle}°</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={180}
+                    step={5}
+                    value={hAngle}
+                    disabled={data.generating || busy}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setHAngle(n);
+                      pushCamera({ hAngle: n });
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Vertical Angle {vAngle}°</span>
+                  <input
+                    type="range"
+                    min={-30}
+                    max={90}
+                    step={1}
+                    value={vAngle}
+                    disabled={data.generating || busy}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setVAngle(n);
+                      pushCamera({ vAngle: n });
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Zoom {zoom}</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    step={0.5}
+                    value={zoom}
+                    disabled={data.generating || busy}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      setZoom(n);
+                      pushCamera({ zoom: n });
+                    }}
+                  />
+                </label>
+                <label className="param check">
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={defaultPrompts}
+                      disabled={data.generating || busy}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setDefaultPrompts(on);
+                        pushCamera({ defaultPrompts: on });
+                      }}
+                    />{" "}
+                    Default Prompts
+                  </span>
+                </label>
+                <p className="hint cam-readout">{qwenCameraReadout(hAngle, vAngle, zoom)}</p>
+              </div>
+            ) : (
+              <label className="builder-field">
+                <span className="field-label">{isSheet ? "Sheet prompt" : isComfyChar ? "Identity prompt" : "Angle prompt"}</span>
+                <textarea
+                  className="prompt nowheel"
+                  rows={4}
+                  value={anglePrompt}
+                  disabled={data.generating}
+                  onChange={(e) => {
+                    setAnglePrompt(e.target.value);
+                    data.onPrompt?.(e.target.value);
+                  }}
+                />
+              </label>
+            )}
             <div className="prompt-actions">
-              {isAngle ? (
+              {isAngle && !isComfyChar ? (
                 <>
                   <button
                     type="button"
@@ -1235,8 +1432,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                     ? "Regenerate"
                     : "Generate"}
               </button>
-              {(isComfyConfirm || isComfyChar || isLocalComfyModel(data.confirmModel)) &&
-              hasStill ? (
+              {isComfyChar && hasStill && !isSheet ? (
                 <button
                   type="button"
                   className="ghost nodrag"

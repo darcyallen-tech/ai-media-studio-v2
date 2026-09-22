@@ -73,9 +73,20 @@ Bring your own. Never commit `.env` or `secrets.json`.
 | xAI (optional) | Prompt Enhance / Grok text | https://console.x.ai/team/default/api-keys |
 | Runware (optional) | Frame Editor / Aleph only | https://my.runware.ai/keys |
 
-**Local Comfy (no keys).** Settings → COMFY_URL (`http://127.0.0.1:8188`). Pick **Local · Z-Image Turbo** (Front) and **Local · Qwen Edit 2511 Multiangle** (angles) when Comfy is running; Confirm is **Local · SeedVR2**. Cloud Flux/Nano/etc. still use fal. **16 GB VRAM recommended** (graphs built on RTX 5070 Ti). ACE-Step file in `workflows/comfy/` is not wired from this pipeline.
+**Local Comfy (no keys).** Settings → COMFY_URL (`http://127.0.0.1:8188`). Test connection. **16 GB VRAM recommended** (graphs built on RTX 5070 Ti). ACE-Step file in `workflows/comfy/` is not wired from Character Builder.
+
+### Character Builder: Local vs Cloud
+
+Toggle at the top of Character Builder, next to Generate / Upload / Ref: **Local Comfy** | **Cloud (fal)**. Persists for the browser session. Defaults to Local when Settings Comfy is Connected, otherwise Cloud. Local is disabled with tooltip “Start ComfyUI” while Offline.
+
+- **Local** — no fal, Est. cost always `$0.00`. Front engine is Z-Image Turbo (fixed, identity prompt, 2 MP 9:16). Angles are Qwen Edit 2511 Multiangle with Horizontal / Vertical / Zoom sliders (not a rewritten identity prompt). Confirm is SeedVR2. If the Comfy client 404s, the error is shown — there is no fal fallback. UI log: `provider: comfy | workflow: … | $0.00`.
+- **Cloud** — existing Front/Angle fal dropdowns and billing. No Comfy.
+
+Do not add Local rows into the fal model list. Create tab is unchanged.
 
 **Local ACE-Step 1.5.** Same COMFY_URL. Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system`). MiniMax / ElevenLabs remain fal fallbacks. No Comfy UI is embedded.
+
+**Local YuE2.** Same COMFY_URL. Music models: text-to-music, cover, re-render from ABC. WAV saved with prefix `AIMS_YuE2_`. Cost $0.00. No fal fallback. CC-BY-NC weights.
 
 Packaged Windows app: Settings only (`%LOCALAPPDATA%\AI Media Studio V2\secrets.json`). From source in production mode: Settings (OS app-data folder above). Dev (`AMS_DEV=1`): Settings or repo-root `.env` (gitignored).
 

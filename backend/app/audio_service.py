@@ -52,6 +52,8 @@ class AudioResult:
     model_key: str = ""
     endpoint: str = ""
     job_kind: str = "audio"
+    abc: str = ""
+    abc_path: str = ""
 
 
 def normalize_audio_modality(raw: str | None) -> str:
@@ -135,8 +137,10 @@ def duration_tokens(spec: AudioSpec) -> tuple[list[str], str]:
         420,
         600,
     )
+    if str(getattr(spec, "key", "") or "").lower().startswith("yue2"):
+        ladder = ladder + (360, 480, 900)
     toks: list[str] = []
-    for val in ladder:
+    for val in sorted(set(ladder)):
         if val + 0.01 < lo or val - 0.01 > hi:
             continue
         toks.append(_dur_token(val))
@@ -324,13 +328,26 @@ def generate_audio(
     if spec is None:
         return AudioResult(ok=False, status=f"Unknown audio model: {model_id or '(none)'}.")
     text = (prompt or "").strip()
-    if not text:
-        return AudioResult(ok=False, status="Enter a prompt.")
     extra = extra or {}
     dur = parse_duration_s(duration)
     if dur is None:
         dur = spec.duration_default_s
     kind = spec.category if spec.category in ("music", "sfx", "voiceover") else "audio"
+
+    if spec.category == "music":
+        from app.comfy_yue2 import generate_yue2, is_yue2
+
+        if is_yue2(spec):
+            return generate_yue2(
+                prompt=text,
+                duration_s=float(dur or spec.duration_default_s or 120),
+                extra=extra,
+                output_dir=output_dir,
+                spec=spec,
+            )
+
+    if not text:
+        return AudioResult(ok=False, status="Enter a prompt.")
 
     if spec.category == "music":
         from app.comfy_ace import generate_ace_step, is_ace_step

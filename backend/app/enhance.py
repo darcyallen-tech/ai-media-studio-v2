@@ -148,6 +148,284 @@ def _parse_prompt(raw: str, fallback: str) -> str:
     return text or fallback
 
 
+YUE_JSON_RULE = (
+    'Return JSON only: {"style":"<sonic-only>","lyrics":"<section-tagged>"}. '
+    "Never put verses, section tags, or \"no vocals / no lyrics\" dumps in style. "
+    "Never leave lyrics empty. No Suno meta tags. "
+    "Style keeps the chips, adds sonic fusion from Notes, and holds vocal timbre. "
+    "Instrumental true: polish style; keep [Section] tags and (instrumental, ...) lines; no sung words. "
+    "Instrumental false: under every [Section] put ONE short musical (cue) for arrangement, "
+    "entry, or texture, THEN sung lines. Do not replace that cue with sung lines. "
+    "Allowed cues: drums kick, full band, record scratches, guitar stab. "
+    "Forbidden in cues and lyric lines: timbre and stage direction "
+    "(gritty male, southern drawl, spitting) — those stay in style. "
+    "Do not write (instrumental…) or (no vocals)."
+)
+
+
+def yue_enhance_target(
+    *,
+    model_id: str = "",
+    label: str = "",
+    endpoint: str = "",
+) -> bool:
+    blob = f"{model_id} {label} {endpoint}".lower()
+    return "yue2" in blob or "yue 2" in blob
+
+
+_LYRIC_PREMISE = re.compile(r"\blyrics?\b|\babout\b|\bwrite verses\b", re.I)
+_SUNG_CUE = re.compile(
+    r"\([^)\n]*(?:instrumental|no vocals)[^)\n]*\)|\binstrumental groove\b|\bno vocals\b",
+    re.I,
+)
+
+
+def _chips_only_style(style: str) -> str:
+    parts = [part.strip(" ,") for part in re.split(r",|\n", style) if part.strip(" ,")]
+    kept = [part for part in parts if not _LYRIC_PREMISE.search(part)]
+    return ", ".join(kept).strip(" ,")
+
+
+_TIMBRE_WORD = re.compile(
+    r"\b(?:warm|bright|airy|gritty|raspy|belted|intimate|southern drawl|"
+    r"rap cadence|spoken-sung|stacked doubles|male voice|female voice|"
+    r"raw grit|spitting)\b",
+    re.I,
+)
+_ARRANGEMENT_WORD = re.compile(
+    r"\b(?:band|groove|riff|swell|hit|fade|stop|drum|guitar|build|kick|"
+    r"chord|arrangement|solo)\b",
+    re.I,
+)
+
+
+_STAGE_PHRASE = re.compile(
+    r"\b(?:gritty\s+male(?:\s+voice)?(?:\s+raw)?|male\s+voice(?:\s+raw)?|"
+    r"female\s+voice(?:\s+raw)?|southern\s+drawl|raw\s+grit|"
+    r"spitting|belted\s+vocal|rap\s+cadence|spoken-sung|stacked\s+doubles)\b",
+    re.I,
+)
+_PLACEHOLDER_CUE = re.compile(r"^\([^)\n]*—\s*enhance fills\)$", re.I)
+_CUE_SHORT = {
+    "intro": "(cold-open riff, drums kick)",
+    "verse": "(full band, groove)",
+    "pre-chorus": "(build, guitar stab)",
+    "chorus": "(full band, big hit)",
+    "bridge": "(strip back, guitar stab)",
+    "outro": "(ring out)",
+}
+_CUE_RICH = {
+    "intro": "(cold-open riff, drums kick, record scratches under guitar)",
+    "verse": "(full band, groove, guitar stab)",
+    "pre-chorus": "(gradual build, guitar stab)",
+    "chorus": "(full band, big hit, record scratches)",
+    "bridge": "(strip back, then guitar stab)",
+    "outro": "(ring out, soft fade)",
+}
+
+
+def _strip_instrumental_words(inner: str) -> str:
+    text = re.sub(r"\bno vocals\b", "", inner or "", flags=re.I)
+    text = re.sub(r"\binstrumental\b", "", text, flags=re.I)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r"(?:,\s*){2,}", ", ", text)
+    return re.sub(r"\s{2,}", " ", text).strip(" ,;-")
+
+
+def _paren_inner_musical(inner: str) -> str:
+    """Drop instrumental, no-vocals, and timbre words. Keep arrangement."""
+    text = _TIMBRE_WORD.sub("", _strip_instrumental_words(inner))
+    text = _STAGE_PHRASE.sub("", text)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r"(?:,\s*){2,}", ", ", text)
+    return re.sub(r"\s{2,}", " ", text).strip(" ,;-")
+
+
+def _append_style_phrase(style: str, phrase: str) -> str:
+    phrase = re.sub(r"\s{2,}", " ", (phrase or "")).strip(" ,;")
+    if not phrase:
+        return (style or "").strip(" ,")
+    if phrase.lower() in (style or "").lower():
+        return (style or "").strip(" ,")
+    base = (style or "").strip(" ,")
+    return f"{base}, {phrase}".strip(" ,") if base else phrase
+
+
+def lift_timbre(style: str, lyrics: str) -> tuple[str, str]:
+    """Vocal timbre leaves lyric parentheses and stage-direction lines for style.
+
+    Musical arrangement parentheses stay. Only the timbre words inside them move.
+    """
+    found: list[str] = []
+
+    def _take_timbre(source: str) -> None:
+        seen: set[str] = set()
+        for token in list(_TIMBRE_WORD.findall(source)) + list(_STAGE_PHRASE.findall(source)):
+            key = token.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(token)
+
+    def grab(match: re.Match[str]) -> str:
+        inner = match.group(1).strip()
+        if not inner or not (_TIMBRE_WORD.search(inner) or _STAGE_PHRASE.search(inner)):
+            return match.group(0)
+        _take_timbre(inner)
+        kept = _paren_inner_musical(inner)
+        return f"({kept})" if kept else ""
+
+    text = re.sub(r"\(([^)\n]*)\)", grab, lyrics or "")
+    body_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") or stripped.startswith("("):
+            body_lines.append(stripped)
+            continue
+        if _STAGE_PHRASE.search(stripped):
+            _take_timbre(stripped)
+        cleaned = _STAGE_PHRASE.sub("", stripped)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,;-")
+        if cleaned:
+            body_lines.append(cleaned)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(body_lines)).strip()
+    next_style = (style or "").strip()
+    for phrase in found:
+        next_style = _append_style_phrase(next_style, phrase)
+    return next_style, text
+
+
+def enforce_sung_lyrics(lyrics: str, notes: str) -> str:
+    """Strip instrumental / no-vocals words only. Musical cues stay.
+
+    Notes are the Enhance premise and are not pasted under sections.
+    """
+    _ = notes
+    out: list[str] = []
+    for line in (lyrics or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            out.append(line)
+            continue
+        if re.fullmatch(r"\[[^\]]+\]", stripped) or _PLACEHOLDER_CUE.match(stripped):
+            if not _PLACEHOLDER_CUE.match(stripped):
+                out.append(stripped)
+            continue
+        if stripped.startswith("(") and stripped.endswith(")"):
+            inner = _strip_instrumental_words(stripped[1:-1])
+            if inner:
+                out.append(f"({inner})")
+            continue
+        out.append(line)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
+    text = re.sub(r"\bno vocals\b", "", text, flags=re.I)
+    text = re.sub(r"\binstrumental\b", "", text, flags=re.I)
+    text = re.sub(r"\(\s*,", "(", text)
+    text = re.sub(r",\s*\)", ")", text)
+    text = re.sub(r"\(\s*\)", "", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def ensure_musical_cues(lyrics: str, *, creative: bool = False) -> str:
+    """One arrangement cue under each [Section], then the sung lines."""
+    text = (lyrics or "").strip()
+    if "[" not in text:
+        return text
+    table = _CUE_RICH if creative else _CUE_SHORT
+    chunks = re.split(r"(?m)^(?=\[[^\]]+\])", text)
+    blocks: list[str] = []
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        lines = [line.strip() for line in chunk.splitlines() if line.strip()]
+        tag = lines[0]
+        if not re.fullmatch(r"\[[^\]]+\]", tag):
+            blocks.append(chunk)
+            continue
+        name = tag[1:-1].split("-")[0].split(":")[0].strip().lower()
+        cue = ""
+        bodies: list[str] = []
+        for line in lines[1:]:
+            if line.startswith("(") and line.endswith(")") and line.count("(") == 1:
+                if _PLACEHOLDER_CUE.match(line):
+                    continue
+                inner = _paren_inner_musical(line[1:-1])
+                if inner and not cue:
+                    cue = f"({inner})"
+                continue
+            if line:
+                bodies.append(line)
+        if not cue:
+            cue = table.get(name) or ("(full band, groove, guitar stab)" if creative else "(full band, groove)")
+        block = f"{tag}\n{cue}"
+        if bodies:
+            block += "\n" + "\n".join(bodies)
+        blocks.append(block)
+    return "\n\n".join(blocks).strip()
+
+
+_VOICE_FRAGMENT = re.compile(
+    r"\b(?:vocal|gritty|belted|airy|bright|warm|intimate|southern drawl|"
+    r"rap cadence|spoken-sung|stacked doubles|male lead|female lead|"
+    r"mixed leads|harmony stack|choir / chant)\b",
+    re.I,
+)
+
+
+def merge_sonic_notes(style: str, notes: str, fallback_style: str = "") -> str:
+    """Keep chip voice character and add short sonic fusion from Notes."""
+    parts = [part.strip() for part in _chips_only_style(style).split(",") if part.strip()]
+    have = ", ".join(parts).lower()
+
+    def add(fragment: str) -> None:
+        nonlocal have
+        fragment = re.sub(r"\s{2,}", " ", fragment).strip(" ,;")
+        if not fragment or _LYRIC_PREMISE.search(fragment):
+            return
+        if fragment.lower() in have:
+            return
+        parts.append(fragment)
+        have = f"{have}, {fragment.lower()}".strip(" ,")
+
+    for frag in re.split(r",|\n|;", notes or ""):
+        frag = frag.strip()
+        if not frag or _LYRIC_PREMISE.search(frag) or len(frag.split()) > 8:
+            continue
+        add(frag)
+    for frag in re.split(r",", fallback_style or ""):
+        if _VOICE_FRAGMENT.search(frag):
+            add(frag)
+    return ", ".join(parts).strip(" ,")
+
+
+def _parse_style_lyrics(raw: str, fallback_style: str, fallback_lyrics: str) -> dict[str, str]:
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text).strip()
+    data: dict[str, Any] = {}
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            data = parsed
+    except json.JSONDecodeError:
+        data = {}
+    style = str(data.get("style") or data.get("tags") or data.get("prompt") or "").strip()
+    lyrics = str(data.get("lyrics") or "").strip()
+    if not style:
+        style = (fallback_style or "").strip()
+    if "[" not in lyrics:
+        lyrics = (fallback_lyrics or "").strip()
+    if "[" in style:
+        style = style.split("[", 1)[0]
+    style = " ".join(style.splitlines()).strip()
+    style = re.sub(r"\b(no vocals|no lyrics|instrumental only)\b", "", style, flags=re.I)
+    style = _chips_only_style(style)
+    style = re.sub(r"\s{2,}", " ", style).strip(" ,")
+    return {"style": style or _chips_only_style(fallback_style or ""), "lyrics": lyrics}
+
+
 def ace_enhance_target(
     *,
     model_id: str = "",
@@ -183,7 +461,7 @@ def _parse_ace_payload(raw: str, fallback: str) -> dict[str, Any]:
             data = parsed
     except json.JSONDecodeError:
         data = {}
-    tags = str(data.get("tags") or data.get("prompt") or "").strip()
+    tags = str(data.get("tags") or data.get("style") or data.get("prompt") or "").strip()
     lyrics = str(data.get("lyrics") or "")
     if not tags:
         from app.comfy_ace import split_tags_lyrics
@@ -259,6 +537,8 @@ def enhance_prompt_text(
     max_prompt: int | None = None,
     creative: bool = False,
     instrumental: bool | None = None,
+    lyrics: str | None = None,
+    notes: str | None = None,
 ) -> dict[str, Any]:
     original = (prompt or "").strip()
     if not original:
@@ -314,23 +594,46 @@ def enhance_prompt_text(
     flag = "true" if creative_on else "false"
     log.info("enhance.creative=%s", flag)
     print(f"enhance.creative={flag}", flush=True)
+    endpoint = (entry.endpoint if entry else "") or ""
     ace = ace_enhance_target(
         model_id=model_id,
         modality=modality,
         mode=mode,
         label=label,
-        endpoint=(entry.endpoint if entry else "") or "",
+        endpoint=endpoint,
+    )
+    yue = (not ace) and yue_enhance_target(
+        model_id=model_id, label=label, endpoint=endpoint
     )
     if ace:
         print("enhance.ace=true", flush=True)
         log.info("enhance.ace=true")
     creative_note = CREATIVE_NOTE if creative_on else TIGHT_NOTE
-    if ace:
+    if yue:
+        creative_note = (
+            "Style stays sonic: keep the chips, add fusion from Notes "
+            "(hip-hop pocket, boom-bap, color) and vocal timbre. "
+            "Do not write a location brief or put verses in style.\n\n"
+        )
+        if instrumental is False:
+            if creative_on:
+                creative_note += (
+                    "Creative Enhance ON: one richer musical cue under each [Section], "
+                    "then denser sung lines. Still one cue per section.\n\n"
+                )
+            else:
+                creative_note += (
+                    "Creative Enhance OFF: tighter words. Still one short musical cue "
+                    "under each [Section], then the sung lines.\n\n"
+                )
+    elif ace:
         creative_note = ACE_CREATIVE_NOTE if creative_on else ACE_TIGHT_NOTE
     if creative_on and (mode or "").strip().lower() in ("storyboard", "board") and not ace:
         creative_note += STORYBOARD_CREATIVE_NOTE
     system = SYSTEM
-    if ace:
+    if yue:
+        system = YUE_JSON_RULE
+    elif ace:
         system = SYSTEM + "\n" + ACE_JSON_RULE
         if creative_on:
             system += (
@@ -352,8 +655,33 @@ def enhance_prompt_text(
             "Do not invent shops, doors, or set dressing."
         )
     inst_line = ""
-    if ace and instrumental is not None:
+    if (ace or yue) and instrumental is not None:
         inst_line = f"Instrumental: {'true' if instrumental else 'false'}\n"
+    lyric_line = ""
+    if (lyrics or "").strip() and (ace or yue):
+        lyric_line = f"Current lyrics:\n{lyrics.strip()}\n\n"
+    if yue and (notes or "").strip():
+        lyric_line += (
+            "Notes: sonic fusion goes in style only. Lyric themes stay out of style "
+            "and are not repeated under every section.\n"
+            f"{notes.strip()}\n\n"
+        )
+    if yue and instrumental is False:
+        cue_rule = (
+            "one richer musical (cue), then denser sung lines"
+            if creative_on
+            else "one short musical (cue), then sung lines"
+        )
+        lyric_line += (
+            "Instrumental is false. Under every [Section] write "
+            f"{cue_rule}. "
+            "The cue is arrangement, entry, or texture "
+            "(drums kick, full band, record scratches, guitar stab). "
+            "Do not replace that cue with sung lines. "
+            "Do not return (instrumental…) or (no vocals). "
+            "Do not put timbre or stage direction in the cue or the lyric lines "
+            "(no gritty male, southern drawl, spitting). Those belong in style.\n\n"
+        )
     user = (
         f"Mode: {mode or 'image'}\n"
         f"Modality: {modality or 't2i'}\n"
@@ -366,6 +694,7 @@ def enhance_prompt_text(
         + wan_note
         + family_notes
         + (f"{extra}\n\n" if extra else "")
+        + lyric_line
         + f"User prompt:\n{original}"
     )
     vision_used = False
@@ -407,7 +736,29 @@ def enhance_prompt_text(
             "vision": False,
         }
     ace_fields: dict[str, Any] | None = None
-    if ace:
+    yue_fields: dict[str, str] | None = None
+    if yue:
+        yue_fields = _parse_style_lyrics(raw, original, lyrics or "")
+        if instrumental is True:
+            kept: list[str] = []
+            for line in yue_fields["lyrics"].splitlines():
+                s = line.strip()
+                if not s or s.startswith("[") or s.startswith("("):
+                    kept.append(line)
+            yue_fields["lyrics"] = "\n".join(kept).strip() or (lyrics or "").strip()
+        rewritten = yue_fields["style"]
+        if instrumental is False:
+            yue_fields["lyrics"] = enforce_sung_lyrics(yue_fields["lyrics"], notes or "")
+            lifted_style, lifted_lyrics = lift_timbre(
+                _chips_only_style(yue_fields["style"]),
+                yue_fields["lyrics"],
+            )
+            yue_fields["lyrics"] = ensure_musical_cues(lifted_lyrics, creative=creative_on)
+            yue_fields["style"] = merge_sonic_notes(
+                lifted_style, notes or "", original or ""
+            )
+            rewritten = yue_fields["style"]
+    elif ace:
         ace_fields = _parse_ace_payload(raw, original)
         rewritten = str(ace_fields.get("prompt") or "")
         if instrumental is True:
@@ -485,7 +836,7 @@ def enhance_prompt_text(
     )
 
     low = original.lower()
-    sceneish = (not ace) and (
+    sceneish = (not ace) and (not yue) and (
         "scene enhance" in low
         or "creative enhance" in low
         or "keep photoreal photograph lock" in low
@@ -523,7 +874,15 @@ def enhance_prompt_text(
         "vision": vision_used,
         "creative": creative_on,
     }
-    if ace and ace_fields:
+    if yue and yue_fields:
+        style = yue_fields["style"] or original
+        out["prompt"] = style
+        out["style"] = style
+        out["tags"] = style
+        out["lyrics"] = yue_fields["lyrics"]
+        if instrumental is not None:
+            out["instrumental"] = bool(instrumental)
+    elif ace and ace_fields:
         tags = str(ace_fields.get("tags") or rewritten).strip() or rewritten
         out["prompt"] = tags
         out["tags"] = tags

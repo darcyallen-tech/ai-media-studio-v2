@@ -48,6 +48,8 @@ You can use the app with **fal only**. Add Runware when you want Frame Editor. A
 
 **Local ACE-Step 1.5 (optional).** Same Comfy URL. Enhance on ACE-Step rewrites into comma **tags** + `[Section]` **lyrics** (not MiniMax/Suno prose). This app on **:8000** is not Comfy. MiniMax / ElevenLabs stay on fal. Cost $0.00.
 
+**Local YuE2 (optional).** Same Comfy URL. Audio → Music → YuE2 Text-to-Music, YuE2 Cover, or YuE2 Re-render from ABC. Cost $0.00. Cover needs a reference clip. Re-render needs an ABC score. Text-to-music can paste a previous ABC to skip planning. YuE2 weights are CC-BY-NC (personal/testing; not for selling tracks as-is). If Comfy is stopped, you get a Comfy error — these models do not fall back to fal.
+
 ---
 
 ## 3. First still (T2I)

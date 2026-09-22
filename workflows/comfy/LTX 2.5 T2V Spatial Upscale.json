@@ -1,0 +1,500 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "lora_name": "ltx-2.5-22b-distilled-lora-450-bf16.safetensors",
+      "strength_model": 1.0,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Distill LoRA"
+    }
+  },
+  "3": {
+    "inputs": {
+      "clip_name": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "ltx-2.5-video-vae-conv-bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Video VAE"
+    }
+  },
+  "5": {
+    "inputs": {
+      "vae_name": "ltx-2.5-audio-vae-bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Audio VAE"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "cinematic wide shot of waves crashing on a rocky shoreline at sunset, seabirds calling, gentle camera push-in, natural ambient sound",
+      "clip": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "blurry, low quality, distorted, watermark, text, logo, static frame, jitter, overexposed, underexposed, bad anatomy",
+      "clip": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "8": {
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "frame_rate": [
+        "100",
+        5
+      ]
+    },
+    "class_type": "LTXVConditioning",
+    "_meta": {
+      "title": "LTXV Conditioning"
+    }
+  },
+  "9": {
+    "inputs": {
+      "width": [
+        "100",
+        0
+      ],
+      "height": [
+        "100",
+        1
+      ],
+      "length": [
+        "100",
+        2
+      ],
+      "batch_size": [
+        "100",
+        4
+      ]
+    },
+    "class_type": "EmptyLTXVLatentVideo",
+    "_meta": {
+      "title": "Empty Latent Video"
+    }
+  },
+  "10": {
+    "inputs": {
+      "frames_number": [
+        "100",
+        3
+      ],
+      "frame_rate": [
+        "100",
+        5
+      ],
+      "batch_size": [
+        "100",
+        4
+      ],
+      "audio_vae": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "LTXVEmptyLatentAudio",
+    "_meta": {
+      "title": "Empty Latent Audio"
+    }
+  },
+  "11": {
+    "inputs": {
+      "video_latent": [
+        "9",
+        0
+      ],
+      "audio_latent": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Concat AV Stage1"
+    }
+  },
+  "12": {
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "8",
+        1
+      ],
+      "video_cfg": 1.0,
+      "audio_cfg": 1.0
+    },
+    "class_type": "LTXVDualCFGGuider",
+    "_meta": {
+      "title": "Dual CFG Stage1"
+    }
+  },
+  "13": {
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler Stage1"
+    }
+  },
+  "14": {
+    "inputs": {
+      "sigmas": "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "Sigmas Stage1"
+    }
+  },
+  "15": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Random Noise Stage1"
+    }
+  },
+  "16": {
+    "inputs": {
+      "noise": [
+        "15",
+        0
+      ],
+      "guider": [
+        "12",
+        0
+      ],
+      "sampler": [
+        "13",
+        0
+      ],
+      "sigmas": [
+        "14",
+        0
+      ],
+      "latent_image": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Sampler Stage1"
+    }
+  },
+  "17": {
+    "inputs": {
+      "av_latent": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate After Stage1"
+    }
+  },
+  "18": {
+    "inputs": {
+      "model_name": "ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"
+    },
+    "class_type": "LatentUpscaleModelLoader",
+    "_meta": {
+      "title": "Spatial Upscaler x2"
+    }
+  },
+  "19": {
+    "inputs": {
+      "samples": [
+        "31",
+        0
+      ],
+      "upscale_model": [
+        "18",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "LTXVLatentUpsampler",
+    "_meta": {
+      "title": "Latent Spatial Upsample"
+    }
+  },
+  "20": {
+    "inputs": {
+      "video_latent": [
+        "19",
+        0
+      ],
+      "audio_latent": [
+        "17",
+        1
+      ]
+    },
+    "class_type": "LTXVConcatAVLatent",
+    "_meta": {
+      "title": "Concat AV Stage2"
+    }
+  },
+  "21": {
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "8",
+        1
+      ],
+      "video_cfg": 1.0,
+      "audio_cfg": 1.0
+    },
+    "class_type": "LTXVDualCFGGuider",
+    "_meta": {
+      "title": "Dual CFG Stage2"
+    }
+  },
+  "22": {
+    "inputs": {
+      "sampler_name": "euler_ancestral"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler Stage2"
+    }
+  },
+  "23": {
+    "inputs": {
+      "sigmas": "0.85, 0.7250, 0.4219, 0.0"
+    },
+    "class_type": "ManualSigmas",
+    "_meta": {
+      "title": "Sigmas Stage2"
+    }
+  },
+  "24": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Random Noise Stage2"
+    }
+  },
+  "25": {
+    "inputs": {
+      "noise": [
+        "24",
+        0
+      ],
+      "guider": [
+        "21",
+        0
+      ],
+      "sampler": [
+        "22",
+        0
+      ],
+      "sigmas": [
+        "23",
+        0
+      ],
+      "latent_image": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Sampler Stage2"
+    }
+  },
+  "26": {
+    "inputs": {
+      "av_latent": [
+        "25",
+        0
+      ]
+    },
+    "class_type": "LTXVSeparateAVLatent",
+    "_meta": {
+      "title": "Separate After Stage2"
+    }
+  },
+  "27": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "tile_size": 512,
+      "overlap": 64,
+      "temporal_size": 64,
+      "temporal_overlap": 16
+    },
+    "class_type": "VAEDecodeTiled",
+    "_meta": {
+      "title": "VAE Decode Video Tiled"
+    }
+  },
+  "28": {
+    "inputs": {
+      "samples": [
+        "26",
+        1
+      ],
+      "audio_vae": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "LTXVAudioVAEDecode",
+    "_meta": {
+      "title": "Audio VAE Decode"
+    }
+  },
+  "29": {
+    "inputs": {
+      "images": [
+        "27",
+        0
+      ],
+      "fps": [
+        "100",
+        6
+      ],
+      "audio": [
+        "28",
+        0
+      ],
+      "bit_depth": 8,
+      "color_space": "sRGB"
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "30": {
+    "inputs": {
+      "video": [
+        "29",
+        0
+      ],
+      "filename_prefix": "video/LTX25_T2V_Spatial",
+      "format": "auto",
+      "codec": "auto"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "31": {
+    "inputs": {
+      "anything": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM After Stage1"
+    }
+  },
+  "32": {
+    "inputs": {
+      "anything": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Before Decode"
+    }
+  },
+  "100": {
+    "inputs": {
+      "resolution_preset": "768x512 (LTX template)",
+      "aspect_ratio": "16:9",
+      "megapixels": 0.4,
+      "seconds": 4.0,
+      "fps_preset": "24",
+      "fps": 24.0,
+      "batch_size": 1
+    },
+    "class_type": "LTXVideoControls",
+    "_meta": {
+      "title": "LTX Video Controls"
+    }
+  }
+}

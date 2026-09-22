@@ -1532,6 +1532,7 @@ function StudioCanvas() {
                   modality: studioModality,
                   modelId: studioModelId,
                   instrumental,
+                  onInstrumental: setInstrumental,
                   onApply: applyBuilderPrompt,
                 },
               }
@@ -1554,6 +1555,7 @@ function StudioCanvas() {
           onClose: () => closeNode(BUILDER_ID),
           onApply: applyBuilderPrompt,
           instrumental,
+          onInstrumental: setInstrumental,
         },
       };
       return [...current, node];
@@ -1932,8 +1934,15 @@ function StudioCanvas() {
                   maxRefs: patch.maxRefs ?? n.data.maxRefs,
                   modelId: patch.modelId ?? n.data.modelId,
                   sheetKind: patch.sheetKind ?? n.data.sheetKind,
-                  localPipeline: patch.localPipeline ?? n.data.localPipeline,
+                  localPipeline:
+                    patch.localPipeline !== undefined
+                      ? patch.localPipeline
+                      : n.data.localPipeline,
                   confirmModel: patch.confirmModel ?? n.data.confirmModel,
+                  hAngle: patch.hAngle ?? n.data.hAngle,
+                  vAngle: patch.vAngle ?? n.data.vAngle,
+                  zoom: patch.zoom ?? n.data.zoom,
+                  defaultPrompts: patch.defaultPrompts ?? n.data.defaultPrompts,
                   characterId: patch.characterId ?? n.data.characterId,
                   costumeId: patch.costumeId ?? n.data.costumeId,
                   refPreviews: patch.refPreviews ?? n.data.refPreviews,
@@ -1977,8 +1986,15 @@ function StudioCanvas() {
               maxRefs: patch.maxRefs ?? prev?.maxRefs,
               modelId: patch.modelId ?? prev?.modelId,
               sheetKind: patch.sheetKind ?? prev?.sheetKind,
-              localPipeline: patch.localPipeline ?? prev?.localPipeline,
+              localPipeline:
+                patch.localPipeline !== undefined
+                  ? patch.localPipeline
+                  : prev?.localPipeline,
               confirmModel: patch.confirmModel ?? prev?.confirmModel,
+              hAngle: patch.hAngle ?? prev?.hAngle,
+              vAngle: patch.vAngle ?? prev?.vAngle,
+              zoom: patch.zoom ?? prev?.zoom,
+              defaultPrompts: patch.defaultPrompts ?? prev?.defaultPrompts,
               characterId: patch.characterId ?? prev?.characterId,
               costumeId: patch.costumeId ?? prev?.costumeId,
               refPreviews: patch.refPreviews ?? prev?.refPreviews,
@@ -2009,6 +2025,16 @@ function StudioCanvas() {
                 prev?.onPrompt ??
                 ((prompt) =>
                   upsertSheetAngleRef.current(builderId, slot, { slot, prompt })),
+              onCamera:
+                prev?.onCamera ??
+                ((cam) =>
+                  upsertSheetAngleRef.current(builderId, slot, {
+                    slot,
+                    hAngle: cam.hAngle,
+                    vAngle: cam.vAngle,
+                    zoom: cam.zoom,
+                    defaultPrompts: cam.defaultPrompts,
+                  })),
               onResolution:
                 prev?.onResolution ??
                 ((resolution) =>
@@ -2262,6 +2288,74 @@ function StudioCanvas() {
             throw new Error(errorFromBody(draft, "Create failed."));
           }
           assetId = draft.item.id;
+        }
+        if (nodeData.localPipeline === "comfy-character") {
+          const job = slot === "front" ? "front" : "angle";
+          const res = await fetch("/comfy/character", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              job,
+              asset_id: assetId,
+              slot,
+              prompt: slot === "front" ? prompt : "",
+              source_still: sourceStill,
+              h_angle: nodeData.hAngle,
+              v_angle: nodeData.vAngle,
+              zoom: nodeData.zoom,
+              default_prompts: nodeData.defaultPrompts !== false,
+            }),
+          });
+          const body = (await readJson(res)) as {
+            ok?: boolean;
+            item?: StudioAsset & { cost?: string; workflow?: string };
+            detail?: string;
+            error?: string;
+          };
+          if (res.status === 404) {
+            throw new Error(
+              errorFromBody(
+                body,
+                "POST /comfy/character 404 — Local Comfy client missing, not falling back to fal.",
+              ),
+            );
+          }
+          if (!res.ok || body.ok === false || !body.item) {
+            throw new Error(errorFromBody(body, "Comfy generate failed."));
+          }
+          const path = body.item.identity?.[slot] || body.item.still_path || "";
+          const url = body.item.identity_urls?.[slot] || body.item.url || "";
+          setBuilderSessions((cur) => {
+            const prev = cur[builderId];
+            return {
+              ...cur,
+              [builderId]: {
+                assetId,
+                t2iModel: prev?.t2iModel || "",
+                r2iModel: prev?.r2iModel || "",
+                slots: prev?.slots?.length
+                  ? prev.slots
+                  : [...CORE_SLOTS, ...EXTRA_SLOTS],
+                attachSlotId: prev?.attachSlotId,
+                name: prev?.name || "Character",
+                fields: prev?.fields,
+                wardrobe: prev?.wardrobe,
+                notes: prev?.notes,
+                t2iResolution: prev?.t2iResolution,
+                r2iResolution: prev?.r2iResolution,
+                done: { ...(prev?.done || {}), [slot]: path },
+              },
+            };
+          });
+          upsertSheetAngle(builderId, slot, {
+            slot,
+            path,
+            url: url ? `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}` : "",
+            cost: body.item.cost || "",
+            generating: false,
+            error: null,
+          });
+          return;
         }
         const res = await fetch("/assets/sheet/angle", {
           method: "POST",
@@ -3214,6 +3308,7 @@ function StudioCanvas() {
               modality: studioModality,
               modelId: studioModelId,
               instrumental,
+              onInstrumental: setInstrumental,
               onClose: () => closeNode(BUILDER_ID),
               onApply: applyBuilderPrompt,
             },
@@ -3413,6 +3508,12 @@ function StudioCanvas() {
                 maxRefs: n.data.maxRefs,
                 modelId: n.data.modelId,
                 sheetKind: n.data.sheetKind,
+                localPipeline: n.data.localPipeline,
+                confirmModel: n.data.confirmModel,
+                hAngle: n.data.hAngle,
+                vAngle: n.data.vAngle,
+                zoom: n.data.zoom,
+                defaultPrompts: n.data.defaultPrompts,
                 characterId: n.data.characterId,
                 costumeId: n.data.costumeId,
                 nodeKey: n.data.nodeKey,
@@ -3423,6 +3524,14 @@ function StudioCanvas() {
                 onCompareSource: () => addCompareFromResult(n.id),
                 onPrompt: (prompt) =>
                   upsertSheetAngle(builderId, slot, { slot, prompt }),
+                onCamera: (cam) =>
+                  upsertSheetAngle(builderId, slot, {
+                    slot,
+                    hAngle: cam.hAngle,
+                    vAngle: cam.vAngle,
+                    zoom: cam.zoom,
+                    defaultPrompts: cam.defaultPrompts,
+                  }),
                 onResolution: (resolution) =>
                   upsertSheetAngle(builderId, slot, {
                     slot,

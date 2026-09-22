@@ -20,24 +20,14 @@ ZIMAGE_ASPECT = "9:16 (Portrait Widescreen)"
 ZIMAGE_MP = 2
 CAMERA_LOCK = "Do not change appearance or clothing."
 
-# slot -> horizontal, vertical, zoom, camera phrase
-ANGLE_CAM: dict[str, tuple[int, int, int, str]] = {
-    "threequarter_front": (
-        45,
-        0,
-        4,
-        "Rotate the camera 45 degrees around the subject, three-quarter front, full body.",
-    ),
-    "side": (90, 0, 4, "Rotate the camera 90 degrees to the side, full-body profile."),
-    "threequarter_back": (
-        135,
-        0,
-        4,
-        "Rotate the camera 135 degrees, three-quarter back, full body.",
-    ),
-    "back": (180, 0, 4, "Rotate the camera 180 degrees to the back, full body."),
-    "closeup": (0, 0, 9, "Move in for a close-up of the face."),
-    "top": (0, 70, 4, "Raise the camera high and look down at the subject."),
+# slot -> horizontal, vertical, zoom (Qwen Multiangle sliders; not a rewritten prompt)
+ANGLE_CAM: dict[str, tuple[float, float, float]] = {
+    "threequarter_front": (45, 0, 4),
+    "side": (90, 0, 4),
+    "threequarter_back": (135, 0, 4),
+    "back": (180, 0, 4),
+    "closeup": (0, 0, 10),
+    "top": (0, 70, 4),
 }
 
 CHAR_SLOTS = ("front",) + tuple(ANGLE_CAM.keys())
@@ -69,7 +59,9 @@ def _pack(pub: dict[str, Any], *, slot: str, prompt: str, job: dict[str, Any]) -
     pub["prompt"] = prompt
     pub["path"] = path
     pub["preview_path"] = path
-    pub["cost"] = f"Local · $0.00 · {ms / 1000:.1f}s" if ms else "Local · $0.00"
+    wf = str(job.get("workflow") or "")
+    pub["cost"] = f"provider: comfy | workflow: {wf} | $0.00" if wf else "provider: comfy | workflow: | $0.00"
+    pub["provider"] = "comfy"
     pub["duration_ms"] = ms
     pub["duration_sec"] = round(ms / 1000, 3) if ms else 0
     pub["width"] = job.get("width") or 0
@@ -85,6 +77,33 @@ def _pack(pub: dict[str, Any], *, slot: str, prompt: str, job: dict[str, Any]) -
     pub["url"] = url
     pub["qwen_source"] = str((pub.get("identity") or {}).get(slot) or path)
     return pub
+
+
+def camera_for(
+    slot: str,
+    h_angle: float | None = None,
+    v_angle: float | None = None,
+    zoom: float | None = None,
+) -> tuple[float, float, float]:
+    cam = ANGLE_CAM.get((slot or "").strip().lower())
+    if not cam:
+        raise ComfyError(f"Unknown character angle: {slot}")
+    dh, dv, dz = cam
+    h = float(dh if h_angle is None else h_angle)
+    v = float(dv if v_angle is None else v_angle)
+    z = float(dz if zoom is None else zoom)
+    return (
+        max(0.0, min(180.0, h)),
+        max(-30.0, min(90.0, v)),
+        max(1.0, min(12.0, z)),
+    )
+
+
+def qwen_prompt_patch(default_prompts: bool) -> tuple[dict[str, Any], dict[str, bool] | None]:
+    """Default Prompts ON: leave camera→encode link. OFF: one-liner lock only."""
+    if default_prompts:
+        return {"default_prompts": True}, None
+    return {"default_prompts": False, "prompt": CAMERA_LOCK}, {"prompt": True}
 
 
 def generate_front(*, asset_id: str, prompt: str, seed: int | None = None) -> dict[str, Any]:
@@ -103,7 +122,12 @@ def generate_front(*, asset_id: str, prompt: str, seed: int | None = None) -> di
         dest=dest,
     )
     pub = attach_identity_still(asset_id, "front", dest, model="comfy:zimage-turbo")
-    record_generated([str(dest)], cost="Local · $0.00", duration_sec=job.get("duration_ms", 0) / 1000, model="zimage-turbo")
+    record_generated(
+        [str(dest)],
+        cost="provider: comfy | workflow: ZimageTurbo T2I.json | $0.00",
+        duration_sec=job.get("duration_ms", 0) / 1000,
+        model="zimage-turbo",
+    )
     return _pack(pub, slot="front", prompt=text, job=job)
 
 
@@ -115,42 +139,44 @@ def generate_angle(
     source_still: str = "",
     enhanced: bool = False,
     seed: int | None = None,
+    h_angle: float | None = None,
+    v_angle: float | None = None,
+    zoom: float | None = None,
+    default_prompts: bool = True,
 ) -> dict[str, Any]:
+    del prompt, enhanced  # never dump identity into Qwen
     key = (slot or "").strip().lower()
-    cam = ANGLE_CAM.get(key)
-    if not cam:
-        raise ComfyError(f"Unknown character angle: {slot}")
-    h, v, zoom, phrase = cam
+    h, v, z = camera_for(key, h_angle, v_angle, zoom)
     row = get_asset(asset_id) or {}
     ident = row.get("identity") if isinstance(row.get("identity"), dict) else {}
     front = str(source_still or ident.get("front") or "").strip()
     if not front or not Path(front).is_file():
         raise ComfyError("Generate Front first.")
-    lock = f"{phrase} {CAMERA_LOCK}".strip()
-    extra = (prompt or "").strip()
-    qwen_prompt = f"{extra}\n{lock}".strip() if enhanced and extra else lock
+    extra, relink = qwen_prompt_patch(bool(default_prompts))
+    sent = str(extra.get("prompt") or "")
     dest = _dest(f"character-{key}", "qwen-multiangle")
+    values: dict[str, Any] = {
+        "h_angle": h,
+        "v_angle": v,
+        "zoom": z,
+        "seed": int(seed) if seed is not None else _seed(),
+        **extra,
+    }
     job = run_workflow(
         binding_key="qwen_angle",
-        values={
-            "h_angle": h,
-            "v_angle": v,
-            "zoom": zoom,
-            "prompt": qwen_prompt,
-            "seed": int(seed) if seed is not None else _seed(),
-        },
+        values=values,
         dest=dest,
         source_image=front,
-        replace_links={"prompt": True},
+        replace_links=relink,
     )
     pub = attach_identity_still(asset_id, key, dest, model="comfy:qwen-multiangle")
     record_generated(
         [str(dest)],
-        cost="Local · $0.00",
+        cost="provider: comfy | workflow: Qwen R2I - Multiple Angles Generator.json | $0.00",
         duration_sec=job.get("duration_ms", 0) / 1000,
         model="qwen-multiangle",
     )
-    return _pack(pub, slot=key, prompt=qwen_prompt, job=job)
+    return _pack(pub, slot=key, prompt=sent, job=job)
 
 
 def confirm_upscale(*, asset_id: str, slot: str, source_still: str = "") -> dict[str, Any]:
@@ -181,7 +207,7 @@ def confirm_upscale(*, asset_id: str, slot: str, source_still: str = "") -> dict
     job["path"] = str(out_copy.resolve())
     record_generated(
         [str(out_copy), str(four_k)],
-        cost="Local · $0.00",
+        cost="provider: comfy | workflow: SeedVR2 Image Upscale.json | $0.00",
         duration_sec=job.get("duration_ms", 0) / 1000,
         model="seedvr2",
     )
@@ -206,6 +232,10 @@ def run_character_job(
     source_still: str = "",
     enhanced: bool = False,
     seed: int | None = None,
+    h_angle: float | None = None,
+    v_angle: float | None = None,
+    zoom: float | None = None,
+    default_prompts: bool = True,
 ) -> dict[str, Any]:
     kind = (job or "").strip().lower()
     if kind in ("front", "zimage", "zimage_t2i"):
@@ -218,6 +248,10 @@ def run_character_job(
             source_still=source_still,
             enhanced=enhanced,
             seed=seed,
+            h_angle=h_angle,
+            v_angle=v_angle,
+            zoom=zoom,
+            default_prompts=default_prompts,
         )
     if kind in ("confirm", "seedvr", "seedvr_confirm"):
         return confirm_upscale(asset_id=asset_id, slot=slot, source_still=source_still)

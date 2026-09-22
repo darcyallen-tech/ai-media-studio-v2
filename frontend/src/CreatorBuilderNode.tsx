@@ -80,10 +80,14 @@ import {
   sizeChoices,
   useSheetEstimate,
   useSheetModels,
-  isLocalComfyModel,
-  LOCAL_COMFY_CONFIRM,
+  useComfyStatus,
   LOCAL_SEEDVR_ID,
-  withLocalComfyModels,
+  LOCAL_WORKFLOWS,
+  ANGLE_CAM_PRESETS,
+  comfyCostLine,
+  readCharProvider,
+  writeCharProvider,
+  type CharProvider,
 } from "./sheetUi";
 import type {
   CreatorBuilderNodeData,
@@ -310,8 +314,25 @@ function CharacterForm({
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"generate" | "upload" | "ref">("generate");
   const [refStill, setRefStill] = useState("");
-  const models = useSheetModels({ localComfy: true });
-  const [confirmId, setConfirmId] = useState(LOCAL_SEEDVR_ID);
+  const models = useSheetModels();
+  const { ok: comfyOk, ready: comfyReady } = useComfyStatus();
+  const [provider, setProvider] = useState<CharProvider>(
+    () => readCharProvider() || "cloud",
+  );
+  const [providerReady, setProviderReady] = useState(() => readCharProvider() !== null);
+  useEffect(() => {
+    if (providerReady || !comfyReady) return;
+    const next: CharProvider = comfyOk ? "local" : "cloud";
+    setProvider(next);
+    writeCharProvider(next);
+    setProviderReady(true);
+  }, [comfyOk, comfyReady, providerReady]);
+  const localOn = provider === "local";
+  function setCharProvider(next: CharProvider) {
+    if (next === "local" && !comfyOk) return;
+    setProvider(next);
+    writeCharProvider(next);
+  }
   const locked = gender === "Female" ? WARDROBE_F : WARDROBE_M;
   const haveFront = Boolean(data.doneSlots?.front);
   const t2iRow = models.t2i.find((m) => m.id === models.t2iId);
@@ -329,10 +350,6 @@ function CharacterForm({
   useEffect(() => {
     setFrontRes((cur) => {
       if (frontSizes.includes(cur)) return cur;
-      if (isLocalComfyModel(t2iRow)) {
-        if (frontSizes.includes("9:16")) return "9:16";
-        if (frontSizes.includes("2 MP")) return "2 MP";
-      }
       return pickDefaultResolution(frontSizes);
     });
     setFrontQuality((cur) =>
@@ -342,10 +359,6 @@ function CharacterForm({
   useEffect(() => {
     setAngleRes((cur) => {
       if (angleSizes.includes(cur)) return cur;
-      if (isLocalComfyModel(r2iRow)) {
-        if (angleSizes.includes("9:16")) return "9:16";
-        if (angleSizes.includes("2 MP")) return "2 MP";
-      }
       return pickDefaultResolution(angleSizes);
     });
     setAngleQuality((cur) =>
@@ -486,6 +499,46 @@ function CharacterForm({
             ? refStill
             : ""
           : data.doneSlots?.front || "";
+      const session = sessionPayload(data.sessionAssetId || "", ident, label);
+      if (localOn) {
+        const cam = ANGLE_CAM_PRESETS[slot] || ANGLE_CAM_PRESETS.side;
+        const wf = slot === "front" ? LOCAL_WORKFLOWS.front : LOCAL_WORKFLOWS.angle;
+        spawnAngleResult({
+          builderId,
+          slot,
+          label: SLOT_LABEL[slot] || slot,
+          prompt: slot === "front" ? ident : "",
+          generating: false,
+          error: null,
+          cost: comfyCostLine(wf),
+          focus: true,
+          resolution: "2 MP",
+          resolutionChoices: ["9:16", "2 MP"],
+          aspect: "9:16",
+          quality: "2 MP",
+          qualityChoices: ["2 MP"],
+          t2iModel: "",
+          r2iModel: "",
+          modelId: "",
+          assetId: data.sessionAssetId || "",
+          sourceStill,
+          wardrobe: identityFields.wardrobe,
+          name: label,
+          fields: session.fields,
+          notes: session.notes,
+          t2iResolution: "9:16",
+          r2iResolution: "9:16",
+          localPipeline: "comfy-character",
+          confirmModel: LOCAL_SEEDVR_ID,
+          hAngle: cam.h,
+          vAngle: cam.v,
+          zoom: cam.zoom,
+          defaultPrompts: true,
+        });
+        setError(null);
+        data.onSession?.(session);
+        return;
+      }
       const spawnR2i = extraAngleR2iRow(slot, models.r2i, r2iRow);
       const spawnR2iId = spawnR2i?.id || models.r2iId || models.t2iId;
       const extraSizes = sizeChoices(spawnR2i);
@@ -520,7 +573,6 @@ function CharacterForm({
         wardrobe: identityFields.wardrobe,
         name: label,
       };
-      const session = sessionPayload(data.sessionAssetId || "", ident, label);
       spawnAngleResult({
         builderId,
         ...patch,
@@ -532,11 +584,7 @@ function CharacterForm({
         notes: session.notes,
         t2iResolution: session.t2iResolution,
         r2iResolution: session.r2iResolution,
-        localPipeline:
-          isLocalComfyModel(models.t2iId) || isLocalComfyModel(spawnR2iId)
-            ? "comfy-character"
-            : undefined,
-        confirmModel: confirmId,
+        localPipeline: null,
       });
       setError(null);
       data.onSession?.(session);
@@ -750,17 +798,43 @@ function CharacterForm({
         Generate opens a Result node — run Generate on the node. Upload drops stills
         into Front / Side / Close-up. Ref edit I2I’s Front from a face/body still.
       </p>
-      <div className="pills chips">
-        {(["generate", "upload", "ref"] as const).map((id) => (
+      <div className="builder-mode-block">
+        <div className="pills chips">
+          {(["generate", "upload", "ref"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={mode === id ? "pill modality on" : "pill modality"}
+              onClick={() => setMode(id)}
+            >
+              {id === "generate" ? "Generate" : id === "upload" ? "Upload" : "Ref edit"}
+            </button>
+          ))}
+        </div>
+        <div className="pills chips builder-modes" role="tablist" aria-label="Mode">
+          <span className="field-label">Mode</span>
           <button
-            key={id}
             type="button"
-            className={mode === id ? "pill modality on" : "pill modality"}
-            onClick={() => setMode(id)}
+            role="tab"
+            aria-selected={localOn}
+            className={localOn ? "pill modality on" : "pill modality"}
+            disabled={!comfyOk}
+            title={!comfyOk ? "Start ComfyUI" : "Local Comfy — Z-Image → Qwen Multiangle → SeedVR"}
+            onClick={() => setCharProvider("local")}
           >
-            {id === "generate" ? "Generate" : id === "upload" ? "Upload" : "Ref edit"}
+            Local Comfy
           </button>
-        ))}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!localOn}
+            className={!localOn ? "pill modality on" : "pill modality"}
+            title="Cloud (fal) billing"
+            onClick={() => setCharProvider("cloud")}
+          >
+            Cloud (fal)
+          </button>
+        </div>
       </div>
       <label className="builder-field">
         <span className="field-label">Name</span>
@@ -941,13 +1015,16 @@ function CharacterForm({
           onChange={(e) => setWardrobe(e.target.value)}
         />
       </label>
-      <ModelPickers
-        models={models}
-        localComfy
-        comfyOk={models.comfyOk}
-        confirmId={confirmId}
-        onConfirmId={setConfirmId}
-      />
+      {localOn ? (
+        <div className="local-engines">
+          <p className="hint">Front engine: Z-Image Turbo (fixed)</p>
+          <p className="hint">Angle engine: Qwen Edit 2511 Multiangle (fixed)</p>
+          <p className="hint">Confirm: SeedVR2 (fixed)</p>
+        </div>
+      ) : (
+        <ModelPickers models={models} />
+      )}
+      {localOn ? null : (
       <div className="params">
         <label className="param">
           <span>Front size</span>
@@ -1015,6 +1092,7 @@ function CharacterForm({
           </label>
         ) : null}
       </div>
+      )}
       <div className="prompt-actions">
         <button
           type="button"
@@ -1048,7 +1126,7 @@ function CharacterForm({
           onChange={(e) => setIdentityPrompt(e.target.value)}
         />
       </label>
-      <p className="estimate">{estimate}</p>
+      <p className="estimate">{localOn ? "Est. cost: $0.00" : estimate}</p>
       {mode === "upload" ? (
         <>
           <p className="hint">Drop 1–3 stills into Front / Side / Close-up, then Save.</p>
@@ -3461,27 +3539,13 @@ function ModelPickers({
   models,
   t2iOnly,
   r2iOnly,
-  localComfy,
-  comfyOk,
-  confirmId,
-  onConfirmId,
 }: {
   models: ReturnType<typeof useSheetModels>;
   t2iOnly?: boolean;
   r2iOnly?: boolean;
-  localComfy?: boolean;
-  comfyOk?: boolean;
-  confirmId?: string;
-  onConfirmId?: (id: string) => void;
 }) {
-  const t2i = withLocalComfyModels(
-    Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [],
-    "t2i",
-  );
-  const r2i = withLocalComfyModels(
-    Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [],
-    "r2i",
-  );
+  const t2i = Array.isArray(models?.t2i) ? models.t2i.filter((m) => m?.id) : [];
+  const r2i = Array.isArray(models?.r2i) ? models.r2i.filter((m) => m?.id) : [];
   const t2iId = t2i.some((m) => m.id === models?.t2iId) ? models.t2iId : t2i[0]?.id || "";
   const r2iId = r2i.some((m) => m.id === models?.r2iId) ? models.r2iId : r2i[0]?.id || "";
   return (
@@ -3496,12 +3560,7 @@ function ModelPickers({
           >
             {t2i.length === 0 ? <option value="">Loading models…</option> : null}
             {t2i.map((m) => (
-              <option
-                key={m.id}
-                value={m.id}
-                disabled={isLocalComfyModel(m) && !comfyOk}
-                title={isLocalComfyModel(m) && !comfyOk ? "Start ComfyUI" : undefined}
-              >
+              <option key={m.id} value={m.id}>
                 {m.label || m.id}
               </option>
             ))}
@@ -3518,34 +3577,10 @@ function ModelPickers({
           >
             {r2i.length === 0 ? <option value="">Loading models…</option> : null}
             {r2i.map((m) => (
-              <option
-                key={m.id}
-                value={m.id}
-                disabled={isLocalComfyModel(m) && !comfyOk}
-                title={isLocalComfyModel(m) && !comfyOk ? "Start ComfyUI" : undefined}
-              >
+              <option key={m.id} value={m.id}>
                 {m.label || m.id}
               </option>
             ))}
-          </select>
-        </label>
-      ) : null}
-      {localComfy && onConfirmId ? (
-        <label className="param">
-          <span>Confirm / upscale</span>
-          <select
-            className="model"
-            value={confirmId || LOCAL_SEEDVR_ID}
-            onChange={(e) => onConfirmId(e.target.value)}
-            title={!comfyOk ? "Start ComfyUI" : undefined}
-          >
-            <option
-              value={LOCAL_COMFY_CONFIRM.id}
-              disabled={!comfyOk}
-              title={!comfyOk ? "Start ComfyUI" : undefined}
-            >
-              {LOCAL_COMFY_CONFIRM.label}
-            </option>
           </select>
         </label>
       ) : null}

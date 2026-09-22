@@ -88,9 +88,11 @@ Default video model: Kling O3 Standard V2V edit.
 
 | Kind | Models |
 |------|--------|
-| **Music** | MiniMax Music 3 (default), **ACE-Step 1.5 (local Comfy)**, Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
+| **Music** | MiniMax Music 3 (default), **ACE-Step 1.5 (local Comfy)**, **YuE2 Text-to-Music / Cover / Re-render ABC (local Comfy, $0.00)**, Sonilo v1.1, ElevenLabs Music, Google Lyria 3 Pro, Stable Audio 2.5 |
 
 **ACE-Step 1.5 (local Comfy).** Settings → COMFY_URL only (default `http://127.0.0.1:8188`). Browser POSTs `/generate` on AMS; AMS talks to Comfy. Health is GET `{COMFY_URL}/system_stats` (JSON `devices`/`system` — AMS `/health` is not Comfy). Queue POST `{COMFY_URL}/prompt` then `/api/prompt`. **405** toasts **405 on http://127.0.0.1:8000/prompt (this app) — set Comfy URL to :8188**. Does not launch Comfy. MiniMax / ElevenLabs stay on fal. Cost **$0.00**. ACE Advanced: seed/randomize, steps 8, CFG 1.0, sampler `er_sde`, scheduler `linear_quadratic`, denoise 1.0. Enhance on ACE returns comma **tags** + `[Section]` **lyrics** (`prompt` == tags); instrumental keeps structure lyrics. Builder prose goes through Enhance.
+
+**YuE2 (local Comfy).** Three Music models, same Settings COMFY_URL, cost **$0.00**, no fal fallback: Text-to-Music, Cover (reference audio + SheetSage2 melody), Re-render from ABC. Text-to-Music style and lyrics are Comfy nodes 113 and 114. Poll up to 20 minutes. Output is WAV (`AIMS_YuE2_`). Weights are CC-BY-NC (personal/testing; not for selling tracks as-is). If Comfy is down, the error is the same class as ACE-Step.
 
 | **SFX** | ElevenLabs Sound Effects V2, Sonilo Text-to-SFX |
 | **Voiceover** | MiniMax Speech 2.8 HD, MiniMax Speech 2.6 HD, Grok TTS, ElevenLabs Eleven v3, ElevenLabs Turbo v2.5 |

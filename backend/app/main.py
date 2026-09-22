@@ -282,6 +282,10 @@ class ComfyCharacterIn(BaseModel):
     source_still: str = ""
     enhanced: bool = False
     seed: int | None = None
+    h_angle: float | None = None
+    v_angle: float | None = None
+    zoom: float | None = None
+    default_prompts: bool = True
 
 
 class BuilderApplyIn(BaseModel):
@@ -310,6 +314,8 @@ class EnhanceIn(BaseModel):
     max_prompt: int | None = None
     creative: bool = False
     instrumental: bool | None = None
+    lyrics: str | None = None
+    notes: str | None = None
 
 
 class CreateStateIn(BaseModel):
@@ -381,64 +387,6 @@ def _state_from_body(body: CreateStateIn) -> CreateState:
     )
 
 
-def _local_comfy_model_rows(mode: str | None, modality: str | None) -> list[dict[str, Any]]:
-    """Local Comfy rows so Character Builder dropdowns cannot miss them."""
-    if (mode or "").strip().lower() not in ("image", ""):
-        return []
-    zimage = {
-        "id": "local_zimage_t2i",
-        "label": "Local · Z-Image Turbo",
-        "provider": "comfy",
-        "workflow": "ZimageTurbo T2I.json",
-        "endpoint": "comfy:zimage-turbo",
-        "mode": "image",
-        "modality": "t2i",
-        "cost_estimate_usd": 0,
-        "cost": "Local · $0.00",
-        "aspect_choices": ["9:16", "2 MP", "2K"],
-        "default_aspect": "9:16",
-        "resolution_choices": ["2 MP", "2K"],
-        "default_resolution": "2 MP",
-        "notes": "Local Comfy Z-Image Turbo. Start ComfyUI.",
-    }
-    qwen = {
-        "id": "local_qwen_angle",
-        "label": "Local · Qwen Edit 2511 Multiangle",
-        "provider": "comfy",
-        "workflow": "Qwen R2I - Multiple Angles Generator.json",
-        "endpoint": "comfy:qwen-multiangle",
-        "mode": "image",
-        "modality": "r2i",
-        "cost_estimate_usd": 0,
-        "cost": "Local · $0.00",
-        "aspect_choices": ["9:16", "2 MP", "2K"],
-        "default_aspect": "9:16",
-        "resolution_choices": ["2 MP", "2K"],
-        "default_resolution": "2 MP",
-        "notes": "Local Comfy Qwen Multiangle. IMAGE1 = Front. Start ComfyUI.",
-    }
-    seedvr = {
-        "id": "local_seedvr",
-        "label": "Local · SeedVR2",
-        "provider": "comfy",
-        "workflow": "SeedVR2 Image Upscale.json",
-        "endpoint": "comfy:seedvr2",
-        "mode": "image",
-        "modality": "r2i",
-        "cost_estimate_usd": 0,
-        "cost": "Local · $0.00",
-        "notes": "Local Comfy SeedVR2 Confirm 4K. Start ComfyUI.",
-    }
-    m = (modality or "").strip().lower()
-    if m == "t2i":
-        return [zimage]
-    if m in ("r2i", "i2i"):
-        return [qwen]
-    if not m:
-        return [zimage, qwen, seedvr]
-    return []
-
-
 def _jsonable(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
         return {k: _jsonable(v) for k, v in asdict(value).items()}
@@ -505,6 +453,17 @@ def _audio_models(modality: str | None) -> list[dict[str, Any]]:
                     f"Local ACE-Step 1.5 via Comfy API at {curl}. "
                     "Uses Settings COMFY_URL only (default http://127.0.0.1:8188). "
                     "Cost $0.00. This app is not Comfy."
+                )
+            elif str(spec.endpoint).startswith("comfy:yue2"):
+                from app.prefs import load_prefs
+
+                curl = str(load_prefs().get("comfy_url") or "http://127.0.0.1:8188").rstrip("/")
+                notes = (
+                    f"Local YuE2 via Comfy API at {curl}. "
+                    "Settings COMFY_URL only (default http://127.0.0.1:8188). "
+                    "Cost $0.00. No fal fallback. "
+                    "YuE2 weights are CC-BY-NC (personal/testing; not for selling tracks as-is). "
+                    "This app is not Comfy."
                 )
             rows.append(
                 {
@@ -643,10 +602,6 @@ def list_models_endpoint(
     entries = list_models_for_ui(want_mode, modality)
     default = default_model_for(want_mode, modality)
     models = [_jsonable(e) for e in entries]
-    local = _local_comfy_model_rows(want_mode, modality)
-    if local:
-        seen = {str(row.get("id") or "") for row in models if isinstance(row, dict)}
-        models = [row for row in local if row["id"] not in seen] + models
     return {
         "mode": want_mode,
         "modality": modality,
@@ -759,6 +714,8 @@ def enhance_endpoint(body: EnhanceIn) -> dict[str, Any]:
         max_prompt=body.max_prompt,
         creative=bool(body.creative),
         instrumental=body.instrumental,
+        lyrics=body.lyrics,
+        notes=body.notes,
     )
 
 
@@ -929,6 +886,11 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
                 "endpoint": audio.endpoint,
                 "notes": list(audio.notes),
                 "metrics_line": audio.metrics_line,
+                **(
+                    {"abc": audio.abc, "abc_path": audio.abc_path}
+                    if (audio.abc or "").strip()
+                    else {}
+                ),
             },
         )
     state = _state_from_body(body)
@@ -1480,6 +1442,10 @@ def comfy_character_job(body: ComfyCharacterIn) -> dict[str, Any]:
             source_still=body.source_still,
             enhanced=bool(body.enhanced),
             seed=body.seed,
+            h_angle=body.h_angle,
+            v_angle=body.v_angle,
+            zoom=body.zoom,
+            default_prompts=bool(body.default_prompts),
         )
     except ComfyError as exc:
         msg = str(exc) or COMFY_DOWN

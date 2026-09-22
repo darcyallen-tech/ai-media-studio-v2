@@ -1263,7 +1263,7 @@
 }
 
 .creator-builder-node {
-  width: 380px;
+  width: 440px;
 }
 
 .creator-builder-node.costume-builder,
@@ -1618,6 +1618,57 @@ html[data-theme="night"] .sheet-angle-empty.sheet-angle-replace {
   color: #fff;
 }
 
+.pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.builder-mode-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.builder-modes {
+  align-items: center;
+}
+
+.builder-modes .field-label {
+  margin: 0 4px 0 0;
+  flex: 0 0 auto;
+}
+
+.local-engines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 8px;
+}
+
+.cam-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.cam-sliders label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.78rem;
+  color: #5a6b7c;
+}
+
+.cam-sliders input[type="range"] {
+  width: 100%;
+}
+
+.cam-readout {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
 .field-label {
   font-size: 0.78rem;
   color: #5a6b7c;
@@ -1891,6 +1942,35 @@ html[data-theme="night"] .hint.budget-ok {
   gap: 3px;
 }
 
+.yue-music,
+.yue-abc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yue-music .prompt,
+.yue-abc .prompt,
+.music-builder .prompt {
+  min-height: 72px;
+  width: 100%;
+}
+
+.yue-music textarea.yue-pair {
+  min-height: 132px;
+}
+
+.yue-abc .prompt {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.yue-abc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .builder-node .prompt {
   min-height: 72px;
 }
@@ -2159,12 +2239,15 @@ html[data-theme="night"] .topbar p,
 html[data-theme="night"] .hint,
 html[data-theme="night"] .field-label,
 html[data-theme="night"] .param,
+html[data-theme="night"] .cam-sliders label,
 html[data-theme="night"] .estimate,
 html[data-theme="night"] .settings-sec h3,
 html[data-theme="night"] .settings-field,
 html[data-theme="night"] .meta {
   color: #9aa8b8;
 }
+
+
 
 html[data-theme="night"] .hint.warn {
   color: #e07070;

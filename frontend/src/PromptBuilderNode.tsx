@@ -16,9 +16,15 @@ import {
   MUSIC_INTROS,
   MUSIC_MOODS,
   MUSIC_TEMPO,
+  MUSIC_SECTIONS,
   MUSIC_USE_CASES,
+  MUSIC_VOICE_CHARACTER,
   MUSIC_VOCALS,
-  composeMusicPrompt,
+  composeMusicLyrics,
+  composeMusicStyle,
+  liftTimbre,
+  scrubSungLyrics,
+  shapeSungLyrics,
   regionalFor,
   regionalTip,
   subgenresFor,
@@ -436,13 +442,13 @@ function SkipSelect({
 }
 
 function MusicForm({ data }: { data: PromptBuilderNodeData }) {
-  const instrumental = data.instrumental !== false;
+  const instrumental = data.instrumental === true;
   const [genre, setGenre] = useState("");
   const [subgenre, setSubgenre] = useState("");
   const [flare, setFlare] = useState("");
   const [flareCustom, setFlareCustom] = useState("");
   const [era, setEra] = useState("");
-  const [energy, setEnergy] = useState("driving");
+  const [energy, setEnergy] = useState("forward");
   const [tempo, setTempo] = useState("driving (~120 BPM)");
   const [tempoCustom, setTempoCustom] = useState("");
   const [mood, setMood] = useState("");
@@ -453,9 +459,11 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
   ]);
   const [regional, setRegional] = useState<string[]>([]);
   const [vocals, setVocals] = useState("");
+  const [voiceCharacter, setVoiceCharacter] = useState<string[]>([]);
   const [intro, setIntro] = useState("cold-open riff");
   const [buildup, setBuildup] = useState("kick in at ~8s");
   const [ending, setEnding] = useState("hard stop");
+  const [sections, setSections] = useState<string[]>([]);
   const [useCase, setUseCase] = useState("");
   const [notes, setNotes] = useState("");
   const [enhancing, setEnhancing] = useState(false);
@@ -493,30 +501,40 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
     instruments,
     regional,
     vocals,
+    voiceCharacter,
     intro,
     buildup,
     ending,
+    sections,
     useCase,
     notes,
     instrumental,
   };
-  const live = composeMusicPrompt(fields);
+  const liveStyle = composeMusicStyle(fields);
+  const liveLyrics = composeMusicLyrics(fields);
 
-  function apply(text: string) {
-    const out = text.trim();
-    if (!out) {
-      setError("Pick at least a genre.");
+  function applySelection() {
+    const style = liveStyle.trim();
+    const lyrics = liveLyrics.trim();
+    if (!style) {
+      setError("Pick at least a genre or an instrument.");
       return;
     }
-    data.onApply(out);
-    toast("Applied to Prompt.");
+    if (!lyrics.includes("[")) {
+      setError("Lyrics need a [Section] tag.");
+      return;
+    }
+    const pack: AceEnhancePack = { tags: style, lyrics, instrumental };
+    data.onApply(style, pack);
+    toast("Applied Style and Lyrics.");
     setError(null);
   }
 
   async function onEnhance() {
-    const raw = live.trim();
-    if (!raw) {
-      setError("Apply selection first so Enhance has a music prompt.");
+    const style = liveStyle.trim();
+    const lyrics = liveLyrics.trim();
+    if (!style || !lyrics.includes("[")) {
+      setError("Apply selection first so Enhance has Style and Lyrics.");
       return;
     }
     setEnhancing(true);
@@ -526,7 +544,9 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: raw,
+          prompt: style,
+          lyrics,
+          notes,
           model_id: data.modelId || "",
           mode: "audio",
           modality: "music",
@@ -537,6 +557,7 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
       const body = (await readJson(res)) as {
         ok?: boolean;
         prompt?: string;
+        style?: string;
         tags?: string;
         lyrics?: string;
         bpm?: number | string;
@@ -547,28 +568,33 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
         error?: string;
         detail?: string;
       };
-      const rewritten = (body.tags || body.prompt || "").trim();
-      if (!res.ok || body.ok === false || !rewritten) {
+      if (!res.ok || body.ok === false) {
         throw new Error(
           (typeof body.detail === "string" && body.detail) ||
             body.error ||
-            "Enhance returned an empty reply.",
+            "Enhance failed.",
         );
       }
-      const pack: AceEnhancePack | undefined =
-        body.tags || body.lyrics != null || body.bpm != null
-          ? {
-              tags: body.tags || rewritten,
-              lyrics: body.lyrics,
-              bpm: body.bpm,
-              keyscale: body.keyscale,
-              timesignature: body.timesignature,
-              language: body.language,
-              instrumental: body.instrumental,
-            }
-          : undefined;
-      data.onApply(rewritten, pack);
-      toast("Enhanced prompt applied.");
+      let nextStyle = (body.style || body.tags || body.prompt || style).trim();
+      let nextLyrics = (body.lyrics || "").trim();
+      if (!nextLyrics.includes("[")) nextLyrics = lyrics;
+      if (!instrumental) {
+        const scrubbed = scrubSungLyrics(nextLyrics, notes);
+        const lifted = liftTimbre(nextStyle, scrubbed);
+        nextLyrics = shapeSungLyrics(lifted.lyrics, creativeEnhance);
+        nextStyle = lifted.style;
+      }
+      const pack: AceEnhancePack = {
+        tags: nextStyle,
+        lyrics: nextLyrics,
+        bpm: body.bpm,
+        keyscale: body.keyscale,
+        timesignature: body.timesignature,
+        language: body.language,
+        instrumental: body.instrumental ?? instrumental,
+      };
+      data.onApply(nextStyle, pack);
+      toast("Enhanced Style and Lyrics.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Enhance failed.";
       setError(msg);
@@ -646,12 +672,34 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
             />
           </>
         ) : null}
+        <label className="param check">
+          <input
+            type="checkbox"
+            checked={instrumental}
+            onChange={(e) => data.onInstrumental?.(e.target.checked)}
+          />
+          Instrumental
+        </label>
         {instrumental ? (
-          <p className="hint">Prompt node is Instrumental — vocals omitted.</p>
+          <p className="hint">Same checkbox as the Prompt node. Vocals stay off.</p>
         ) : (
-          <div className="params">
-            <SkipSelect label="Vocals" value={vocals} options={MUSIC_VOCALS} onChange={setVocals} />
-          </div>
+          <>
+            <div className="params">
+              <SkipSelect label="Vocals" value={vocals} options={MUSIC_VOCALS} onChange={setVocals} />
+            </div>
+            <span className="field-label">Voice character (max 2)</span>
+            <ChipMulti
+              options={MUSIC_VOICE_CHARACTER}
+              selected={voiceCharacter}
+              onToggle={(value) =>
+                setVoiceCharacter((cur) => {
+                  if (cur.includes(value)) return cur.filter((item) => item !== value);
+                  if (cur.length >= 2) return cur;
+                  return [...cur, value];
+                })
+              }
+            />
+          </>
         )}
         <span className="field-label">Structure</span>
         <div className="params">
@@ -659,6 +707,12 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
           <SkipSelect label="Buildup" value={buildup} options={MUSIC_BUILDS} onChange={setBuildup} />
           <SkipSelect label="Ending" value={ending} options={MUSIC_ENDINGS} onChange={setEnding} />
         </div>
+        <span className="field-label">Sections</span>
+        <ChipMulti
+          options={MUSIC_SECTIONS}
+          selected={sections}
+          onToggle={(v) => toggle(sections, v, setSections)}
+        />
         <div className="params">
           <SkipSelect
             label="Use case"
@@ -678,11 +732,15 @@ function MusicForm({ data }: { data: PromptBuilderNodeData }) {
           />
         </label>
         <label className="builder-field">
-          <span className="field-label">Composed prompt</span>
-          <textarea className="prompt nodrag nowheel" rows={4} readOnly value={live} />
+          <span className="field-label">Style</span>
+          <textarea className="prompt nodrag nowheel" rows={4} readOnly value={liveStyle} />
+        </label>
+        <label className="builder-field">
+          <span className="field-label">Lyrics</span>
+          <textarea className="prompt nodrag nowheel" rows={6} readOnly value={liveLyrics} />
         </label>
         <div className="prompt-actions">
-          <button type="button" className="generate nodrag" onClick={() => apply(live)}>
+          <button type="button" className="generate nodrag" onClick={applySelection}>
             Apply selection
           </button>
           <button

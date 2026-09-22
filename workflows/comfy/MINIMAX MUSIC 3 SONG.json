@@ -1,0 +1,136 @@
+{
+  "6": {
+    "inputs": {
+      "unet_name": "minimax_music3_dit_fp16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "clip_name": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "7": {
+    "inputs": {
+      "vae_name": "minimax_music3_dav.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "13": {
+    "inputs": {
+      "caption": "Indie rock song with clear male vocals, electric guitar, bass and drums, catchy chorus, polished radio mix, upbeat, 120 BPM",
+      "lyrics": "[Verse]\nWalking through the static of another late night\nCity lights are humming like a neon guide\n\n[Chorus]\nTurn it up, let the rhythm take the wheel\nHeart on fire, every word we feel\n",
+      "seed": 0,
+      "max_duration": 60.0,
+      "cfg_scale": 1.7,
+      "top_k": 50,
+      "clip": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "MiniMaxMusic3TextEncode",
+    "_meta": {
+      "title": "Caption and Lyrics"
+    }
+  },
+  "10": {
+    "inputs": {
+      "conditioning": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Negative (Zero Out)"
+    }
+  },
+  "15": {
+    "inputs": {
+      "seconds": [
+        "13",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyMiniMaxMusic3LatentAudio",
+    "_meta": {
+      "title": "Empty Latent Audio"
+    }
+  },
+  "9": {
+    "inputs": {
+      "seed": 0,
+      "steps": 30,
+      "cfg": 1.7,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "6",
+        0
+      ],
+      "positive": [
+        "13",
+        0
+      ],
+      "negative": [
+        "10",
+        0
+      ],
+      "latent_image": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "12": {
+    "inputs": {
+      "samples": [
+        "9",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "35": {
+    "inputs": {
+      "audio": [
+        "12",
+        0
+      ],
+      "filename_prefix": "AIMS_MiniMax_Music3_Song",
+      "format": "wav",
+      "also_mp3": false
+    },
+    "class_type": "SaveModernAudio",
+    "_meta": {
+      "title": "Save Audio WAV"
+    }
+  }
+}

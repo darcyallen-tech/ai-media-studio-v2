@@ -36,6 +36,7 @@ import {
   storyboardRefItems,
 } from "./storyboard";
 import { readJson } from "./http";
+import { importOsFiles } from "./osImport";
 import { toast } from "./toast";
 import CreativeEnhanceToggle from "./CreativeEnhanceToggle";
 import { useXaiKey } from "./useXaiKey";
@@ -238,6 +239,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const [aceSampler, setAceSampler] = useState("er_sde");
   const [aceScheduler, setAceScheduler] = useState("linear_quadratic");
   const [aceDenoise, setAceDenoise] = useState("1.0");
+  const [yueLyrics, setYueLyrics] = useState("");
+  const [yueSteps, setYueSteps] = useState("32");
+  const [yueRandAbc, setYueRandAbc] = useState(true);
+  const [yueRandMusic, setYueRandMusic] = useState(true);
+  const [yueRandSampler, setYueRandSampler] = useState(true);
+  const [yueSeedMusic, setYueSeedMusic] = useState("");
+  const [yueSeedSampler, setYueSeedSampler] = useState("");
+  const [yueSeedAbc, setYueSeedAbc] = useState("");
+  const [yueMode, setYueMode] = useState("full");
+  const [yueAbc, setYueAbc] = useState("");
+  const [yueAudioPath, setYueAudioPath] = useState("");
+  const [yueAudioName, setYueAudioName] = useState("");
+  const [yueCoverMode, setYueCoverMode] = useState("melody");
+  const yueAudioRef = useRef<HTMLInputElement | null>(null);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [numImages, setNumImages] = useState(1);
   const [draft, setDraft] = useState(false);
@@ -267,8 +282,13 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
   const isAce = /ace.?step/i.test(
     `${selectedModel?.id || ""} ${selectedModel?.label || ""}`,
   );
+  const yueId = `${selectedModel?.id || ""} ${selectedModel?.endpoint || ""}`.toLowerCase();
+  const isYue2 = yueId.includes("yue2");
+  const isYueCover = yueId.includes("yue2-cover") || yueId.includes("yue2 cover");
+  const isYueRerender = yueId.includes("yue2-rerender") || yueId.includes("yue2 rerender");
+  const isYueT2m = isYue2 && !isYueCover && !isYueRerender;
   useEffect(() => {
-    if (!isAce) return;
+    if (!isAce && !isYue2) return;
     const ac = new AbortController();
     fetch("/settings", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
@@ -278,7 +298,22 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       })
       .catch(() => undefined);
     return () => ac.abort();
-  }, [isAce]);
+  }, [isAce, isYue2]);
+  useEffect(() => {
+    const onRerender = (event: Event) => {
+      const abc = String((event as CustomEvent<{ abc?: string }>).detail?.abc || "");
+      if (!abc.trim()) return;
+      setYueAbc(abc);
+      const hit = models.find((row) => {
+        const blob = `${row.id || ""} ${row.endpoint || ""}`.toLowerCase();
+        return blob.includes("yue2-rerender") || blob.includes("yue2 rerender");
+      });
+      if (hit) setModelId(hit.id);
+      toast("ABC is in Re-render. Generate to render that score.");
+    };
+    window.addEventListener("aims-yue-rerender", onRerender);
+    return () => window.removeEventListener("aims-yue-rerender", onRerender);
+  }, [models]);
   const isFrame = mode === "frame";
   const isStoryboard = mode === "storyboard";
   const maxRefs = data.maxRefs || maxRefImages(selectedModel, modality);
@@ -385,6 +420,11 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       if (!okFront && !okVid) missing.push(`Element ${i + 1} frontal still`);
     }
   }
+  if (isYue2 && !/\[[^\]]+\]/.test(yueLyrics)) {
+    missing.push("Lyrics need a [Section] tag");
+  }
+  if (isYueCover && !yueAudioPath) missing.push("Reference audio");
+  if (isYueRerender && !yueAbc.trim()) missing.push("ABC score");
 
   const canGenerate =
     Boolean(modelId) &&
@@ -426,9 +466,20 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       setPrompt((cur) => mergeDirectorBlock(cur, data.incomingPrompt || ""));
       return;
     }
-    setPrompt(data.incomingPrompt);
     const pack = data.incomingAcePack;
-    if (pack) applyAcePack(pack);
+    const style = (pack?.tags || data.incomingPrompt || "").trim();
+    if (style) setPrompt(style);
+    else setPrompt(data.incomingPrompt);
+    if (!pack) return;
+    const lyrics = pack.lyrics != null ? String(pack.lyrics) : "";
+    if (typeof pack.instrumental === "boolean") setInstrumental(pack.instrumental);
+    if (isYue2 && lyrics.trim()) setYueLyrics(lyrics);
+    if (isAce) {
+      applyAcePack({ ...pack, tags: style || pack.tags, lyrics });
+      return;
+    }
+    if (isYue2) return;
+    applyAcePack(pack);
   }, [incomingToken, data.incomingPrompt, data.incomingPromptMode, data.incomingAcePack]);
 
   useEffect(() => {
@@ -613,10 +664,17 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       ? storyboardDurationChoices(selectedModel)
       : durationOptions(selectedModel);
     const def = selectedModel.default_duration || opts[0] || "";
-    setDuration((cur) => {
-      if (cur && (!opts.length || opts.includes(cur))) return cur;
-      return def;
-    });
+    const yueModel = `${selectedModel.endpoint || ""} ${selectedModel.id || ""}`
+      .toLowerCase()
+      .includes("yue2");
+    if (yueModel) {
+      setDuration(def);
+    } else {
+      setDuration((cur) => {
+        if (cur && (!opts.length || opts.includes(cur))) return cur;
+        return def;
+      });
+    }
     const as = selectedModel.aspect_choices ?? [];
     setAspect(selectedModel.default_aspect || as[0] || "");
     const resOpts = resolutionOptions(selectedModel);
@@ -840,7 +898,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         : {};
       if (isAudio && modality === "music") {
         extra.tags = composed;
-        extra.lyrics = aceLyrics;
+        extra.lyrics = isYue2 ? yueLyrics : aceLyrics;
         const bpmN = parseInt(aceBpm, 10);
         if (aceBpm.trim() && Number.isFinite(bpmN)) extra.bpm = bpmN;
         if (aceKey.trim()) extra.keyscale = aceKey.trim();
@@ -857,6 +915,39 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           extra.scheduler = aceScheduler.trim() || "linear_quadratic";
           const denN = parseFloat(aceDenoise);
           extra.denoise = Number.isFinite(denN) ? denN : 1.0;
+        }
+        if (isYue2) {
+          if (aceComfyUrl.trim()) extra.comfy_url = aceComfyUrl.trim();
+          const yueStepsN = parseInt(yueSteps, 10);
+          extra.steps = Number.isFinite(yueStepsN) ? yueStepsN : 32;
+          extra.seed_music_randomize = yueRandMusic;
+          extra.seed_sampler_randomize = yueRandSampler;
+          const musicSeed = parseInt(yueSeedMusic, 10);
+          if (!yueRandMusic && yueSeedMusic.trim() && Number.isFinite(musicSeed)) {
+            extra.seed_music = musicSeed;
+          }
+          const samplerSeed = parseInt(yueSeedSampler, 10);
+          if (!yueRandSampler && yueSeedSampler.trim() && Number.isFinite(samplerSeed)) {
+            extra.seed_sampler = samplerSeed;
+          }
+          if (isYueT2m) {
+            extra.mode = yueMode || "full";
+            extra.seed_abc_randomize = yueRandAbc;
+            const abcSeed = parseInt(yueSeedAbc, 10);
+            if (!yueRandAbc && yueSeedAbc.trim() && Number.isFinite(abcSeed)) {
+              extra.seed_abc = abcSeed;
+            }
+          }
+          if (isYueCover) {
+            extra.audio_path = yueAudioPath;
+            extra.mode = yueCoverMode;
+            extra.sheetsage_mode = yueCoverMode;
+            extra.music_mode = yueCoverMode;
+          }
+          if (isYueRerender) {
+            extra.mode = yueMode || "full";
+            extra.abc = yueAbc;
+          }
         }
       }
       if (seedreamBoxes.length) {
@@ -964,18 +1055,29 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         }),
       });
       const body = (await res.json()) as GenerateResponse & { detail?: string };
+      const failYue = (msg: string) => {
+        setSwitchOffer(null);
+        setError(msg.startsWith("Failed") ? msg : `Failed: ${msg}`);
+        setLoading(false);
+        setPhase("idle");
+      };
       if (!res.ok) {
         const msg =
           typeof body.detail === "string"
             ? body.detail
-            : body.error || `Generate failed (${res.status})`;
+            : body.error || body.status || `Generate failed (${res.status})`;
         if (typeof body.prompt === "string" && body.prompt.trim()) {
           setPrompt(body.prompt);
+        }
+        if (isYue2) {
+          failYue(msg);
+          return;
         }
         showSwitch(body.switch, msg);
         if (
           !body.switch &&
           (isAce ||
+            isYue2 ||
             /could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             isComfyAlert(msg))
@@ -989,10 +1091,15 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
         if (typeof body.prompt === "string" && body.prompt.trim()) {
           setPrompt(body.prompt);
         }
+        if (isYue2) {
+          failYue(msg);
+          return;
+        }
         showSwitch(body.switch, msg);
         if (
           !body.switch &&
           (isAce ||
+            isYue2 ||
             /could not fetch the source/i.test(msg) ||
             /re-upload retry failed/i.test(msg) ||
             /content_policy|partner_validation|422/i.test(msg) ||
@@ -1324,7 +1431,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
 
         {!isFrame && (durs.length > 0 || aspects.length > 0 || resolutions.length > 0 || showAudio || voices.length > 0 || Boolean(selectedModel?.supports_draft) || isAudio && modality === "music") ? (
           <div className="params">
-            {durs.length > 0 ? (
+            {durs.length > 0 && !isYue2 ? (
               <label className="param">
                 <span>Duration</span>
                 <select
@@ -1398,7 +1505,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
                 </select>
               </label>
             ) : null}
-            {isAudio && modality === "music" ? (
+            {isAudio && modality === "music" && !isYue2 ? (
               <label className="param check">
                 <input
                   type="checkbox"
@@ -1483,15 +1590,236 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
           </div>
         ) : null}
 
+        {isYue2 ? (
+          <div className="yue-music">
+            <label className="builder-field" htmlFor="yue-style">
+              <span className="field-label">Style</span>
+              <textarea
+                id="yue-style"
+                className="prompt nodrag nowheel yue-pair"
+                rows={5}
+                placeholder="Style, genre, production…"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+              />
+            </label>
+            <label className="builder-field" htmlFor="yue-lyrics">
+              <span className="field-label">Lyrics</span>
+              <textarea
+                id="yue-lyrics"
+                className="prompt nodrag nowheel yue-pair"
+                rows={5}
+                placeholder="YuE2 needs section tags — Apply fills these."
+                value={yueLyrics}
+                onChange={(e) => setYueLyrics(e.target.value)}
+              />
+            </label>
+            <label className="param check">
+              <input
+                type="checkbox"
+                checked={instrumental}
+                onChange={(e) => setInstrumental(e.target.checked)}
+              />
+              Instrumental
+            </label>
+            {durs.length > 0 ? (
+              <label className="param">
+                <span>Duration</span>
+                <select
+                  className="model nodrag"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                >
+                  {durs.map((tok) => (
+                    <option key={tok} value={tok}>
+                      {formatDurationToken(tok)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {isYueT2m || isYueRerender ? (
+              <label className="param">
+                <span>Mode</span>
+                <select
+                  className="model nodrag"
+                  value={yueMode}
+                  onChange={(e) => setYueMode(e.target.value)}
+                >
+                  <option value="full">full</option>
+                  <option value="melody">melody</option>
+                </select>
+              </label>
+            ) : null}
+            {isYue2 && Number(duration) > 480 ? (
+              <p className="hint warn">
+                {duration}s is a long YuE2 run. Generate Music allows up to 900s.
+              </p>
+            ) : null}
+            <p className="hint">
+              Duration is the Generate Music budget. The latent stays linked to the encoded length.
+              Cost $0.00. YuE2 weights are CC-BY-NC (personal/testing; not for selling tracks as-is).
+            </p>
+            {isYueCover ? (
+              <>
+                <label className="builder-field">
+                  <span className="field-label">Reference audio</span>
+                  <button
+                    type="button"
+                    className="ghost nodrag"
+                    onClick={() => yueAudioRef.current?.click()}
+                  >
+                    {yueAudioName || "Choose clip…"}
+                  </button>
+                  <input
+                    ref={yueAudioRef}
+                    type="file"
+                    hidden
+                    accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      void importOsFiles([file]).then((items) => {
+                        const item = items[0];
+                        if (!item?.path) return;
+                        setYueAudioPath(item.path);
+                        setYueAudioName(item.name || file.name);
+                      });
+                    }}
+                  />
+                </label>
+                <label className="param">
+                  <span>Melody mode</span>
+                  <select
+                    className="model nodrag"
+                    value={yueCoverMode}
+                    onChange={(e) => setYueCoverMode(e.target.value)}
+                  >
+                    <option value="melody">melody</option>
+                    <option value="full">full</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {isYueRerender ? (
+              <label className="builder-field">
+                <span className="field-label">ABC score</span>
+                <textarea
+                  className="prompt nodrag nowheel"
+                  rows={5}
+                  placeholder="Paste the ABC score to re-render"
+                  value={yueAbc}
+                  onChange={(e) => setYueAbc(e.target.value)}
+                />
+              </label>
+            ) : null}
+            <details className="advanced nodrag">
+              <summary>Advanced</summary>
+              <div className="advanced-body">
+                {isYueT2m ? (
+                  <>
+                    <label className="param">
+                      <span>ABC seed</span>
+                      <input
+                        className="model nodrag"
+                        type="number"
+                        inputMode="numeric"
+                        placeholder={yueRandAbc ? "random" : "graph default"}
+                        value={yueSeedAbc}
+                        disabled={yueRandAbc}
+                        onChange={(e) => setYueSeedAbc(e.target.value)}
+                      />
+                    </label>
+                    <label className="param check">
+                      <input
+                        type="checkbox"
+                        checked={yueRandAbc}
+                        onChange={(e) => setYueRandAbc(e.target.checked)}
+                      />
+                      Randomize
+                    </label>
+                  </>
+                ) : null}
+                <label className="param">
+                  <span>Music seed</span>
+                  <input
+                    className="model nodrag"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={yueRandMusic ? "random" : "graph default"}
+                    value={yueSeedMusic}
+                    disabled={yueRandMusic}
+                    onChange={(e) => setYueSeedMusic(e.target.value)}
+                  />
+                </label>
+                <label className="param check">
+                  <input
+                    type="checkbox"
+                    checked={yueRandMusic}
+                    onChange={(e) => setYueRandMusic(e.target.checked)}
+                  />
+                  Randomize
+                </label>
+                <label className="param">
+                  <span>Sampler seed</span>
+                  <input
+                    className="model nodrag"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder={yueRandSampler ? "random" : "graph default"}
+                    value={yueSeedSampler}
+                    disabled={yueRandSampler}
+                    onChange={(e) => setYueSeedSampler(e.target.value)}
+                  />
+                </label>
+                <label className="param check">
+                  <input
+                    type="checkbox"
+                    checked={yueRandSampler}
+                    onChange={(e) => setYueRandSampler(e.target.checked)}
+                  />
+                  Randomize
+                </label>
+                <label className="param">
+                  <span>Steps</span>
+                  <input
+                    className="model nodrag"
+                    type="number"
+                    min={1}
+                    max={150}
+                    value={yueSteps}
+                    onChange={(e) => setYueSteps(e.target.value)}
+                  />
+                </label>
+                <label className="builder-field">
+                  <span className="field-label">Comfy URL</span>
+                  <input
+                    className="model nodrag"
+                    value={aceComfyUrl}
+                    placeholder="http://127.0.0.1:8188"
+                    onChange={(e) => setAceComfyUrl(e.target.value)}
+                  />
+                </label>
+                <p className="hint">
+                  CFG stays 1, sampler dpm_2, scheduler sgm_uniform. Settings COMFY_URL only.
+                </p>
+              </div>
+            </details>
+          </div>
+        ) : (
+          <>
         <label className="field-label" htmlFor="prompt">
-          Prompt
+          {isAce ? "Style" : "Prompt"}
         </label>
         <textarea
           id="prompt"
           className="prompt nodrag nowheel"
           rows={5}
           placeholder={
-            isFrame
+            isAce
+              ? "Style / tags, arrangement…"
+              : isFrame
               ? "What to change on the pinned frames…"
               : isAudio && modality === "voice"
               ? "Script to speak…"
@@ -1511,8 +1839,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             {fibo15Legend(data.source, characters, scenes)}
           </p>
         ) : null}
+          </>
+        )}
 
-        {!isFrame && !isStoryboard ? (
+        {!isFrame && !isStoryboard && !isYue2 ? (
           <details className="advanced nodrag">
             <summary>Advanced</summary>
             <div className="advanced-body">

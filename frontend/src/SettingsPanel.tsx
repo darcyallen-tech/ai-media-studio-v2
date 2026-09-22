@@ -391,7 +391,8 @@ export default function SettingsPanel({
         <p className="hint">
           Character Front / angles / Confirm and ACE-Step talk to ComfyUI at this
           URL only (default http://127.0.0.1:8188). Start Comfy first. This app
-          on :8000 is not Comfy.
+          on :8000 is not Comfy. Character Builder Local Comfy is available when
+          this status is Connected; the Local toggle is disabled while Offline.
         </p>
         <label className="settings-field">
           <span>COMFY_URL</span>

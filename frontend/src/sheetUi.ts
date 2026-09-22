@@ -74,35 +74,110 @@ export const LOCAL_COMFY_CONFIRM: ModelRow = {
   notes: "Local Comfy SeedVR2 Confirm upscale (3840 long edge). Start ComfyUI.",
 };
 
-/** Always prepend Local Comfy rows so a stale GET /models cannot hide them. */
-export function withLocalComfyModels(
+/** Fal lists only — never inject Local Comfy rows. */
+export function withoutLocalComfyModels(
   rows: ModelRow[] | undefined | null,
-  kind: "t2i" | "r2i",
 ): ModelRow[] {
-  const extras = kind === "t2i" ? [LOCAL_COMFY_T2I] : [LOCAL_COMFY_R2I];
-  const seen = new Set(extras.map((e) => e.id));
-  const rest = (Array.isArray(rows) ? rows : []).filter(
-    (r) => r?.id && !seen.has(r.id),
+  return (Array.isArray(rows) ? rows : []).filter(
+    (r) => r?.id && !isLocalComfyModel(r),
   );
-  return [...extras, ...rest];
+}
+
+export const CHAR_PROVIDER_KEY = "ams-character-provider";
+export type CharProvider = "local" | "cloud";
+
+export const LOCAL_WORKFLOWS = {
+  front: "ZimageTurbo T2I.json",
+  angle: "Qwen R2I - Multiple Angles Generator.json",
+  confirm: "SeedVR2 Image Upscale.json",
+} as const;
+
+export function comfyCostLine(workflow: string): string {
+  return `provider: comfy | workflow: ${workflow} | $0.00`;
+}
+
+export const ANGLE_CAM_PRESETS: Record<
+  string,
+  { h: number; v: number; zoom: number }
+> = {
+  front: { h: 0, v: 0, zoom: 4 },
+  side: { h: 90, v: 0, zoom: 4 },
+  closeup: { h: 0, v: 0, zoom: 10 },
+  threequarter_front: { h: 45, v: 0, zoom: 4 },
+  back: { h: 180, v: 0, zoom: 4 },
+  threequarter_back: { h: 135, v: 0, zoom: 4 },
+  top: { h: 0, v: 70, zoom: 4 },
+};
+
+/** Display-only Qwen Multiangle readout. Do not send this as an identity prompt. */
+export function qwenCameraReadout(h: number, v: number, zoom: number): string {
+  const hAngle = ((Number(h) % 360) + 360) % 360;
+  let hDir = "front view";
+  if (hAngle < 22.5 || hAngle >= 337.5) hDir = "front view";
+  else if (hAngle < 67.5) hDir = "front-right quarter view";
+  else if (hAngle < 112.5) hDir = "right side view";
+  else if (hAngle < 157.5) hDir = "back-right quarter view";
+  else if (hAngle < 202.5) hDir = "back view";
+  else if (hAngle < 247.5) hDir = "back-left quarter view";
+  else if (hAngle < 292.5) hDir = "left side view";
+  else hDir = "front-left quarter view";
+  let vDir = "eye-level shot";
+  if (v < -15) vDir = "low-angle shot";
+  else if (v < 15) vDir = "eye-level shot";
+  else if (v < 45) vDir = "elevated shot";
+  else vDir = "high-angle shot";
+  let dist = "medium shot";
+  if (zoom < 4) dist = "wide shot";
+  else if (zoom < 8) dist = "medium shot";
+  else dist = "close-up";
+  return `<sks> ${hDir} ${vDir} ${dist}`;
+}
+
+export function readCharProvider(): CharProvider | null {
+  try {
+    const raw = sessionStorage.getItem(CHAR_PROVIDER_KEY);
+    if (raw === "local" || raw === "cloud") return raw;
+  } catch {
+    /* private mode */
+  }
+  return null;
+}
+
+export function writeCharProvider(value: CharProvider) {
+  try {
+    sessionStorage.setItem(CHAR_PROVIDER_KEY, value);
+  } catch {
+    /* private mode */
+  }
 }
 
 export function useComfyStatus() {
   const [ok, setOk] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
+    let live = true;
     const ping = () => {
       fetch("/comfy/status")
         .then((res) => (res.ok ? res.json() : null))
         .then((body: { status?: string; ok?: boolean } | null) => {
+          if (!live) return;
           setOk(body?.status === "Connected");
         })
-        .catch(() => setOk(false));
+        .catch(() => {
+          if (live) setOk(false);
+        })
+        .finally(() => {
+          if (live) setReady(true);
+        });
     };
     ping();
     const id = window.setInterval(ping, 15000);
-    return () => window.clearInterval(id);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
   }, []);
-  return ok;
+  return { ok, ready };
 }
 
 export const CORE_SLOTS = ["front", "side", "closeup"] as const;
@@ -1650,13 +1725,12 @@ export function pickQwenImage3(
   });
 }
 
-/** Extra-angle R2I: Qwen Image 3 when listed, else the builder fallback. */
+/** Extra-angle R2I: Qwen Image 3 when listed, else the builder fallback. Cloud/fal only. */
 export function extraAngleR2iRow(
   slot: string,
   rows: ModelRow[] | undefined | null,
   fallback?: ModelRow | null,
 ): ModelRow | undefined {
-  if (isLocalComfyModel(fallback)) return fallback || undefined;
   if (isQwenDefaultAngleSlot(slot)) {
     const qwen = pickQwenImage3(rows);
     if (qwen) return qwen;
@@ -1961,29 +2035,22 @@ function pickModelId(cur: string, preferred: string | undefined, rows: ModelRow[
   return rows[0]?.id || "";
 }
 
-export function useSheetModels(opts?: { localComfy?: boolean }) {
-  const localComfy = Boolean(opts?.localComfy);
-  const comfyOk = useComfyStatus();
-  const [t2i, setT2i] = useState<ModelRow[]>(() => withLocalComfyModels([], "t2i"));
-  const [r2i, setR2i] = useState<ModelRow[]>(() => withLocalComfyModels([], "r2i"));
+export function useSheetModels() {
+  const [t2i, setT2i] = useState<ModelRow[]>([]);
+  const [r2i, setR2i] = useState<ModelRow[]>([]);
   const [composeR2i, setComposeR2i] = useState<ModelRow[]>([]);
   const [t2iId, setT2iIdRaw] = useState("");
   const [r2iId, setR2iIdRaw] = useState("");
-  const [t2iTouched, setT2iTouched] = useState(false);
-  const [r2iTouched, setR2iTouched] = useState(false);
   useEffect(() => {
     const ac = new AbortController();
     fetch("/models?mode=image&modality=t2i", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : { models: [] }))
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const rows = asModelRows(body.models).filter(sheetModel);
-        const list = withLocalComfyModels(rows, "t2i");
+        const list = withoutLocalComfyModels(
+          asModelRows(body.models).filter(sheetModel),
+        );
         setT2i(list);
-        setT2iIdRaw((cur) => {
-          if (cur && list.some((r) => r.id === cur)) return cur;
-          if (localComfy && comfyOk) return LOCAL_ZIMAGE_ID;
-          return pickModelId(cur, body.default_id, rows);
-        });
+        setT2iIdRaw((cur) => pickModelId(cur, body.default_id, list));
       })
       .catch((err: unknown) => {
         console.error("T2I catalog load failed", err);
@@ -1991,31 +2058,18 @@ export function useSheetModels(opts?: { localComfy?: boolean }) {
     fetch("/models?mode=image&modality=r2i", { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : { models: [] }))
       .then((body: { models?: ModelRow[]; default_id?: string }) => {
-        const all = asModelRows(body.models);
-        const rows = all.filter(sheetModel);
+        const all = withoutLocalComfyModels(asModelRows(body.models));
+        const list = all.filter(sheetModel);
         const compose = all.filter(sheetComposeModel);
-        const list = withLocalComfyModels(rows, "r2i");
         setR2i(list);
         setComposeR2i(compose);
-        setR2iIdRaw((cur) => {
-          if (cur && list.some((r) => r.id === cur)) return cur;
-          if (localComfy && comfyOk) return LOCAL_QWEN_ID;
-          return pickModelId(cur, body.default_id, rows);
-        });
+        setR2iIdRaw((cur) => pickModelId(cur, body.default_id, list));
       })
       .catch((err: unknown) => {
         console.error("R2I catalog load failed", err);
       });
     return () => ac.abort();
-  }, [localComfy, comfyOk]);
-  useEffect(() => {
-    if (!localComfy || !comfyOk || t2iTouched) return;
-    setT2iIdRaw(LOCAL_ZIMAGE_ID);
-  }, [localComfy, comfyOk, t2iTouched]);
-  useEffect(() => {
-    if (!localComfy || !comfyOk || r2iTouched) return;
-    setR2iIdRaw(LOCAL_QWEN_ID);
-  }, [localComfy, comfyOk, r2iTouched]);
+  }, []);
   const t2iSafe = t2i.some((r) => r.id === t2iId) ? t2iId : t2i[0]?.id || "";
   const r2iSafe = r2i.some((r) => r.id === r2iId) ? r2iId : r2i[0]?.id || "";
   return {
@@ -2024,13 +2078,10 @@ export function useSheetModels(opts?: { localComfy?: boolean }) {
     composeR2i,
     t2iId: t2iSafe,
     r2iId: r2iSafe,
-    comfyOk,
     setT2iId: (id: string) => {
-      setT2iTouched(true);
       setT2iIdRaw(t2i.some((r) => r.id === id) ? id : t2i[0]?.id || "");
     },
     setR2iId: (id: string) => {
-      setR2iTouched(true);
       setR2iIdRaw(r2i.some((r) => r.id === id) ? id : r2i[0]?.id || "");
     },
   };

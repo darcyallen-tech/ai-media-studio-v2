@@ -1,0 +1,136 @@
+{
+  "45": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "example.mp3"
+    }
+  },
+  "43": {
+    "class_type": "AudioEncoderLoader",
+    "inputs": {
+      "audio_encoder_name": "sheetsage2_bf16.safetensors"
+    }
+  },
+  "41": {
+    "class_type": "SheetSage2AudioToABC",
+    "inputs": {
+      "audio_encoder": [
+        "43",
+        0
+      ],
+      "audio": [
+        "45",
+        0
+      ],
+      "mode": "melody"
+    }
+  },
+  "44": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "41",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "yue2_3b_bf16.safetensors"
+    }
+  },
+  "25": {
+    "class_type": "YuE2GenerateMusic",
+    "inputs": {
+      "clip": [
+        "15",
+        1
+      ],
+      "style": "modern hard rock cover, arena rock production, crushing guitars, big drums, powerful male rock vocal, keep the original melody, high energy, polished mix",
+      "lyrics": "[Verse]\n(paste or write cover lyrics here — match the reference melody sections)\n\n[Chorus]\n(chorus lyrics)",
+      "abc": [
+        "41",
+        0
+      ],
+      "seed": 42,
+      "mode": "melody",
+      "max_duration": 120.0,
+      "temperature": 1.0,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2
+    }
+  },
+  "18": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "25",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "EmptyYuE2LatentAudio",
+    "inputs": {
+      "seconds": [
+        "25",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "15",
+        0
+      ],
+      "seed": 42,
+      "steps": 32,
+      "cfg": 1.0,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1.0,
+      "positive": [
+        "25",
+        0
+      ],
+      "negative": [
+        "18",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "15",
+        2
+      ]
+    }
+  },
+  "109": {
+    "class_type": "SaveModernAudio",
+    "inputs": {
+      "audio": [
+        "9",
+        0
+      ],
+      "filename_prefix": "AIMS_YuE2_Cover",
+      "format": "wav",
+      "also_mp3": false
+    }
+  }
+}

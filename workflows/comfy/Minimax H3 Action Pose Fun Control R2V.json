@@ -1,0 +1,632 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load Video VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load Audio VAE"
+    }
+  },
+  "5": {
+    "inputs": {
+      "value": "<Picture 1> is the character. Keep the same face, body, and clothes. Perform the action from the pose control with natural weight and limb clarity. Minimal camera move."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Prompt (action + identity lock)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "value": 5.0
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Duration Seconds"
+    }
+  },
+  "7": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Lightning Enable"
+    }
+  },
+  "8": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Seed"
+    }
+  },
+  "9": {
+    "inputs": {
+      "aspect_ratio": "16:9",
+      "resolution": "High Detail (1.00 MP) \u2014 1344\u00d7768"
+    },
+    "class_type": "MiniMaxH3Resolutions",
+    "_meta": {
+      "title": "MiniMax H3 Resolutions"
+    }
+  },
+  "10": {
+    "inputs": {
+      "expression": "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17",
+      "values.a": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "ComfyMathExpression",
+    "_meta": {
+      "title": "Length From Duration"
+    }
+  },
+  "50": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Use 8-step turbo"
+    }
+  },
+  "11": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "FL2V Turbo 4-step LoRA"
+    }
+  },
+  "51": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "FL2V Turbo 8-step LoRA"
+    }
+  },
+  "52": {
+    "inputs": {
+      "switch": [
+        "50",
+        0
+      ],
+      "on_false": [
+        "11",
+        0
+      ],
+      "on_true": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Turbo Tier"
+    }
+  },
+  "12": {
+    "inputs": {
+      "switch": [
+        "7",
+        0
+      ],
+      "on_false": [
+        "1",
+        0
+      ],
+      "on_true": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Model"
+    }
+  },
+  "13": {
+    "inputs": {
+      "value": 20
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps Quality"
+    }
+  },
+  "14": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps Lightning 4"
+    }
+  },
+  "53": {
+    "inputs": {
+      "value": 8
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Steps Lightning 8"
+    }
+  },
+  "54": {
+    "inputs": {
+      "switch": [
+        "50",
+        0
+      ],
+      "on_false": [
+        "14",
+        0
+      ],
+      "on_true": [
+        "53",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Steps Turbo"
+    }
+  },
+  "15": {
+    "inputs": {
+      "switch": [
+        "7",
+        0
+      ],
+      "on_false": [
+        "13",
+        0
+      ],
+      "on_true": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Steps"
+    }
+  },
+  "16": {
+    "inputs": {
+      "sampler_name": "res_multistep"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler Quality"
+    }
+  },
+  "17": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler Lightning"
+    }
+  },
+  "18": {
+    "inputs": {
+      "switch": [
+        "7",
+        0
+      ],
+      "on_false": [
+        "16",
+        0
+      ],
+      "on_true": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Sampler"
+    }
+  },
+  "19": {
+    "inputs": {
+      "value": 12.0
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Shift Video Quality"
+    }
+  },
+  "20": {
+    "inputs": {
+      "value": 6.0
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Shift Video Lightning"
+    }
+  },
+  "21": {
+    "inputs": {
+      "switch": [
+        "7",
+        0
+      ],
+      "on_false": [
+        "19",
+        0
+      ],
+      "on_true": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "Switch Shift Video"
+    }
+  },
+  "40": {
+    "inputs": {
+      "image": "01_0e329e.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "REF_IMAGE_1 (identity sheet)"
+    }
+  },
+  "61": {
+    "inputs": {
+      "name": "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors"
+    },
+    "class_type": "ModelPatchLoader",
+    "_meta": {
+      "title": "Fun ControlNet Patch"
+    }
+  },
+  "62": {
+    "inputs": {
+      "value": 0.75
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Control Strength"
+    }
+  },
+  "63": {
+    "inputs": {
+      "value": 0.0
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Control Start"
+    }
+  },
+  "64": {
+    "inputs": {
+      "value": 0.7
+    },
+    "class_type": "PrimitiveFloat",
+    "_meta": {
+      "title": "Control End"
+    }
+  },
+  "65": {
+    "inputs": {
+      "model": [
+        "12",
+        0
+      ],
+      "model_patch": [
+        "61",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "strength": [
+        "62",
+        0
+      ],
+      "start_percent": [
+        "63",
+        0
+      ],
+      "end_percent": [
+        "64",
+        0
+      ],
+      "control_video": [
+        "71",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3FunControlNetApply",
+    "_meta": {
+      "title": "H3 Fun Control (pose)"
+    }
+  },
+  "23": {
+    "inputs": {
+      "prompt": [
+        "5",
+        0
+      ],
+      "width": [
+        "9",
+        0
+      ],
+      "height": [
+        "9",
+        1
+      ],
+      "length": [
+        "10",
+        1
+      ],
+      "ref_image_size": "match",
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "ref_images.ref_image_0": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "_meta": {
+      "title": "H3 R2V (identity ref)"
+    }
+  },
+  "22": {
+    "inputs": {
+      "model": [
+        "65",
+        0
+      ],
+      "shift_video": [
+        "21",
+        0
+      ],
+      "shift_audio": 3.0
+    },
+    "class_type": "MiniMaxH3SigmaShift",
+    "_meta": {
+      "title": "MiniMaxH3 Sigma Shift"
+    }
+  },
+  "24": {
+    "inputs": {
+      "model": [
+        "22",
+        0
+      ],
+      "conditioning": [
+        "23",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "BasicGuider"
+    }
+  },
+  "25": {
+    "inputs": {
+      "model": [
+        "22",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": [
+        "15",
+        0
+      ],
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "BasicScheduler"
+    }
+  },
+  "26": {
+    "inputs": {
+      "noise": [
+        "8",
+        0
+      ],
+      "guider": [
+        "24",
+        0
+      ],
+      "sampler": [
+        "18",
+        0
+      ],
+      "sigmas": [
+        "25",
+        0
+      ],
+      "latent_image": [
+        "23",
+        1
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "27": {
+    "inputs": {
+      "anything": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Used"
+    }
+  },
+  "28": {
+    "inputs": {
+      "samples": [
+        "27",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode Video"
+    }
+  },
+  "29": {
+    "inputs": {
+      "samples": [
+        "27",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEDecodeAudio",
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "30": {
+    "inputs": {
+      "images": [
+        "28",
+        0
+      ],
+      "fps": 24.0,
+      "audio": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "31": {
+    "inputs": {
+      "video": [
+        "30",
+        0
+      ],
+      "filename_prefix": "video/MiniMax_H3_Action_Pose_R2V",
+      "format": "auto",
+      "codec": "auto"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Action Video"
+    }
+  },
+  "70": {
+    "inputs": {
+      "video": "",
+      "force_rate": 24.0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 124,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "None"
+    },
+    "class_type": "VHS_LoadVideoPath",
+    "_meta": {
+      "title": "ACTION_PLATE path (mp4)"
+    }
+  },
+  "71": {
+    "inputs": {
+      "image": [
+        "70",
+        0
+      ],
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "disable",
+      "resolution": 768,
+      "bbox_detector": "yolox_l.onnx",
+      "pose_estimator": "dw-ll_ucoco_384_bs5.torchscript.pt",
+      "scale_stick_for_xinsr_cn": "disable"
+    },
+    "class_type": "DWPreprocessor",
+    "_meta": {
+      "title": "DWPose from action plate"
+    }
+  }
+}

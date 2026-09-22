@@ -1,26 +1,1788 @@
 {
   "zimage_t2i": {
     "file": "ZimageTurbo T2I.json",
-    "prompt": ["CLIPTextEncode", "text"],
-    "aspect_ratio": ["ResolutionSelector", "aspect_ratio"],
-    "megapixels": ["ResolutionSelector", "megapixels"],
-    "seed": ["RandomNoise", "noise_seed"]
+    "prompt": [
+      "CLIPTextEncode",
+      "text"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "RandomNoise",
+      "noise_seed"
+    ]
   },
   "qwen_angle": {
     "file": "Qwen R2I - Multiple Angles Generator.json",
-    "image": ["IMAGE1", "image"],
-    "h_angle": ["QwenMultiangleCameraNode", "horizontal_angle"],
-    "v_angle": ["QwenMultiangleCameraNode", "vertical_angle"],
-    "zoom": ["QwenMultiangleCameraNode", "zoom"],
-    "prompt": ["TextEncodeQwenImageEditPlus", "prompt"],
-    "seed": ["KSampler", "seed"]
+    "image": [
+      "IMAGE1",
+      "image"
+    ],
+    "h_angle": [
+      "QwenMultiangleCameraNode",
+      "horizontal_angle"
+    ],
+    "v_angle": [
+      "QwenMultiangleCameraNode",
+      "vertical_angle"
+    ],
+    "zoom": [
+      "QwenMultiangleCameraNode",
+      "zoom"
+    ],
+    "default_prompts": [
+      "QwenMultiangleCameraNode",
+      "default_prompts"
+    ],
+    "prompt": [
+      "TextEncodeQwenImageEditPlus",
+      "prompt"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ]
   },
   "seedvr_confirm": {
     "file": "SeedVR2 Image Upscale.json",
-    "image": ["LoadImage", "image"],
-    "max_resolution": ["SeedVR2VideoUpscaler", "max_resolution"],
-    "batch_size": ["SeedVR2VideoUpscaler", "batch_size"],
-    "temporal_overlap": ["SeedVR2VideoUpscaler", "temporal_overlap"],
-    "prepend_frames": ["SeedVR2VideoUpscaler", "prepend_frames"]
+    "image": [
+      "LoadImage",
+      "image"
+    ],
+    "max_resolution": [
+      "SeedVR2VideoUpscaler",
+      "max_resolution"
+    ],
+    "batch_size": [
+      "SeedVR2VideoUpscaler",
+      "batch_size"
+    ],
+    "temporal_overlap": [
+      "SeedVR2VideoUpscaler",
+      "temporal_overlap"
+    ],
+    "prepend_frames": [
+      "SeedVR2VideoUpscaler",
+      "prepend_frames"
+    ]
+  },
+  "qwen_multi_r2i": {
+    "file": "QWEN IMAGE EDIT 2511 MULTI R2I.json",
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image2": [
+      "IMAGE2",
+      "image"
+    ],
+    "image3": [
+      "IMAGE3",
+      "image"
+    ],
+    "prompt": [
+      "Positive Prompt",
+      "prompt"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "prompt"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ]
+  },
+  "qwen_r2i_1ref": {
+    "file": "QWEN IMAGE EDIT 2511 R2I 1REF.json",
+    "prompt": [
+      "Positive Prompt",
+      "prompt"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "prompt"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image": [
+      "IMAGE1",
+      "image"
+    ]
+  },
+  "qwen_r2i_2ref": {
+    "file": "QWEN IMAGE EDIT 2511 R2I 2REF.json",
+    "prompt": [
+      "Positive Prompt",
+      "prompt"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "prompt"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image2": [
+      "IMAGE2",
+      "image"
+    ]
+  },
+  "qwen_multi_r2i_quality": {
+    "file": "QWEN IMAGE EDIT 2511 MULTI R2I QUALITY.json",
+    "prompt": [
+      "Positive Prompt",
+      "prompt"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "prompt"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image2": [
+      "IMAGE2",
+      "image"
+    ],
+    "image3": [
+      "IMAGE3",
+      "image"
+    ]
+  },
+  "qwen_multi_r2i_skin": {
+    "file": "QWEN IMAGE EDIT 2511 MULTI R2I SKIN.json",
+    "prompt": [
+      "Positive Prompt",
+      "prompt"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "prompt"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image2": [
+      "IMAGE2",
+      "image"
+    ],
+    "image3": [
+      "IMAGE3",
+      "image"
+    ]
+  },
+  "klein_multi_r2i": {
+    "file": "FLUX.2 KLEIN MULTI R2I.json",
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "image2": [
+      "IMAGE2",
+      "image"
+    ],
+    "image3": [
+      "IMAGE3",
+      "image"
+    ],
+    "prompt": [
+      "Prompt",
+      "text"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "SamplerCustom",
+      "noise_seed"
+    ],
+    "steps": [
+      "BasicScheduler",
+      "steps"
+    ],
+    "cfg": [
+      "SamplerCustom",
+      "cfg"
+    ]
+  },
+  "klein_r2i_1ref": {
+    "file": "FLUX.2 KLEIN R2I 1REF.json",
+    "image": [
+      "IMAGE1",
+      "image"
+    ],
+    "image1": [
+      "IMAGE1",
+      "image"
+    ],
+    "prompt": [
+      "Prompt",
+      "text"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "SamplerCustom",
+      "noise_seed"
+    ],
+    "steps": [
+      "BasicScheduler",
+      "steps"
+    ],
+    "cfg": [
+      "SamplerCustom",
+      "cfg"
+    ]
+  },
+  "zimage_sheet_front": {
+    "file": "ZIMAGE SHEET FRONT T2I.json",
+    "prompt": [
+      "Prompt",
+      "text"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "RandomNoise",
+      "noise_seed"
+    ]
+  },
+  "krea2_sheet_front": {
+    "file": "KREA2 TURBO SHEET FRONT T2I.json",
+    "prompt": [
+      "Prompt",
+      "text"
+    ],
+    "aspect_ratio": [
+      "ResolutionSelector",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "ResolutionSelector",
+      "megapixels"
+    ],
+    "seed": [
+      "SamplerCustom",
+      "noise_seed"
+    ]
+  },
+  "ace_turbo_song": {
+    "file": "ACE STEP 1.5 TURBO SONG.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ]
+  },
+  "ace_turbo_instrumental": {
+    "file": "ACE STEP 1.5 TURBO INSTRUMENTAL.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ]
+  },
+  "ace_xl_song": {
+    "file": "ACE STEP 1.5 XL QUALITY SONG.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ]
+  },
+  "minimax_music3_song": {
+    "file": "MINIMAX MUSIC 3 SONG.json",
+    "caption": [
+      "Caption and Lyrics",
+      "caption"
+    ],
+    "lyrics": [
+      "Caption and Lyrics",
+      "lyrics"
+    ],
+    "max_duration": [
+      "Caption and Lyrics",
+      "max_duration"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "duration": [
+      "Caption and Lyrics",
+      "max_duration"
+    ]
+  },
+  "minimax_music3_turbo": {
+    "file": "MINIMAX MUSIC 3 TURBO.json",
+    "caption": [
+      "Caption and Lyrics",
+      "caption"
+    ],
+    "lyrics": [
+      "Caption and Lyrics",
+      "lyrics"
+    ],
+    "max_duration": [
+      "Caption and Lyrics",
+      "max_duration"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "duration": [
+      "Caption and Lyrics",
+      "max_duration"
+    ]
+  },
+  "ace_xl_rock": {
+    "file": "ACE STEP 1.5 XL ROCK LORA SONG.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "lora_strength": [
+      "Rock LoRA (XL)",
+      "strength_model"
+    ]
+  },
+  "ace_turbo_rock": {
+    "file": "ACE STEP 1.5 TURBO ROCK LORA SONG.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "lora_strength": [
+      "Rock LoRA (Turbo)",
+      "strength_model"
+    ]
+  },
+  "ace_xl_rock_stack": {
+    "file": "ACE STEP 1.5 XL ROCK STACK DEMO.json",
+    "tags": [
+      "Tags and Lyrics",
+      "tags"
+    ],
+    "lyrics": [
+      "Tags and Lyrics",
+      "lyrics"
+    ],
+    "bpm": [
+      "Tags and Lyrics",
+      "bpm"
+    ],
+    "duration": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "seconds": [
+      "Duration (seconds)",
+      "seconds"
+    ],
+    "keyscale": [
+      "Tags and Lyrics",
+      "keyscale"
+    ],
+    "timesignature": [
+      "Tags and Lyrics",
+      "timesignature"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "steps": [
+      "KSampler",
+      "steps"
+    ],
+    "cfg": [
+      "KSampler",
+      "cfg"
+    ],
+    "lora_strength": [
+      "Rock LoRA (XL)",
+      "strength_model"
+    ],
+    "lora2_strength": [
+      "2nd LoRA (stack — optional)",
+      "strength_model"
+    ]
+  },
+  "wan_t2v_13b": {
+    "file": "Wan 2.1 T2V 1.3B.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "resolution_preset": [
+      "Wan Video Controls",
+      "resolution_preset"
+    ],
+    "aspect_ratio": [
+      "Wan Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Wan Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "Wan Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "Wan Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "Wan Video Controls",
+      "fps_preset"
+    ]
+  },
+  "wan_t2v_14b": {
+    "file": "Wan 2.1 T2V 14B FP8.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "resolution_preset": [
+      "Wan Video Controls",
+      "resolution_preset"
+    ],
+    "aspect_ratio": [
+      "Wan Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Wan Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "Wan Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "Wan Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "Wan Video Controls",
+      "fps_preset"
+    ]
+  },
+  "ltx25_t2v": {
+    "file": "LTX 2.5 T2V.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "RandomNoise",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "LTX Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "LTX Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "LTX Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "LTX Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "LTX Video Controls",
+      "fps_preset"
+    ],
+    "resolution_preset": [
+      "LTX Video Controls",
+      "resolution_preset"
+    ]
+  },
+  "ltx25_t2v_spatial": {
+    "file": "LTX 2.5 T2V Spatial Upscale.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "Random Noise Stage1",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "LTX Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "LTX Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "LTX Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "LTX Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "LTX Video Controls",
+      "fps_preset"
+    ],
+    "resolution_preset": [
+      "LTX Video Controls",
+      "resolution_preset"
+    ]
+  },
+  "ltx25_t2v_temporal": {
+    "file": "LTX 2.5 T2V Temporal Upscale.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "Random Noise Stage1",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "LTX Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "LTX Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "LTX Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "LTX Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "LTX Video Controls",
+      "fps_preset"
+    ],
+    "resolution_preset": [
+      "LTX Video Controls",
+      "resolution_preset"
+    ]
+  },
+  "wan22_ti2v_5b": {
+    "file": "Wan 2.2 TI2V 5B.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "resolution_preset": [
+      "Wan Video Controls",
+      "resolution_preset"
+    ],
+    "aspect_ratio": [
+      "Wan Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Wan Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "Wan Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "Wan Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "Wan Video Controls",
+      "fps_preset"
+    ]
+  },
+  "wan22_t2v_14b": {
+    "file": "Wan 2.2 T2V 14B.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler High Noise",
+      "noise_seed"
+    ],
+    "resolution_preset": [
+      "Wan Video Controls",
+      "resolution_preset"
+    ],
+    "aspect_ratio": [
+      "Wan Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Wan Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "Wan Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "Wan Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "Wan Video Controls",
+      "fps_preset"
+    ]
+  },
+  "wan22_t2v_14b_lightning": {
+    "file": "Wan 2.2 T2V 14B Lightning.json",
+    "prompt": [
+      "Positive Prompt",
+      "text"
+    ],
+    "negative": [
+      "Negative Prompt",
+      "text"
+    ],
+    "seed": [
+      "KSampler High Lightning",
+      "noise_seed"
+    ],
+    "resolution_preset": [
+      "Wan Video Controls",
+      "resolution_preset"
+    ],
+    "aspect_ratio": [
+      "Wan Video Controls",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Wan Video Controls",
+      "megapixels"
+    ],
+    "seconds": [
+      "Wan Video Controls",
+      "seconds"
+    ],
+    "fps": [
+      "Wan Video Controls",
+      "fps"
+    ],
+    "fps_preset": [
+      "Wan Video Controls",
+      "fps_preset"
+    ]
+  },
+  "minimax_h3_t2v": {
+    "file": "Minimax H3 T2V.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ]
+  },
+  "minimax_h3_i2v": {
+    "file": "Minimax H3 I2V.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "first_frame": [
+      "FIRST_FRAME",
+      "image"
+    ]
+  },
+  "minimax_h3_fl2v": {
+    "file": "Minimax H3 FL2V.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "first_frame": [
+      "FIRST_FRAME",
+      "image"
+    ],
+    "last_frame": [
+      "LAST_FRAME",
+      "image"
+    ]
+  },
+  "minimax_h3_r2v": {
+    "file": "Minimax H3 Reference 2 Video.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "ref_image_1": [
+      "REF_IMAGE_1",
+      "image"
+    ],
+    "ref_image_2": [
+      "REF_IMAGE_2",
+      "image"
+    ]
+  },
+  "minimax_h3_i2v_fun_control": {
+    "file": "Minimax H3 I2V Fun Control.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "first_frame": [
+      "FIRST_FRAME",
+      "image"
+    ],
+    "control_video": [
+      "CONTROL_VIDEO",
+      "image"
+    ],
+    "control_strength": [
+      "Control Strength",
+      "value"
+    ],
+    "control_start": [
+      "Control Start Percent",
+      "value"
+    ],
+    "control_end": [
+      "Control End Percent",
+      "value"
+    ]
+  },
+  "minimax_h3_t2v_fun_control": {
+    "file": "Minimax H3 T2V Fun Control.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "control_video": [
+      "CONTROL_VIDEO",
+      "image"
+    ],
+    "control_strength": [
+      "Control Strength",
+      "value"
+    ],
+    "control_start": [
+      "Control Start Percent",
+      "value"
+    ],
+    "control_end": [
+      "Control End Percent",
+      "value"
+    ]
+  },
+  "minimax_h3_t2v_camera": {
+    "file": "Minimax H3 T2V Camera.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "camera_move": [
+      "H3 Camera Move Preset (optional seed)",
+      "move"
+    ],
+    "camera_profile": [
+      "bruxosdovfx • Camera H3",
+      "profile"
+    ]
+  },
+  "minimax_h3_i2v_camera": {
+    "file": "Minimax H3 I2V Camera.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "camera_move": [
+      "H3 Camera Move Preset (optional seed)",
+      "move"
+    ],
+    "camera_profile": [
+      "bruxosdovfx • Camera H3",
+      "profile"
+    ],
+    "first_frame": [
+      "FIRST_FRAME",
+      "image"
+    ]
+  },
+  "minimax_h3_r2v_camera": {
+    "file": "Minimax H3 R2V Camera.json",
+    "prompt": [
+      "Prompt",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "camera_move": [
+      "H3 Camera Move Preset (optional seed)",
+      "move"
+    ],
+    "camera_profile": [
+      "bruxosdovfx • Camera H3",
+      "profile"
+    ],
+    "ref_image_1": [
+      "REF_IMAGE_1",
+      "image"
+    ],
+    "ref_image_2": [
+      "REF_IMAGE_2",
+      "image"
+    ]
+  },
+  "minimax_h3_action_pose": {
+    "file": "Minimax H3 Action Pose Fun Control.json",
+    "prompt": [
+      "Prompt (action + identity lock)",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "first_frame": [
+      "FIRST_FRAME (identity)",
+      "image"
+    ],
+    "action_plate_path": [
+      "ACTION_PLATE path (mp4)",
+      "video"
+    ],
+    "control_strength": [
+      "Control Strength",
+      "value"
+    ],
+    "control_end": [
+      "Control End",
+      "value"
+    ]
+  },
+  "minimax_h3_action_pose_r2v": {
+    "file": "Minimax H3 Action Pose Fun Control R2V.json",
+    "prompt": [
+      "Prompt (action + identity lock)",
+      "value"
+    ],
+    "seed": [
+      "Seed",
+      "noise_seed"
+    ],
+    "duration_seconds": [
+      "Duration Seconds",
+      "value"
+    ],
+    "aspect_ratio": [
+      "MiniMax H3 Resolutions",
+      "aspect_ratio"
+    ],
+    "resolution": [
+      "MiniMax H3 Resolutions",
+      "resolution"
+    ],
+    "lightning_enable": [
+      "Lightning Enable",
+      "value"
+    ],
+    "use_8step_turbo": [
+      "Use 8-step turbo",
+      "value"
+    ],
+    "ref_image_1": [
+      "REF_IMAGE_1 (identity sheet)",
+      "image"
+    ],
+    "action_plate_path": [
+      "ACTION_PLATE path (mp4)",
+      "video"
+    ],
+    "control_strength": [
+      "Control Strength",
+      "value"
+    ],
+    "control_end": [
+      "Control End",
+      "value"
+    ]
+  },
+  "qwen_char_sheet_3ref": {
+    "file": "QWEN IMAGE EDIT 2511 CHAR SHEET 3REF.json",
+    "prompt": [
+      "Positive (character sheet)",
+      "prompt"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "aspect_ratio": [
+      "Sheet resolution",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Sheet resolution",
+      "megapixels"
+    ],
+    "ref_1": [
+      "REF_1 (primary identity)",
+      "image"
+    ],
+    "ref_2": [
+      "REF_2 (angle / detail)",
+      "image"
+    ],
+    "ref_3": [
+      "REF_3 (angle / detail)",
+      "image"
+    ]
+  },
+  "qwen_char_sheet_5ref": {
+    "file": "QWEN IMAGE EDIT 2511 CHAR SHEET 5REF.json",
+    "prompt": [
+      "Positive (character sheet)",
+      "prompt"
+    ],
+    "seed": [
+      "KSampler",
+      "seed"
+    ],
+    "aspect_ratio": [
+      "Sheet resolution",
+      "aspect_ratio"
+    ],
+    "megapixels": [
+      "Sheet resolution",
+      "megapixels"
+    ],
+    "ref_1": [
+      "REF_1 (primary identity)",
+      "image"
+    ],
+    "ref_2": [
+      "REF_2 (angle / detail)",
+      "image"
+    ],
+    "ref_3": [
+      "REF_3 (angle / detail)",
+      "image"
+    ],
+    "ref_4": [
+      "REF_4 (optional)",
+      "image"
+    ],
+    "ref_5": [
+      "REF_5 (optional)",
+      "image"
+    ]
+  },
+  "ace_dialog_rock_bed": {
+    "workflow": "ACE STEP 1.5 TURBO DIALOG ROCK BED.json",
+    "label": "ACE 1.5 Turbo Dialog Rock Bed (no LoRA)",
+    "description": "Instrumental modern Queens NY rock underscore via ACE Turbo only — no rock LoRA. Optional kaola Captioner/Repaint refine in separate notes.",
+    "bindings": {
+      "tags": {
+        "node": "94",
+        "field": "tags"
+      },
+      "lyrics": {
+        "node": "94",
+        "field": "lyrics"
+      },
+      "bpm": {
+        "node": "94",
+        "field": "bpm"
+      },
+      "keyscale": {
+        "node": "94",
+        "field": "keyscale"
+      },
+      "language": {
+        "node": "94",
+        "field": "language"
+      },
+      "seed_encode": {
+        "node": "94",
+        "field": "seed"
+      },
+      "cfg_scale": {
+        "node": "94",
+        "field": "cfg_scale"
+      },
+      "temperature": {
+        "node": "94",
+        "field": "temperature"
+      },
+      "duration_seconds": {
+        "node": "110",
+        "field": "seconds"
+      },
+      "seed_sampler": {
+        "node": "3",
+        "field": "seed"
+      },
+      "steps": {
+        "node": "3",
+        "field": "steps"
+      },
+      "cfg": {
+        "node": "3",
+        "field": "cfg"
+      }
+    }
+  },
+  "yue2_t2m": {
+    "workflow": "YuE2 TEXT TO MUSIC GROK ROCK.json",
+    "label": "YuE2 Text-to-Music (ABC direct into Music)",
+    "description": "YuE2-3B full CoT. Style and lyrics are PrimitiveStringMultiline nodes 113 and 114 (value). Nodes 24 and 25 receive them as links — do not patch 24.style, 24.lyrics, 25.style, or 25.lyrics. Music.abc is a link from Generate ABC node 24. Duration writes node 25 max_duration only. Empty latent seconds stays a link from Music output 1.",
+    "bindings": {
+      "style": {
+        "node": "113",
+        "field": "value"
+      },
+      "lyrics": {
+        "node": "114",
+        "field": "value"
+      },
+      "mode": {
+        "node": "25",
+        "field": "mode"
+      },
+      "mode_abc": {
+        "node": "24",
+        "field": "mode"
+      },
+      "max_duration": {
+        "node": "25",
+        "field": "max_duration"
+      },
+      "seed_abc": {
+        "node": "24",
+        "field": "seed"
+      },
+      "seed_music": {
+        "node": "25",
+        "field": "seed"
+      },
+      "seed_sampler": {
+        "node": "8",
+        "field": "seed"
+      },
+      "steps": {
+        "node": "8",
+        "field": "steps"
+      }
+    }
+  },
+  "yue2_grok_rock": {
+    "workflow": "YuE2 TEXT TO MUSIC GROK ROCK.json",
+    "label": "YuE2 Text-to-Music (ABC direct into Music)",
+    "description": "Alias of yue2_t2m. Style and lyrics are PrimitiveStringMultiline nodes 113 and 114. Do not patch nodes 24 or 25 style/lyrics — those inputs are links. Duration writes max_duration only. Latent seconds stays [\"25\", 1].",
+    "bindings": {
+      "style": {
+        "node": "113",
+        "field": "value"
+      },
+      "lyrics": {
+        "node": "114",
+        "field": "value"
+      },
+      "mode": {
+        "node": "25",
+        "field": "mode"
+      },
+      "mode_abc": {
+        "node": "24",
+        "field": "mode"
+      },
+      "max_duration": {
+        "node": "25",
+        "field": "max_duration"
+      },
+      "seed_abc": {
+        "node": "24",
+        "field": "seed"
+      },
+      "seed_music": {
+        "node": "25",
+        "field": "seed"
+      },
+      "seed_sampler": {
+        "node": "8",
+        "field": "seed"
+      },
+      "steps": {
+        "node": "8",
+        "field": "steps"
+      }
+    }
+  },
+  "yue2_cover": {
+    "workflow": "YuE2 COVER.json",
+    "label": "YuE2 Cover (SheetSage2 melody)",
+    "description": "Reference audio to SheetSage2 ABC (melody) to YuE2 Generate Music. Swap LoadAudio and target style/lyrics.",
+    "bindings": {
+      "audio": {
+        "node": "45",
+        "field": "audio"
+      },
+      "style": {
+        "node": "25",
+        "field": "style"
+      },
+      "lyrics": {
+        "node": "25",
+        "field": "lyrics"
+      },
+      "sheetsage_mode": {
+        "node": "41",
+        "field": "mode"
+      },
+      "music_mode": {
+        "node": "25",
+        "field": "mode"
+      },
+      "max_duration": {
+        "node": "25",
+        "field": "max_duration"
+      },
+      "seed_music": {
+        "node": "25",
+        "field": "seed"
+      },
+      "seed_sampler": {
+        "node": "8",
+        "field": "seed"
+      },
+      "steps": {
+        "node": "8",
+        "field": "steps"
+      }
+    }
+  },
+  "yue2_rerender_abc": {
+    "workflow": "YuE2 RERENDER FROM ABC.json",
+    "label": "YuE2 Re-render from ABC",
+    "description": "Paste an edited ABC score plus style/lyrics; skips ABC generation.",
+    "bindings": {
+      "abc": {
+        "node": "50",
+        "field": "value"
+      },
+      "style": {
+        "node": "25",
+        "field": "style"
+      },
+      "lyrics": {
+        "node": "25",
+        "field": "lyrics"
+      },
+      "mode": {
+        "node": "25",
+        "field": "mode"
+      },
+      "max_duration": {
+        "node": "25",
+        "field": "max_duration"
+      },
+      "seed_music": {
+        "node": "25",
+        "field": "seed"
+      },
+      "seed_sampler": {
+        "node": "8",
+        "field": "seed"
+      },
+      "steps": {
+        "node": "8",
+        "field": "steps"
+      }
+    }
   }
 }

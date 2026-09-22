@@ -76,6 +76,8 @@ export type GenerateResponse = {
   switch?: SwitchOffer | null;
   prompt?: string | null;
   notes?: string[];
+  abc?: string;
+  abc_path?: string;
 };
 
 export type LibraryItem = {
@@ -289,6 +291,7 @@ export type PromptBuilderNodeData = {
   modality: string;
   modelId?: string;
   instrumental?: boolean;
+  onInstrumental?: (v: boolean) => void;
   onClose?: () => void;
   onApply: (text: string, pack?: AceEnhancePack) => void;
 };
@@ -356,13 +359,23 @@ export type ResultNodeData = {
   name?: string;
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
-  localPipeline?: "comfy-character";
+  localPipeline?: "comfy-character" | null;
   confirmModel?: string;
+  hAngle?: number;
+  vAngle?: number;
+  zoom?: number;
+  defaultPrompts?: boolean;
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;
   refPreviews?: { id?: string; label: string; path: string; url?: string }[];
   onPrompt?: (prompt: string) => void;
+  onCamera?: (cam: {
+    hAngle: number;
+    vAngle: number;
+    zoom: number;
+    defaultPrompts: boolean;
+  }) => void;
   onModel?: (id: string) => void;
   onConfirmSheet?: () => void;
   onRegen?: () => void;
@@ -507,8 +520,12 @@ export type SheetAnglePatch = {
   name?: string;
   fields?: Record<string, string>;
   sheetKind?: "costume" | "character" | "dress" | "scene" | "prop";
-  localPipeline?: "comfy-character";
+  localPipeline?: "comfy-character" | null;
   confirmModel?: string;
+  hAngle?: number;
+  vAngle?: number;
+  zoom?: number;
+  defaultPrompts?: boolean;
   characterId?: string;
   costumeId?: string;
   nodeKey?: string;

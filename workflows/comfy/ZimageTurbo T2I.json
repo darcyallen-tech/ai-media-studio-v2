@@ -10,7 +10,7 @@
   },
   "2": {
     "inputs": {
-      "unet_name": "zImageUltimateNSFW_v20.safetensors",
+      "unet_name": "zimageTurboByStable_2602BF16.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -29,26 +29,26 @@
       "title": "Load CLIP"
     }
   },
-  "6": {
+  "4": {
     "inputs": {
       "noise": [
-        "9",
+        "6",
         0
       ],
       "guider": [
-        "7",
+        "5",
         0
       ],
       "sampler": [
-        "10",
+        "7",
         0
       ],
       "sigmas": [
-        "12",
+        "8",
         0
       ],
       "latent_image": [
-        "17",
+        "12",
         0
       ]
     },
@@ -57,14 +57,14 @@
       "title": "SamplerCustomAdvanced"
     }
   },
-  "7": {
+  "5": {
     "inputs": {
       "model": [
         "2",
         0
       ],
       "conditioning": [
-        "26",
+        "15",
         0
       ]
     },
@@ -73,16 +73,16 @@
       "title": "Basic Guider"
     }
   },
-  "9": {
+  "6": {
     "inputs": {
-      "noise_seed": 1111443144832957
+      "noise_seed": 349849388191471
     },
     "class_type": "RandomNoise",
     "_meta": {
       "title": "RandomNoise"
     }
   },
-  "10": {
+  "7": {
     "inputs": {
       "sampler_name": "res_3m"
     },
@@ -91,7 +91,7 @@
       "title": "KSamplerSelect"
     }
   },
-  "12": {
+  "8": {
     "inputs": {
       "scheduler": "bong_tangent",
       "steps": 4,
@@ -106,10 +106,10 @@
       "title": "BasicScheduler"
     }
   },
-  "14": {
+  "9": {
     "inputs": {
       "samples": [
-        "6",
+        "4",
         1
       ],
       "vae": [
@@ -122,11 +122,11 @@
       "title": "VAE Decode"
     }
   },
-  "15": {
+  "10": {
     "inputs": {
       "filename_prefix": "ComfyUI",
       "images": [
-        "14",
+        "9",
         0
       ]
     },
@@ -135,7 +135,7 @@
       "title": "Save Image"
     }
   },
-  "16": {
+  "11": {
     "inputs": {
       "aspect_ratio": "9:16 (Portrait Widescreen)",
       "megapixels": 2,
@@ -146,14 +146,14 @@
       "title": "Resolution Selector"
     }
   },
-  "17": {
+  "12": {
     "inputs": {
       "width": [
-        "16",
+        "11",
         0
       ],
       "height": [
-        "16",
+        "11",
         1
       ],
       "batch_size": 1
@@ -163,9 +163,9 @@
       "title": "Empty Latent Image"
     }
   },
-  "26": {
+  "15": {
     "inputs": {
-      "text": "Photorealistic still photograph, full-body head to toe front-angle character reference on a pure white background, shot waist height 180 degrees 20mm lens\n\n30-year-old Irish woman, Black Irish phenotype. She is at naturally beautiful, not an average face. About 168 cm. Lean, athletic-feminine body: long legs, high hips, narrow waist, flat toned stomach, high bust, slim defined arms. Skin is true Irish pale — cool ivory with a faint pink undertone, the kind that burns and freckles. A scatter of small natural freckles across the nose, cheeks, collarbones, and the tops of her shoulders. Not olive. Not tanned. Hair is the rare Irish near-black: dense, glossy, blue-black in shadow, dark espresso where the light hits. Long, thick, slightly wavy, falling over her shoulders and chest with the left side tucked behind her ear. Eyes are large, clear, saturated blue — the HERC2/OCA2 light-eye look common in Ireland — with a dark lash line that makes the blue look even colder against the black hair and white skin. Brows dark and clean. Lips naturally full, cool rose, sharp Cupid’s bow. Face is Northern Atlantic/Irish: oval-to-slightly-angular, high cheekbones, slim feminine jaw, straight-to-softly-upturned Celtic nose with a fine bridge. The beauty is the high-contrast pigment stack: black hair, ice-blue eyes, porcelain skin.\n\nWearing a neutral high crop tank top with spaghetti straps, high seam low cut spandex shorts with a medium seam, bare feet. \n\nLighting: soft natural window light casting gentle, elegant shadows across her face for a realistic skin texture. \n\nPure white background. High-resolution full-length framing from crown to toes with slight headroom and equal side margins, camera at mid-torso height, straight-on lens, clean character reference look, natural skin texture and fabric detail, crisp focus, true-to-life color, still photograph, 8k resolution, crisp detail from a modern sensor, high visual fidelity, absolutely no text, no watermark.",
+      "text": "",
       "clip": [
         "3",
         0

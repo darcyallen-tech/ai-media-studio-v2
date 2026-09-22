@@ -71,3 +71,26 @@ desktop.ini
 *.zip
 AIMediaStudioV2*.zip
 dist/
+
+# --- Release hygiene (2026-09-21) ---
+# Local Comfy archives / scratch (not product)
+workflows/comfy/_archive*/
+workflows/comfy/_model_*
+workflows/comfy/_cleanup_*
+workflows/comfy/_build_*
+workflows/comfy/_yue2_*_dump.json
+workflows/comfy/*.bak*
+workflows/comfy/*.bak-*
+**/*.bak
+**/*.bak-*
+
+# Local packaging / one-off reports
+packaging/
+*.zip
+AIMediaStudioV2*.zip
+
+# Runtime / user data already covered above; double-lock
+spend.jsonl
+preferences.json
+.env.local
+.env.production

@@ -9,7 +9,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.comfy_character import ANGLE_CAM, CAMERA_LOCK  # noqa: E402
+from app.comfy_character import (  # noqa: E402
+    ANGLE_CAM,
+    CAMERA_LOCK,
+    camera_for,
+    qwen_prompt_patch,
+)
 from app.comfy_client import (  # noqa: E402
     apply_binding_patches,
     find_nodes,
@@ -66,6 +71,7 @@ class BindingMapTests(unittest.TestCase):
         self.assertIn("horizontal_angle", cam[0][1]["inputs"])
         self.assertIn("vertical_angle", cam[0][1]["inputs"])
         self.assertIn("zoom", cam[0][1]["inputs"])
+        self.assertIn("default_prompts", cam[0][1]["inputs"])
         self.assertNotIn("Horizontal Angle", cam[0][1]["inputs"])
 
     def test_seedvr_force_keys(self):
@@ -132,13 +138,22 @@ class BindingMapTests(unittest.TestCase):
         self.assertEqual(up["inputs"]["max_resolution"], 3840)
 
     def test_angle_table(self):
-        self.assertEqual(ANGLE_CAM["side"][:3], (90, 0, 4))
-        self.assertEqual(ANGLE_CAM["threequarter_front"][:3], (45, 0, 4))
-        self.assertEqual(ANGLE_CAM["threequarter_back"][:3], (135, 0, 4))
-        self.assertEqual(ANGLE_CAM["back"][:3], (180, 0, 4))
-        self.assertEqual(ANGLE_CAM["closeup"][:3], (0, 0, 9))
-        self.assertEqual(ANGLE_CAM["top"][:3], (0, 70, 4))
+        self.assertEqual(ANGLE_CAM["side"], (90, 0, 4))
+        self.assertEqual(ANGLE_CAM["threequarter_front"], (45, 0, 4))
+        self.assertEqual(ANGLE_CAM["threequarter_back"], (135, 0, 4))
+        self.assertEqual(ANGLE_CAM["back"], (180, 0, 4))
+        self.assertEqual(ANGLE_CAM["closeup"], (0, 0, 10))
+        self.assertEqual(ANGLE_CAM["top"], (0, 70, 4))
         self.assertIn("clothing", CAMERA_LOCK)
+        self.assertEqual(camera_for("closeup")[2], 10.0)
+        self.assertEqual(camera_for("side", h_angle=95)[0], 95.0)
+        on, relink_on = qwen_prompt_patch(True)
+        self.assertEqual(on, {"default_prompts": True})
+        self.assertIsNone(relink_on)
+        off, relink_off = qwen_prompt_patch(False)
+        self.assertEqual(off["prompt"], CAMERA_LOCK)
+        self.assertEqual(relink_off, {"prompt": True})
+        self.assertNotIn("identity", off["prompt"].lower())
 
     def test_ace_file_present_not_bound(self):
         ace = workflow_dir() / "audio_ace_step_1_5_split.json"
