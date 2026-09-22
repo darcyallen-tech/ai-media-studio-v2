@@ -2013,6 +2013,8 @@ export function sortSheetComposeModels(rows: ModelRow[]): ModelRow[] {
     if (blob.includes("nano")) return 1;
     if (blob.includes("flux 2 pro")) return 2;
     if (blob.includes("flux 2 max")) return 3;
+    if (blob.includes("gpt-image-2.5/flare") || blob.includes("2.5 flare")) return 3.2;
+    if (blob.includes("gpt-image-2.5/sunburst") || blob.includes("2.5 sunburst")) return 3.3;
     if (blob.includes("gpt image 2") || blob.includes("gpt-image-2")) return 3.5;
     if (blob.includes("flux")) return 4;
     if (blob.includes("seedream")) return 5;

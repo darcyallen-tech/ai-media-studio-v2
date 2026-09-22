@@ -264,6 +264,62 @@
             "Cheap instruction stills",
             "Signage / titles"
           ]
+        },
+        {
+          "id": "vision:gpt image 2.5 flare t2i",
+          "label": "GPT Image 2.5 Flare (quality / speed)",
+          "modalities": ["t2i"],
+          "tagline": "Default OpenAI still — faster, high quality",
+          "strengths": [
+            "Fal openai/gpt-image-2.5/flare/text-to-image.",
+            "Quality auto through max, including xhigh.",
+            "Transparent background. Est. ~$0.21 @ high 1024²."
+          ],
+          "weaknesses": [
+            "Token-billed — xhigh and max cost more than high.",
+            "Not the precision lane (Sunburst is)."
+          ],
+          "use_cases": [
+            "Everyday hero stills",
+            "Type and layout",
+            "Transparent plates"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2.5 sunburst t2i",
+          "label": "GPT Image 2.5 Sunburst (precision / multi-round edit)",
+          "modalities": ["t2i"],
+          "tagline": "OpenAI precision still — same price, finer detail",
+          "strengths": [
+            "Fal openai/gpt-image-2.5/sunburst/text-to-image.",
+            "Same quality enum and token price as Flare.",
+            "Better when the still will be edited again."
+          ],
+          "weaknesses": [
+            "Slower than Flare.",
+            "Token-billed — xhigh and max cost more."
+          ],
+          "use_cases": [
+            "Detail stills",
+            "Plates you will revise",
+            "Transparent plates"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2 t2i",
+          "label": "GPT Image 2",
+          "modalities": ["t2i"],
+          "tagline": "Previous OpenAI still — still selectable",
+          "strengths": [
+            "Fal openai/gpt-image-2.",
+            "Quality auto/low/medium/high."
+          ],
+          "weaknesses": [
+            "No xhigh/max. Prefer Flare or Sunburst for new work."
+          ],
+          "use_cases": [
+            "Existing GPT Image 2 jobs"
+          ]
         }
       ]
     },
@@ -272,6 +328,60 @@
       "label": "Image → Image",
       "blurb": "Edit a source still. Staging, wardrobe, sky, cleanup.",
       "models": [
+        {
+          "id": "vision:gpt image 2.5 flare i2i",
+          "label": "GPT Image 2.5 Flare (quality / speed)",
+          "modalities": ["i2i", "r2i"],
+          "tagline": "Fast OpenAI edit — up to 16 refs",
+          "strengths": [
+            "Fal openai/gpt-image-2.5/flare/edit. image_urls, max 16.",
+            "Quality through max. background auto/transparent/opaque.",
+            "Est. ~$0.24 @ high."
+          ],
+          "weaknesses": [
+            "Token-billed. xhigh and max cost more.",
+            "Sunburst is the tighter multi-round edit."
+          ],
+          "use_cases": [
+            "Fast instruction edits",
+            "Multi-ref stills",
+            "Transparent cutouts"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2.5 sunburst i2i",
+          "label": "GPT Image 2.5 Sunburst (precision / multi-round edit)",
+          "modalities": ["i2i", "r2i"],
+          "tagline": "Precision OpenAI edit — same price as Flare",
+          "strengths": [
+            "Fal openai/gpt-image-2.5/sunburst/edit. Up to 16 refs.",
+            "Holds the subject across revision rounds."
+          ],
+          "weaknesses": [
+            "Slower than Flare.",
+            "Same token price; higher quality settings cost more."
+          ],
+          "use_cases": [
+            "Multi-round edits",
+            "Tight instruction changes",
+            "Character and scene refs"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2 i2i",
+          "label": "GPT Image 2",
+          "modalities": ["i2i", "r2i"],
+          "tagline": "Previous OpenAI edit — still selectable",
+          "strengths": [
+            "Fal openai/gpt-image-2/edit. Up to 16 refs."
+          ],
+          "weaknesses": [
+            "No xhigh/max. Prefer Flare or Sunburst for new edits."
+          ],
+          "use_cases": [
+            "Existing GPT Image 2 edits"
+          ]
+        },
         {
           "id": "studio:img:flux 2 pro",
           "label": "Flux 2 Pro (edit)",
@@ -551,6 +661,55 @@
       "label": "Reference → Image",
       "blurb": "Edit with extra reference stills (identity, style, product).",
       "models": [
+        {
+          "id": "vision:gpt image 2.5 flare r2i",
+          "label": "GPT Image 2.5 Flare (quality / speed)",
+          "modalities": ["r2i"],
+          "tagline": "Fast OpenAI multi-ref still",
+          "strengths": [
+            "Same flare/edit endpoint. Up to 16 image_urls.",
+            "Scene and character pickers include this row."
+          ],
+          "weaknesses": [
+            "Token-billed. Sunburst holds detail better across rounds."
+          ],
+          "use_cases": [
+            "Character angles from refs",
+            "Scene stills from plates"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2.5 sunburst r2i",
+          "label": "GPT Image 2.5 Sunburst (precision / multi-round edit)",
+          "modalities": ["r2i"],
+          "tagline": "Precision OpenAI multi-ref still",
+          "strengths": [
+            "Same sunburst/edit endpoint. Up to 16 refs.",
+            "Better when you will revise the still again."
+          ],
+          "weaknesses": [
+            "Slower than Flare. Same token price."
+          ],
+          "use_cases": [
+            "Identity-locked refs",
+            "Multi-round scene edits"
+          ]
+        },
+        {
+          "id": "vision:gpt image 2 r2i",
+          "label": "GPT Image 2",
+          "modalities": ["r2i"],
+          "tagline": "Previous OpenAI multi-ref still",
+          "strengths": [
+            "Fal openai/gpt-image-2/edit. Still in the picker."
+          ],
+          "weaknesses": [
+            "No xhigh/max."
+          ],
+          "use_cases": [
+            "Existing GPT Image 2 ref jobs"
+          ]
+        },
         {
           "id": "studio:img:flux 2 pro",
           "label": "Flux 2 Pro (edit)",

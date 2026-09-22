@@ -1560,7 +1560,7 @@ def character_angle_params(
         q_allowed = {
             r.lower(): r
             for r in resolutions
-            if r.lower() in ("auto", "low", "medium", "high")
+            if r.lower() in ("auto", "low", "medium", "high", "xhigh", "max")
         } or {"high": "high", "medium": "medium", "low": "low", "auto": "auto"}
         q_raw = (quality or req or "").strip().lower()
         resolution = q_allowed.get(q_raw) or q_allowed.get("high") or "high"

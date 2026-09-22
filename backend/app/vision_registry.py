@@ -150,6 +150,8 @@ GPT_IMAGE_SIZES: tuple[str, ...] = (
     "auto",
 )
 GPT_IMAGE_QUALITY: tuple[str, ...] = ("auto", "low", "medium", "high")
+GPT_IMAGE_25_QUALITY: tuple[str, ...] = ("auto", "low", "medium", "high", "xhigh", "max")
+GPT_IMAGE_25_BACKGROUND: tuple[str, ...] = ("auto", "transparent", "opaque")
 
 _FLUX_T2I_PRESET_PX: dict[str, tuple[int, int]] = {
     "landscape_16_9": (1024, 576),
@@ -756,6 +758,63 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         max_num_images=10,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
     ),
+    "gpt image 2.5 flare t2i": VisionModelSpec(
+        key="gpt image 2.5 flare t2i",
+        label="GPT Image 2.5 Flare (quality / speed)",
+        mode="text_to_image",
+        endpoint="openai/gpt-image-2.5/flare/text-to-image",
+        cost_estimate_usd=0.21,
+        notes=(
+            "OpenAI GPT Image 2.5 Flare on fal — quality/speed lane. "
+            "image_size presets or auto (max edge 3840). "
+            "quality auto/low/medium/high/xhigh/max (default high). "
+            "background auto/transparent/opaque. Token-billed; "
+            "est. ~$0.21 @ high 1024², less at low/medium, more at xhigh/max."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="landscape_4_3",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=4,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
+    "gpt image 2.5 sunburst t2i": VisionModelSpec(
+        key="gpt image 2.5 sunburst t2i",
+        label="GPT Image 2.5 Sunburst (precision / multi-round edit)",
+        mode="text_to_image",
+        endpoint="openai/gpt-image-2.5/sunburst/text-to-image",
+        cost_estimate_usd=0.21,
+        notes=(
+            "OpenAI GPT Image 2.5 Sunburst on fal — precision lane, same price as Flare. "
+            "image_size presets or auto. quality auto/low/medium/high/xhigh/max. "
+            "background auto/transparent/opaque. Token-billed; "
+            "est. ~$0.21 @ high 1024²."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="landscape_4_3",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=4,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
     "gpt image 2 t2i": VisionModelSpec(
         key="gpt image 2 t2i",
         label="GPT Image 2 (T2I)",
@@ -851,6 +910,67 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         supports_strength=True,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
+    "gpt image 2.5 flare i2i": VisionModelSpec(
+        key="gpt image 2.5 flare i2i",
+        label="GPT Image 2.5 Flare (quality / speed)",
+        mode="image_to_image",
+        endpoint="openai/gpt-image-2.5/flare/edit",
+        cost_estimate_usd=0.24,
+        notes=(
+            "OpenAI GPT Image 2.5 Flare edit on fal. Up to 16 image_urls. "
+            "image_size auto infers from the input. "
+            "quality auto/low/medium/high/xhigh/max. "
+            "background auto/transparent/opaque. Token-billed."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=15,
+        image_field="image_urls",
+        edit_model_key="gpt image 2.5 flare",
+        supports_mask=True,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
+    "gpt image 2.5 sunburst i2i": VisionModelSpec(
+        key="gpt image 2.5 sunburst i2i",
+        label="GPT Image 2.5 Sunburst (precision / multi-round edit)",
+        mode="image_to_image",
+        endpoint="openai/gpt-image-2.5/sunburst/edit",
+        cost_estimate_usd=0.24,
+        notes=(
+            "OpenAI GPT Image 2.5 Sunburst edit on fal. Precision / multi-round. "
+            "Up to 16 image_urls. quality through max. "
+            "background auto/transparent/opaque. Same token price as Flare."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=15,
+        image_field="image_urls",
+        edit_model_key="gpt image 2.5 sunburst",
+        supports_mask=True,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
     ),
     "gpt image 2 i2i": VisionModelSpec(
         key="gpt image 2 i2i",
@@ -2039,6 +2159,62 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
     ),
+    "gpt image 2.5 flare r2i": VisionModelSpec(
+        key="gpt image 2.5 flare r2i",
+        label="GPT Image 2.5 Flare (quality / speed)",
+        mode="reference_to_image",
+        endpoint="openai/gpt-image-2.5/flare/edit",
+        cost_estimate_usd=0.24,
+        notes=(
+            "Build a still from refs with GPT Image 2.5 Flare edit. Up to 16 refs. "
+            "image_size auto; quality through max; background can be transparent."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        max_refs=16,
+        image_field="image_urls",
+        edit_model_key="gpt image 2.5 flare",
+        supports_mask=True,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
+    "gpt image 2.5 sunburst r2i": VisionModelSpec(
+        key="gpt image 2.5 sunburst r2i",
+        label="GPT Image 2.5 Sunburst (precision / multi-round edit)",
+        mode="reference_to_image",
+        endpoint="openai/gpt-image-2.5/sunburst/edit",
+        cost_estimate_usd=0.24,
+        notes=(
+            "Build a still from refs with GPT Image 2.5 Sunburst edit. "
+            "Precision / multi-round. Up to 16 refs. Same token price as Flare."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=GPT_IMAGE_SIZES,
+        default_aspect="auto",
+        resolution_choices=GPT_IMAGE_25_QUALITY,
+        default_resolution="high",
+        supports_audio=False,
+        max_refs=16,
+        image_field="image_urls",
+        edit_model_key="gpt image 2.5 sunburst",
+        supports_mask=True,
+        extra_defaults={
+            "num_images": 1,
+            "output_format": "png",
+            "quality": "high",
+            "background": "auto",
+        },
+    ),
     "gpt image 2 r2i": VisionModelSpec(
         key="gpt image 2 r2i",
         label="GPT Image 2 · R2I",
@@ -3086,7 +3262,17 @@ def estimate_vision_cost(
         if "auto 4" in asp or "auto_4" in asp:
             base *= 1.35
         res = (resolution or spec.default_resolution or "").lower()
-        if "gpt-image-2" in ep_still:
+        if "gpt-image-2.5" in ep_still:
+            q = res if res in ("auto", "low", "medium", "high", "xhigh", "max") else "high"
+            base *= {
+                "low": 0.03,
+                "medium": 0.25,
+                "high": 1.0,
+                "auto": 1.0,
+                "xhigh": 1.8,
+                "max": 2.6,
+            }.get(q, 1.0)
+        elif "gpt-image-2" in ep_still:
             q = res if res in ("auto", "low", "medium", "high") else "high"
             if q == "low":
                 base *= 0.4
