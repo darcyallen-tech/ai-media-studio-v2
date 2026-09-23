@@ -1770,6 +1770,43 @@
       "blurb": "Edit or retake an existing clip. Length usually follows the source.",
       "models": [
         {
+          "id": "studio:vid:id v2v",
+          "label": "ID-V2V (identity restyle / short pin-edit)",
+          "modalities": ["v2v"],
+          "tagline": "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph).",
+          "strengths": [
+            "Fal fal-ai/id-v2v. Source video plus a restyled first frame.",
+            "480p or 720p, at most 241 frames. Est. $0.20/s.",
+            "Relight is a second row: fal-ai/id-v2v/relight."
+          ],
+          "weaknesses": [
+            "Not Aleph. No 4K and no 30s.",
+            "Frame Editor stays Aleph 2.0 only."
+          ],
+          "use_cases": [
+            "Identity restyle of a short clip",
+            "Lighting change via the Relight row"
+          ]
+        },
+        {
+          "id": "studio:vid:ray 3.2 v2v",
+          "label": "Ray 3.2 V2V",
+          "modalities": ["v2v"],
+          "tagline": "5s or 10s only. For 2–30s multi-pin use Frame Editor (Aleph).",
+          "strengths": [
+            "Fal luma/agent/ray/v3.2/video-to-video. Sibling of Ray 3.2 T2V.",
+            "Source video, optional start image or indexed keyframes.",
+            "5s: $0.72 / $1.08 / $2.16 at 540p / 720p / 1080p. 10s doubles."
+          ],
+          "weaknesses": [
+            "Duration is locked to 5s or 10s. No 4K.",
+            "Not a Frame Editor model."
+          ],
+          "use_cases": [
+            "Short restyle of an existing clip"
+          ]
+        },
+        {
           "id": "studio:vid:kling o3 standard edit",
           "label": "Kling O3 Standard V2V",
           "modalities": [
@@ -1984,6 +2021,44 @@
       "blurb": "Beds, songs, listing underscore.",
       "models": [
         {
+          "id": "audio:elevenlabs music v2.5",
+          "label": "ElevenLabs Music v2.5",
+          "modalities": ["music"],
+          "tagline": "Current ElevenMusic — richer arrangements",
+          "strengths": [
+            "Fal elevenlabs/music/v2.5. Prompt mode (no composition plan).",
+            "Duration 3s–600s. Instrumental checkbox sets force_instrumental.",
+            "Sung tracks append the Lyrics block. Est. $0.60 per billed minute."
+          ],
+          "weaknesses": [
+            "Billed per output minute, rounded up (30s still costs $0.60).",
+            "No composition_plan editor in this pass."
+          ],
+          "use_cases": [
+            "Full songs with section lyrics",
+            "Instrumental beds"
+          ]
+        },
+        {
+          "id": "audio:lyria 3.5",
+          "label": "Lyria 3.5",
+          "modalities": ["music"],
+          "tagline": "Newest Google music — flat $0.10",
+          "strengths": [
+            "Fal google/lyria-3.5. One prompt: style, then lyrics when sung.",
+            "Optional source still as image_url.",
+            "Est. $0.10 per generation."
+          ],
+          "weaknesses": [
+            "Length is model-chosen and prompt-steered, not a duration API field.",
+            "Instrumental runs omit the Lyrics block."
+          ],
+          "use_cases": [
+            "A full song from style and lyrics",
+            "Mood from a still"
+          ]
+        },
+        {
           "id": "audio:minimax music 3",
           "label": "MiniMax Music 3",
           "modalities": [
@@ -2005,14 +2080,15 @@
         },
         {
           "id": "audio:elevenlabs music",
-          "label": "ElevenLabs Music",
+          "label": "ElevenLabs Music (v1/v2)",
           "modalities": [
             "music"
           ],
-          "tagline": "Best high-quality background music",
+          "tagline": "Earlier ElevenLabs Music — kept below v2.5",
           "strengths": [
             "Duration 3s–3 min.",
-            "Instrumental-friendly."
+            "Instrumental-friendly.",
+            "Endpoint fal-ai/elevenlabs/music stays callable."
           ],
           "weaknesses": [
             "Pricier than MiniMax Music 3."
@@ -3933,11 +4009,11 @@
     },
     {
       "id": "audio:elevenlabs music",
-      "label": "ElevenLabs Music",
+      "label": "ElevenLabs Music (v1/v2)",
       "modalities": [
         "music"
       ],
-      "tagline": "Best high-quality background music",
+      "tagline": "Earlier ElevenLabs Music — kept below v2.5",
       "strengths": [
         "Duration 3s–3 min.",
         "Instrumental-friendly."

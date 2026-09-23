@@ -315,6 +315,24 @@ def _run_audio(
     )
 
 
+def _music_image_url(spec: AudioSpec, extra: dict[str, Any]) -> str | None:
+    """Lyria 3.5 can take one source still. Other music models ignore it."""
+    if (spec.endpoint or "").rstrip("/").lower() != "google/lyria-3.5":
+        return None
+    direct = str(extra.get("image_url") or "").strip()
+    if direct.startswith("http://") or direct.startswith("https://"):
+        return direct
+    path = str(extra.get("image_path") or direct or "").strip()
+    if not path:
+        return None
+    file = Path(path)
+    if not file.is_file():
+        return None
+    from app.fal.client import upload_file
+
+    return upload_file(file)
+
+
 def generate_audio(
     *,
     modality: str,
@@ -366,11 +384,22 @@ def generate_audio(
         if instrumental is None:
             instrumental = True
         use_dur = dur if spec.supports_duration else spec.fixed_duration_s
+        seed_raw = extra.get("seed")
+        seed = None
+        if seed_raw is not None and str(seed_raw).strip() != "":
+            try:
+                seed = int(seed_raw)
+            except (TypeError, ValueError):
+                seed = None
+        image_url = _music_image_url(spec, extra)
         args = build_music_args(
             spec,
             text,
             duration_s=use_dur if spec.supports_duration else None,
             instrumental=bool(instrumental),
+            lyrics=str(extra.get("lyrics") or ""),
+            seed=seed,
+            image_url=image_url,
         )
         est = estimate_audio_cost(
             spec,

@@ -106,6 +106,9 @@ MODEL_OPTIONS: list[str] = [""] + [
     "fibo edit 1.5",
     "muse image edit",
     # video edit
+    "id v2v",
+    "id v2v relight",
+    "ray 3.2 v2v",
     "kling o3 standard edit",
     "kling o3 pro edit",
     "kling o3 4k edit",

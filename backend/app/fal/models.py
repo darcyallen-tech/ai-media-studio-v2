@@ -1175,6 +1175,87 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
 }
 
 VIDEO_MODELS: dict[str, VideoModelSpec] = {
+    # --- Short pin-edit / identity restyle (Create V2V only — not Frame Editor) ---
+    "id v2v": VideoModelSpec(
+        key="id v2v",
+        label="ID-V2V (identity restyle / short pin-edit)",
+        endpoint="fal-ai/id-v2v",
+        task="video_edit",
+        video_field="video_url",
+        image_field=None,
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        auto_image_refs_in_prompt=False,
+        duration_param=None,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=15.0,
+        allowed_durations=("5", "8", "10", "15"),
+        resolution_param="resolution",
+        allowed_resolutions=("480p", "720p"),
+        default_resolution="720p",
+        cost_per_second=0.20,
+        notes=(
+            "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph). "
+            "Source video plus a restyled first frame. Optional indexed keyframes. "
+            "480p/720p only, at most 241 frames. Est. $0.20/s."
+        ),
+    ),
+    "id v2v relight": VideoModelSpec(
+        key="id v2v relight",
+        label="ID-V2V Relight (short pin-edit)",
+        endpoint="fal-ai/id-v2v/relight",
+        task="video_edit",
+        video_field="video_url",
+        image_field=None,
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        auto_image_refs_in_prompt=False,
+        duration_param=None,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=15.0,
+        allowed_durations=("5", "8", "10", "15"),
+        resolution_param="resolution",
+        allowed_resolutions=("480p", "720p"),
+        default_resolution="720p",
+        cost_per_second=0.20,
+        notes=(
+            "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph). "
+            "Relight sibling: source video plus a relit first frame. "
+            "480p/720p only, at most 241 frames. Est. $0.20/s."
+        ),
+    ),
+    "ray 3.2 v2v": VideoModelSpec(
+        key="ray 3.2 v2v",
+        label="Ray 3.2 V2V",
+        endpoint="luma/agent/ray/v3.2/video-to-video",
+        task="video_edit",
+        video_field="video_url",
+        image_field=None,
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        auto_image_refs_in_prompt=False,
+        duration_param="duration",
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=10.0,
+        allowed_durations=("5", "10"),
+        resolution_param="resolution",
+        allowed_resolutions=("540p", "720p", "1080p"),
+        default_resolution="540p",
+        cost_per_second=0.144,
+        cost_per_second_by_resolution={"540p": 0.144, "720p": 0.216, "1080p": 0.432},
+        notes=(
+            "Luma Ray 3.2 video-to-video. Duration 5s or 10s only. "
+            "Source video, optional start image or indexed keyframes. "
+            "540p/720p/1080p. Est. $0.72 / $1.08 / $2.16 for 5s; 10s doubles. "
+            "Not Frame Editor — Aleph remains the 2–30s multi-pin path."
+        ),
+    ),
     # --- Video-to-video edit (camera-lock / motion-preserving) ---
     "kling o3 standard edit": VideoModelSpec(
         key="kling o3 standard edit",
@@ -2411,6 +2492,13 @@ _ALIASES: dict[str, str] = {
     "bytedance/seedream/v4.5/edit": "seedream 5 pro",
     # video
     "kling edit": "kling o3 standard edit",
+    "id v2v": "id v2v",
+    "id-v2v": "id v2v",
+    "fal-ai/id-v2v": "id v2v",
+    "id v2v relight": "id v2v relight",
+    "fal-ai/id-v2v/relight": "id v2v relight",
+    "ray 3.2 v2v": "ray 3.2 v2v",
+    "luma/agent/ray/v3.2/video-to-video": "ray 3.2 v2v",
     "kling o3 standard edit": "kling o3 standard edit",
     "kling o3 standard – v2v edit": "kling o3 standard edit",
     "kling o3 standard - v2v edit": "kling o3 standard edit",
@@ -2665,6 +2753,9 @@ def model_dropdown_choices() -> list[str]:
             labels.append(spec.label)
     # Video V2V edit (camera-lock workflow) + extend
     for key in (
+        "id v2v",
+        "id v2v relight",
+        "ray 3.2 v2v",
         "kling o3 standard edit",
         "kling o3 pro edit",
         "kling o3 4k edit",
@@ -3174,6 +3265,112 @@ def build_edit_arguments(
     return args, notes
 
 
+def _pin_seconds(spec: VideoModelSpec, raw: Any) -> str:
+    return spec.nearest_duration(raw)
+
+
+def _id_v2v_frames(seconds: str) -> int:
+    try:
+        n = float(str(seconds).lower().replace("s", "").strip())
+    except (TypeError, ValueError):
+        n = 5.0
+    frames = int(round(n * 16))
+    return max(17, min(241, frames))
+
+
+def _indexed_keyframes(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("image_url") or "").strip()
+        if not url:
+            continue
+        try:
+            index = int(item.get("frame_index"))
+        except (TypeError, ValueError):
+            continue
+        if index < 0:
+            continue
+        out.append({"image_url": url, "frame_index": index})
+    return out
+
+
+def _build_short_pin_edit_arguments(
+    spec: VideoModelSpec,
+    *,
+    prompt: str,
+    video_url: str,
+    image_urls: list[str] | None = None,
+    parameters: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """ID-V2V / Ray 3.2 V2V. Source clip required. No 4K and no 30s."""
+    params = dict(parameters or {})
+    notes: list[str] = []
+    other = params.get("other") if isinstance(params.get("other"), dict) else {}
+    prompt_out = (prompt or "").strip()
+    if not prompt_out:
+        raise ValueError("prompt is required for video editing.")
+    if not video_url:
+        raise ValueError("video_url is required for video editing.")
+    stills = [u for u in (image_urls or []) if str(u).strip()]
+    ep = (spec.endpoint or "").lower()
+    dur_in = params.get("duration") or params.get("duration_seconds")
+    if dur_in is None:
+        dur_in = other.get("duration", other.get("duration_seconds"))
+    seconds = _pin_seconds(spec, dur_in)
+    res = spec.clamp_resolution(
+        str(params.get("resolution") or other.get("resolution") or "")
+    )
+    args: dict[str, Any] = {"prompt": prompt_out, "video_url": video_url}
+    if "id-v2v" in ep:
+        if not stills:
+            raise ValueError(
+                "ID-V2V needs a restyled first-frame still plus the source video. "
+                "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph)."
+            )
+        args["image_url"] = stills[0]
+        args["resolution"] = res or "720p"
+        args["num_frames"] = _id_v2v_frames(seconds)
+        kfs = _indexed_keyframes(params.get("keyframes") or other.get("keyframes"))
+        if kfs:
+            args["keyframes"] = kfs
+        if len(stills) > 1 and not kfs:
+            notes.append(
+                "Extra stills need frame_index keyframes. Only the first frame was sent."
+            )
+        notes.append(
+            "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph)."
+        )
+    else:
+        args["duration"] = f"{seconds}s" if not str(seconds).endswith("s") else str(seconds)
+        args["resolution"] = res or "540p"
+        kfs = _indexed_keyframes(params.get("keyframes") or other.get("keyframes"))
+        indexes = params.get("keyframe_indexes") or other.get("keyframe_indexes")
+        if kfs:
+            args["keyframes"] = [item["image_url"] for item in kfs]
+            args["keyframe_indexes"] = [item["frame_index"] for item in kfs]
+        elif (
+            isinstance(indexes, list)
+            and stills
+            and len(indexes) == len(stills)
+        ):
+            args["keyframes"] = stills[:64]
+            args["keyframe_indexes"] = [int(i) for i in indexes[:64]]
+        elif stills:
+            args["start_image_url"] = stills[0]
+        notes.append("Ray 3.2 V2V is 5s or 10s only. Aleph stays on Frame Editor.")
+    seed = params.get("seed", other.get("seed"))
+    if seed is not None and str(seed).strip() != "":
+        try:
+            args["seed"] = int(seed)
+        except (TypeError, ValueError):
+            pass
+    return args, notes
+
+
 def build_video_edit_arguments(
     spec: VideoModelSpec,
     *,
@@ -3184,6 +3381,17 @@ def build_video_edit_arguments(
 ) -> tuple[dict[str, Any], list[str]]:
     if spec.task != "video_edit":
         raise ValueError(f"Model {spec.key} is not a video_edit model.")
+    ep = (spec.endpoint or "").lower()
+    if ep in ("fal-ai/id-v2v", "fal-ai/id-v2v/relight") or ep.endswith(
+        "/ray/v3.2/video-to-video"
+    ):
+        return _build_short_pin_edit_arguments(
+            spec,
+            prompt=prompt,
+            video_url=video_url,
+            image_urls=image_urls,
+            parameters=parameters,
+        )
     params = dict(parameters or {})
     notes: list[str] = []
     other = params.get("other") if isinstance(params.get("other"), dict) else {}

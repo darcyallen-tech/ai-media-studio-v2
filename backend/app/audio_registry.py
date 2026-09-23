@@ -6,6 +6,7 @@ Minimal specs for the Audio tab (not a DAW).
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -117,6 +118,42 @@ TTS_VOICES = ELEVENLABS_VOICES
 
 # --- Music ---
 MUSIC_MODELS: dict[str, AudioSpec] = {
+    "elevenlabs music v2.5": AudioSpec(
+        key="elevenlabs music v2.5",
+        label="ElevenLabs Music v2.5",
+        category="music",
+        endpoint="elevenlabs/music/v2.5",
+        cost_estimate_usd=0.60,
+        notes=(
+            "ElevenLabs Music v2.5 on fal. Simple prompt mode (no composition plan). "
+            "Duration 3s–600s via music_length_ms. "
+            "Est. $0.60 per output minute, rounded up."
+        ),
+        supports_duration=True,
+        duration_min_s=3.0,
+        duration_max_s=600.0,
+        duration_default_s=30.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={"output_format": "mp3_48000_192"},
+    ),
+    "lyria 3.5": AudioSpec(
+        key="lyria 3.5",
+        label="Lyria 3.5",
+        category="music",
+        endpoint="google/lyria-3.5",
+        cost_estimate_usd=0.10,
+        notes=(
+            "Google Lyria 3.5 on fal. One prompt (style, then lyrics when sung). "
+            "Length is model-chosen and steered in the prompt, not a duration field. "
+            "Optional image_url from a source still. Est. $0.10 per generation."
+        ),
+        supports_duration=True,
+        duration_min_s=15.0,
+        duration_max_s=180.0,
+        duration_default_s=30.0,
+        pricing_mode="flat_per_track",
+        extra_defaults={},
+    ),
     "minimax music 3": AudioSpec(
         key="minimax music 3",
         label="MiniMax Music 3",
@@ -244,11 +281,14 @@ MUSIC_MODELS: dict[str, AudioSpec] = {
     ),
     "elevenlabs music": AudioSpec(
         key="elevenlabs music",
-        label="ElevenLabs Music",
+        label="ElevenLabs Music (v1/v2)",
         category="music",
         endpoint="fal-ai/elevenlabs/music",
         cost_estimate_usd=0.12,
-        notes="High-quality listing/background music. Duration control (3s–3 min). Instrumental option.",
+        notes=(
+            "Earlier ElevenLabs Music on fal (v1/v2). Duration 3s–3 min. "
+            "Kept below Music v2.5."
+        ),
         supports_duration=True,
         duration_min_s=3.0,
         duration_max_s=180.0,
@@ -679,6 +719,19 @@ def is_per_char(spec: AudioSpec) -> bool:
     return spec.resolved_pricing_mode() == "per_char"
 
 
+def is_eleven_music_v25(spec: AudioSpec) -> bool:
+    return (spec.endpoint or "").rstrip("/").lower() == "elevenlabs/music/v2.5"
+
+
+def eleven_music_v25_usd(duration_s: float | None) -> float:
+    """$0.60 per output minute, rounded up. A 30s song bills as 1 minute."""
+    seconds = float(duration_s or 0)
+    if seconds <= 0:
+        seconds = 60.0
+    minutes = max(1, math.ceil(seconds / 60.0))
+    return round(minutes * 0.60, 2)
+
+
 def estimate_audio_cost(
     spec: AudioSpec,
     *,
@@ -688,6 +741,9 @@ def estimate_audio_cost(
     """Rough USD estimate for UI display."""
     if spec.category == "voice_clone":
         return spec.cost_estimate_usd
+    if is_eleven_music_v25(spec):
+        seconds = duration_s if duration_s and duration_s > 0 else spec.duration_default_s
+        return eleven_music_v25_usd(seconds)
     if is_flat_per_track(spec):
         return spec.cost_estimate_usd
     if spec.cost_per_second is not None and duration_s is not None and duration_s > 0:
@@ -720,6 +776,11 @@ def format_audio_cost(
     amount = estimate_audio_cost(spec, duration_s=duration_s, text=text)
     if "comfy:" in (spec.endpoint or ""):
         return "Cost: $0.00"
+    if is_eleven_music_v25(spec):
+        seconds = duration_s if duration_s and duration_s > 0 else spec.duration_default_s
+        minutes = max(1, math.ceil(float(seconds or 60) / 60.0))
+        unit = "1 billed min" if minutes == 1 else f"{minutes} billed min"
+        return format_job_cost(amount, unit=unit, model=spec.label)
     if is_flat_per_track(spec):
         # Fal Lyria 3 Pro: "$0.08 per audio" — do not imply duration scaling.
         s = format_usd_amount(amount)
@@ -741,21 +802,76 @@ def format_audio_cost(
     return format_job_cost(amount, unit=unit, model=spec.label)
 
 
+_SECTION_TAG = re.compile(r"\[[^\]]+\]")
+
+
+def pack_style_lyrics(style: str, lyrics: str, *, instrumental: bool) -> str:
+    """Style paragraph, then a Lyrics block only when the track is sung."""
+    text = (style or "").strip()
+    body = (lyrics or "").strip()
+    if instrumental or not body:
+        return text
+    has_tag = bool(_SECTION_TAG.search(body))
+    has_line = any(line.strip() for line in body.splitlines())
+    if not has_tag and not has_line:
+        return text
+    if text:
+        return f"{text}\n\nLyrics:\n{body}"
+    return f"Lyrics:\n{body}"
+
+
 def build_music_args(
     spec: AudioSpec,
     prompt: str,
     *,
     duration_s: float | None = None,
     instrumental: bool = True,
+    lyrics: str = "",
+    seed: int | None = None,
+    image_url: str | None = None,
 ) -> dict[str, Any]:
     args = dict(spec.extra_defaults)
     prompt = (prompt or "").strip()
-    if "elevenlabs/music" in spec.endpoint:
+    endpoint = (spec.endpoint or "").rstrip("/").lower()
+    if endpoint == "elevenlabs/music/v2.5":
+        args["prompt"] = pack_style_lyrics(prompt, lyrics, instrumental=instrumental)
+        if duration_s is not None:
+            ms = int(round(float(duration_s) * 1000))
+        else:
+            ms = int(round(float(spec.duration_default_s or 30) * 1000))
+        args["music_length_ms"] = max(3000, min(600000, ms))
+        # Prompt path only. force_instrumental is not valid on composition_plan.
+        args["force_instrumental"] = bool(instrumental)
+        if seed is not None:
+            args["seed"] = int(seed)
+        args.pop("composition_plan", None)
+    elif "elevenlabs/music" in spec.endpoint:
         args["prompt"] = prompt
         if duration_s is not None:
             ms = int(max(spec.duration_min_s, min(spec.duration_max_s, duration_s)) * 1000)
             args["music_length_ms"] = ms
         args["force_instrumental"] = bool(instrumental)
+    elif endpoint == "google/lyria-3.5":
+        text = pack_style_lyrics(prompt, lyrics, instrumental=False)
+        if instrumental:
+            text = (prompt or "").strip()
+            note = "Instrumental only, no vocals, no lyrics."
+            if note not in text:
+                text = f"{text}\n\n{note}".strip() if text else note
+        if duration_s is not None:
+            try:
+                secs = int(round(max(1.0, float(duration_s))))
+            except (TypeError, ValueError):
+                secs = int(spec.duration_default_s or 30)
+            if not re.search(
+                r"\b\d+\s*(s|sec|secs|second|seconds|min|mins|minute|minutes)\b",
+                text,
+                re.I,
+            ):
+                text = text.rstrip() + f"\n\nAbout {secs} seconds."
+        args["prompt"] = text.strip()
+        if image_url and str(image_url).strip():
+            args["image_url"] = str(image_url).strip()
     elif "lyria3" in spec.endpoint:
         # fal-ai/lyria3/pro: prompt + optional image_url. Length via natural language.
         text = prompt

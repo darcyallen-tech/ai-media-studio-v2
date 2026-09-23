@@ -277,6 +277,12 @@ def validate(state: CreateState) -> list[str]:
             )
     elif modality == "v2v":
         _need("source_video", "V2V needs a source clip.")
+        ep = (entry.endpoint or "").lower()
+        if "id-v2v" in ep and not slots.filled("start_still") and not _ref_image_count(slots):
+            errors.append(
+                "ID-V2V needs a restyled first-frame still. "
+                "Partial pin-edit. For 2–30s multi-pin use Frame Editor (Aleph)."
+            )
     elif modality == "bridge":
         _need("start_still", "Bridge needs a start still.")
         _need("end_still", "Bridge needs an end still (first→last).")

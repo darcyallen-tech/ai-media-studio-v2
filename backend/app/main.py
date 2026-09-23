@@ -569,6 +569,10 @@ def list_models_endpoint(
     if want_mode == "audio":
         models = _audio_models(modality)
         default_id = models[0]["id"] if models else None
+        for row in models:
+            if row.get("id") == "audio:minimax music 3":
+                default_id = row["id"]
+                break
         return {
             "mode": "audio",
             "modality": modality,
@@ -840,6 +844,11 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
         extra = dict(body.params.extra or {})
         if body.params.seed is not None:
             extra["seed"] = body.params.seed
+        still = (body.slots.start_still or "").strip()
+        if not still and body.slots.ref_images:
+            still = str(body.slots.ref_images[0] or "").strip()
+        if still:
+            extra["image_path"] = still
         audio = generate_audio(
             modality=body.modality,
             model_id=body.model_id,
