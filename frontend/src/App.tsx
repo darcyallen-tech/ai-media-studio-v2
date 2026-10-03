@@ -524,6 +524,8 @@ function StudioCanvas() {
   const lastSnapshotRef = useRef<CanvasSnapshot | null>(null);
   const skipAutosaveRef = useRef(false);
   const saveCanvasRef = useRef<(opts?: { quiet?: boolean }) => void>(() => undefined);
+  const songSaveTimer = useRef<number | null>(null);
+  const persistSongNameRef = useRef<(id: string, name: string) => void>(() => undefined);
   const onCanvasDraft = useCallback((draft: PromptCanvasDraft) => {
     promptDraftRef.current = draft;
   }, []);
@@ -711,6 +713,32 @@ function StudioCanvas() {
     [getEdges, getNodes],
   );
   saveCanvasRef.current = saveCanvasNow;
+  persistSongNameRef.current = (id, name) => {
+    setNodes((current) =>
+      current.map((n) =>
+        n.id === id && n.type === "result"
+          ? { ...n, data: { ...n.data, songName: name } }
+          : n,
+      ),
+    );
+    if (songSaveTimer.current) window.clearTimeout(songSaveTimer.current);
+    songSaveTimer.current = window.setTimeout(() => {
+      saveCanvasRef.current({ quiet: true });
+      const node = getNodes().find((n) => n.id === id) as StudioNode | undefined;
+      const local =
+        node && node.type === "result" ? node.data.result?.local_paths?.[0] || "" : "";
+      if (!local) return;
+      void fetch("/library/song-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: local, song_name: name }),
+      })
+        .then(() => {
+          window.dispatchEvent(new Event("ams-song-named"));
+        })
+        .catch(() => undefined);
+    }, 350);
+  };
 
   const refreshCanvas = useCallback(() => {
     void fetchCanvas().then((snap) => {
@@ -922,7 +950,7 @@ function StudioCanvas() {
   );
 
   const spawnResult = useCallback(
-    (result: GenerateResponse, job?: { source?: LibraryItem | null }) => {
+    (result: GenerateResponse, job?: { source?: LibraryItem | null; songName?: string }) => {
       const compareSource = stillItem(job?.source);
       const mapped = itemFromResult(result);
       const compareId = compareIdFor(RESULT_ID);
@@ -933,6 +961,16 @@ function StudioCanvas() {
           x: (prompt?.position.x ?? PROMPT_POS.x) + 500,
           y: prompt?.position.y ?? PROMPT_POS.y,
         };
+        const sample = result.local_paths?.[0] || result.result_paths?.[0] || "";
+        const keepSong =
+          isAudioPath(sample) && (!result.job_kind || result.job_kind === "music");
+        const previousName =
+          existing?.type === "result" ? String(existing.data.songName || "").trim() : "";
+        const songName = keepSong
+          ? job && Object.prototype.hasOwnProperty.call(job, "songName")
+            ? String(job.songName || "").trim()
+            : previousName
+          : "";
         const next: StudioNode = {
           id: RESULT_ID,
           type: "result",
@@ -944,6 +982,9 @@ function StudioCanvas() {
           data: {
             result,
             compareSource,
+            songName,
+            onSongName: (name) => persistSongNameRef.current(RESULT_ID, name),
+            getStyle: () => String(promptDraftRef.current.prompt || ""),
             onClose: () => closeNode(RESULT_ID),
             onTool: () => undefined,
             onCompareSource: () => addCompareFromResult(RESULT_ID),
@@ -3202,6 +3243,13 @@ function StudioCanvas() {
             type: "prompt",
             data: {
               onGenerated: spawnResult,
+              getSongName: () => {
+                const node = getNodes().find((n) => n.id === RESULT_ID) as
+                  | StudioNode
+                  | undefined;
+                if (!node || node.type !== "result") return "";
+                return String(node.data.songName || "").trim();
+              },
               onAddSource: addSourceNode,
               onAddMask: addMaskNode,
               hasMaskNode: current.some((row) => row.id === MASK_ID),
@@ -3643,6 +3691,12 @@ function StudioCanvas() {
             n.id === PIN_EDIT_RESULT && mapped && mapped.kind === "image"
               ? mapped
               : null;
+          const samplePath =
+            (result.local_paths && result.local_paths[0]) ||
+            (result.result_paths && result.result_paths[0]) ||
+            "";
+          const musicResult =
+            isAudioPath(samplePath) && (!result.job_kind || result.job_kind === "music");
           return {
             ...n,
             type: "result",
@@ -3650,6 +3704,12 @@ function StudioCanvas() {
               ...n.data,
               result,
               compareSource: n.data.compareSource,
+              onSongName: musicResult
+                ? (name: string) => persistSongNameRef.current(n.id, name)
+                : undefined,
+              getStyle: musicResult
+                ? () => String(promptDraftRef.current.prompt || "")
+                : undefined,
               onClose: () => closeNode(n.id),
               onTool: (kind) => spawnTool(n.id, kind, result),
               onCompareSource: () => addCompareFromResult(n.id),

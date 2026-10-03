@@ -112,6 +112,7 @@ from app.library import (  # noqa: E402
     resolve_handoff_dir,
     resolve_library_file,
     reveal_in_folder,
+    set_generated_song_name,
     set_pinned,
     thumb_path,
     write_upload,
@@ -237,6 +238,12 @@ class ResolveSendIn(BaseModel):
     job_name: str | None = None
     model: str | None = None
     cost: str | None = None
+    clip_name: str | None = None
+
+
+class SongNameIn(BaseModel):
+    path: str
+    song_name: str = ""
 
 
 class ToolRunIn(BaseModel):
@@ -872,6 +879,7 @@ def generate_endpoint(body: CreateStateIn) -> dict[str, Any]:
                 cost=cost,
                 duration_sec=duration,
                 model=audio.model or audio.model_key,
+                song_name=str(extra.get("song_name") or ""),
             )
             _log_job_spend(
                 ok=True,
@@ -1791,6 +1799,20 @@ async def library_import(
     return {"ok": bool(items), "items": items, "errors": errors}
 
 
+@app.post("/library/song-name")
+def library_song_name(body: SongNameIn) -> dict[str, Any]:
+    """Update the Library label for a generated file. Does not rename it."""
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="path is required")
+    if not is_allowed_path(raw):
+        raise HTTPException(status_code=403, detail="Path is outside library roots.")
+    try:
+        return set_generated_song_name(raw, body.song_name or "")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/library/reveal")
 def library_reveal(body: RevealIn) -> dict[str, Any]:
     raw = (body.path or "").strip()
@@ -1943,6 +1965,7 @@ def resolve_send(body: ResolveSendIn) -> dict[str, Any]:
         job_name=body.job_name,
         model=body.model,
         cost=body.cost,
+        clip_name=body.clip_name,
     )
     if result.fallback_folder and not result.ok:
         try:

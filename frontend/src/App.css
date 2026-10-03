@@ -1971,6 +1971,28 @@ html[data-theme="night"] .hint.budget-ok {
   gap: 8px;
 }
 
+.song-name {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.song-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.song-name-row .model {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-name-row .ghost {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .builder-node .prompt {
   min-height: 72px;
 }

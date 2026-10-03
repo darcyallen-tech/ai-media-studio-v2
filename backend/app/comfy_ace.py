@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import PROJECT_ROOT, is_frozen
-from app.naming import job_media_dir, make_output_stem, timestamp_now, unique_path
+from app.naming import job_media_dir, make_output_stem, music_output_stem, timestamp_now, unique_path
 from app.prefs import load_prefs
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
@@ -812,7 +812,11 @@ def generate_ace_step(
         )
     stamp = timestamp_now()
     media_dir = job_media_dir(output_dir, stamp=stamp)
-    stem = make_output_stem(tags, "ace-step-1.5", stamp=stamp, kind="music")
+    stem = music_output_stem(
+        song_name=str(extra.get("song_name") or ""),
+        stamp=stamp,
+        fallback=make_output_stem(tags, "ace-step-1.5", stamp=stamp, kind="music"),
+    )
     ext = Path(files[0]["filename"]).suffix.lower()
     if ext not in _AUDIO_EXT:
         ext = ".mp3"

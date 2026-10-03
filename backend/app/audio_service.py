@@ -22,7 +22,7 @@ from app.audio_registry import (
 )
 from app.errors import friendly_error
 from app.fal.client import FalClientError, download_url, subscribe
-from app.naming import job_media_dir, make_output_stem, timestamp_now, unique_path
+from app.naming import job_media_dir, make_output_stem, music_output_stem, timestamp_now, unique_path
 from app.pricing import (
     extract_cost_usd_from_response,
     format_cost_label,
@@ -225,6 +225,7 @@ def _run_audio(
     kind: str,
     est_cost: float,
     on_progress: ProgressCallback | None = None,
+    song_name: str = "",
 ) -> AudioResult:
     def progress(msg: str) -> None:
         if on_progress:
@@ -283,7 +284,11 @@ def _run_audio(
 
     stamp = timestamp_now()
     media_dir = job_media_dir(output_dir, stamp=stamp)
-    stem = make_output_stem(prompt_for_name, spec.key, stamp=stamp, kind=kind)
+    stem = music_output_stem(
+        song_name=song_name,
+        stamp=stamp,
+        fallback=make_output_stem(prompt_for_name, spec.key, stamp=stamp, kind=kind),
+    )
     dest = unique_path(media_dir, stem, _extension_from_url(out_url))
     try:
         download_url(out_url, dest, on_progress=progress)
@@ -412,6 +417,7 @@ def generate_audio(
             prompt_for_name=text,
             kind="music",
             est_cost=est,
+            song_name=str(extra.get("song_name") or ""),
         )
 
     if spec.category == "sfx":

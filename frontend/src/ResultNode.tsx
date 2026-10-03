@@ -41,6 +41,7 @@ import {
   qwenCameraReadout,
   type SheetAngleChip,
 } from "./sheetUi";
+import { localStamp, songSlug } from "./songName";
 import {
   writeLibraryPayload,
   type GenerateResponse,
@@ -60,10 +61,15 @@ function abcFromResult(result: GenerateResponse): string {
   return "";
 }
 
-function downloadYueAbc(abc: string, mediaPath?: string) {
+function downloadYueAbc(abc: string, mediaPath?: string, songName?: string) {
+  const slug = songSlug(songName || "");
   const base = (mediaPath || "AIMS_YuE2").split(/[/\\]/).pop() || "AIMS_YuE2";
   const stem = base.replace(/\.[^.]+$/, "") || "AIMS_YuE2";
-  const name = stem.startsWith("AIMS_YuE2") ? `${stem}.abc` : `AIMS_YuE2_${stem}.abc`;
+  const name = slug
+    ? `${slug}_${localStamp()}.abc`
+    : stem.startsWith("AIMS_YuE2")
+      ? `${stem}.abc`
+      : `AIMS_YuE2_${stem}.abc`;
   const blob = new Blob([abc], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -223,6 +229,10 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
   const hasXai = useXaiKey();
   const [angleChips, setAngleChips] = useState<SheetAngleChip[]>([]);
   const [pickedSlots, setPickedSlots] = useState<string[]>([]);
+  const [songName, setSongName] = useState(data.songName || "");
+  useEffect(() => {
+    setSongName(data.songName || "");
+  }, [data.songName]);
   const pickedManualRef = useRef(false);
   const cap = isSheet ? sheetR2iRefCap(selectedModel) : Number(data.maxRefs) || 0;
   const isCharacterSheet =
@@ -527,7 +537,9 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
     });
   }
 
-  const title = (data.title || "").trim() || "Result";
+  const showSong = isAud && (!result.job_kind || result.job_kind === "music");
+  const songLabel = showSong ? songName.trim() : "";
+  const title = songLabel || (data.title || "").trim() || "Result";
   const isAngle = Boolean(data.slot || data.builderId);
   const hasStill = paths.length > 0;
   const jobSource = data.compareSource;
@@ -1057,6 +1069,40 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
             <span>{formatDuration(result.duration_sec)}</span>
           ) : null}
         </p>
+        {showSong ? (
+          <div className="song-name">
+            <span className="field-label">Song name</span>
+            <div className="song-name-row">
+              <input
+                className="model nodrag"
+                value={songName}
+                placeholder="Untitled track"
+                maxLength={120}
+                aria-label="Song name"
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSongName(next);
+                  data.onSongName?.(next);
+                }}
+              />
+              <button
+                type="button"
+                className="ghost nodrag"
+                onClick={() => {
+                  const slug = songSlug(data.getStyle?.() || "");
+                  if (!slug) {
+                    toast("Style is empty.", true);
+                    return;
+                  }
+                  setSongName(slug);
+                  data.onSongName?.(slug);
+                }}
+              >
+                From style
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="media" onDoubleClick={enlarge}>
           {paths.map((src) =>
             isVideoPath(src) ? (
@@ -1128,7 +1174,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
               >
                 Copy
               </button>
-              <button type="button" className="ghost nodrag" onClick={() => downloadYueAbc(yueAbc, paths[0])}>
+              <button type="button" className="ghost nodrag" onClick={() => downloadYueAbc(yueAbc, paths[0], songName)}>
                 Save .abc
               </button>
               <button
@@ -1538,6 +1584,7 @@ export default function ResultNode({ data, selected }: NodeProps<ResultFlowNode>
                     ? "video"
                     : "image",
                 cost: result.cost,
+                clip_name: songLabel || undefined,
               })
             }
           >

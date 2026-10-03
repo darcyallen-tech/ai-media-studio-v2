@@ -95,6 +95,7 @@ export type LibraryItem = {
   duration_sec?: number;
   model?: string;
   pinned?: boolean;
+  song_name?: string;
 };
 
 export type LibraryBucket = {
@@ -186,8 +187,9 @@ export type PromptCanvasDraft = {
 export type PromptNodeData = {
   onGenerated: (
     result: GenerateResponse,
-    job?: { source?: LibraryItem | null },
+    job?: { source?: LibraryItem | null; songName?: string },
   ) => void;
+  getSongName?: () => string;
   onAddSource: () => void;
   onAddFirst: () => void;
   onAddLast: () => void;
@@ -339,6 +341,9 @@ export type ResultNodeData = {
   result: GenerateResponse;
   title?: string;
   prompt?: string;
+  songName?: string;
+  onSongName?: (name: string) => void;
+  getStyle?: () => string;
   generating?: boolean;
   error?: string | null;
   builderId?: string;

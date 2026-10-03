@@ -163,8 +163,12 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
     function onAssets() {
       void reloadAssets();
     }
+    function onSongNamed() {
+      if (tab === "library") void reload();
+    }
     window.addEventListener("ams-library-imported", onImported);
     window.addEventListener("ams-assets-changed", onAssets);
+    window.addEventListener("ams-song-named", onSongNamed);
     const id = window.setInterval(() => {
       if (tab === "library" && section === "resolve") void reload();
     }, 4000);
@@ -172,6 +176,7 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
       window.clearInterval(id);
       window.removeEventListener("ams-library-imported", onImported);
       window.removeEventListener("ams-assets-changed", onAssets);
+      window.removeEventListener("ams-song-named", onSongNamed);
     };
   }, [open, filter, section, tab]);
 
@@ -482,7 +487,10 @@ export default function LibraryPanel({ open, tab, onClose, onPick, onNewAsset }:
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  void sendToResolve(item.path, { type: item.kind });
+                  void sendToResolve(item.path, {
+                    type: item.kind,
+                    clip_name: (item.song_name || "").trim() || undefined,
+                  });
                 }}
               >
                 Send to Resolve

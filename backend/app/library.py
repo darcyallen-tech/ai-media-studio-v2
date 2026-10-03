@@ -315,6 +315,12 @@ def _item(
     }
     if extra:
         row.update(extra)
+    song = str(row.get("song_name") or "").strip()
+    if song:
+        row["song_name"] = song[:120]
+        row["name"] = row["song_name"]
+    else:
+        row.pop("song_name", None)
     return row
 
 
@@ -370,34 +376,80 @@ def _load_generated_meta() -> dict[str, dict[str, Any]]:
     return out
 
 
+def _write_generated_rows(rows: list[dict[str, Any]]) -> None:
+    rows.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+    GENERATED_INDEX.write_text(
+        json.dumps(rows[:400], indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def record_generated(
     paths: list[str],
     *,
     cost: str = "",
     duration_sec: float | None = None,
     model: str = "",
+    song_name: str | None = None,
 ) -> None:
     ensure_library_dirs()
     existing = list(_load_generated_meta().values())
     now = datetime.now(timezone.utc).isoformat()
     by_path = {str(r.get("path")): r for r in existing}
+    incoming = str(song_name or "").strip()[:120] if song_name is not None else None
     for raw in paths:
         p = Path(raw)
         if not p.is_file():
             continue
-        by_path[str(p.resolve())] = {
-            "path": str(p.resolve()),
+        key = str(p.resolve())
+        prev = by_path.get(key) or {}
+        row: dict[str, Any] = {
+            "path": key,
             "cost": cost,
             "duration_sec": duration_sec,
             "model": model,
             "created": now,
         }
-    rows = list(by_path.values())
-    rows.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
-    GENERATED_INDEX.write_text(
-        json.dumps(rows[:400], indent=2) + "\n",
-        encoding="utf-8",
-    )
+        if incoming:
+            row["song_name"] = incoming
+        elif incoming is None and str(prev.get("song_name") or "").strip():
+            row["song_name"] = str(prev["song_name"]).strip()[:120]
+        by_path[key] = row
+    _write_generated_rows(list(by_path.values()))
+
+
+def set_generated_song_name(path: str | Path, song_name: str) -> dict[str, Any]:
+    """Store the Library display name. Does not rename the file on disk."""
+    file = Path(path).expanduser()
+    try:
+        file = file.resolve()
+    except OSError as exc:
+        raise FileNotFoundError(str(exc)) from exc
+    if not file.is_file():
+        raise FileNotFoundError(f"File not found: {file}")
+    label = (song_name or "").strip()[:120]
+    ensure_library_dirs()
+    by_path = dict(_load_generated_meta())
+    key = str(file)
+    prev = by_path.get(key) or {}
+    row: dict[str, Any] = {
+        "path": key,
+        "cost": prev.get("cost", ""),
+        "duration_sec": prev.get("duration_sec"),
+        "model": prev.get("model", ""),
+        "created": prev.get("created") or datetime.now(timezone.utc).isoformat(),
+    }
+    if label:
+        row["song_name"] = label
+    by_path[key] = row
+    _write_generated_rows(list(by_path.values()))
+    return {
+        "ok": True,
+        "path": key,
+        "name": label or file.name,
+        "song_name": label,
+        "renamed": False,
+    }
 
 
 def list_source(source: str, media_type: str | None = None) -> dict[str, Any]:

@@ -31,7 +31,7 @@ from app.comfy_ace import (
 )
 from app.comfy_client import _multipart, comfy_input_dir
 from app.config import PROJECT_ROOT, is_frozen
-from app.naming import job_media_dir, timestamp_now, unique_path
+from app.naming import job_media_dir, music_output_stem, timestamp_now, unique_path
 
 # YuE2 plans ABC then renders. Stay inside the 15–20 minute window.
 _POLL_S = 2.0
@@ -792,7 +792,15 @@ def generate_yue2(
     stamp = timestamp_now()
     media_dir = job_media_dir(output_dir, stamp=stamp)
     tag = {"t2m": "T2M", "cover": "Cover", "rerender": "Rerender"}[kind]
-    dest = unique_path(media_dir, f"AIMS_YuE2_{tag}_{stamp}", ".wav")
+    dest = unique_path(
+        media_dir,
+        music_output_stem(
+            song_name=str(extra.get("song_name") or ""),
+            stamp=stamp,
+            fallback=f"AIMS_YuE2_{tag}_{stamp}",
+        ),
+        ".wav",
+    )
     try:
         _download_view(base, files[0], dest)
     except Exception as exc:

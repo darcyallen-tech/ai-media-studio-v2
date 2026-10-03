@@ -896,7 +896,10 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
       const extra: Record<string, unknown> = isAudio
         ? { voice: voice || null, instrumental }
         : {};
+      let songNow = "";
       if (isAudio && modality === "music") {
+        songNow = (data.getSongName?.() || "").trim();
+        if (songNow) extra.song_name = songNow;
         extra.tags = composed;
         extra.lyrics = isYue2 ? yueLyrics : aceLyrics;
         const bpmN = parseInt(aceBpm, 10);
@@ -1122,6 +1125,7 @@ function PromptNodeInner({ data }: NodeProps<PromptFlowNode>) {
             : itemMediaKind(data.first) === "image"
               ? data.first
               : null,
+        ...(isAudio && modality === "music" ? { songName: songNow } : {}),
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Generate request failed.");

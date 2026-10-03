@@ -161,6 +161,43 @@ def prompt_slug(prompt: str, max_len: int = 48) -> str:
     return slug
 
 
+def song_slug(text: str, max_len: int = 40) -> str:
+    """Filesystem slug from a song name or the first ~40 characters of Style.
+
+    Keeps every word. Empty input returns "".
+    "Trailer Park Bed" → "trailer-park-bed"
+    "Hard rock 140" → "hard-rock-140"
+    """
+    raw = (text or "").replace("\r", " ").replace("\n", " ").strip()
+    if not raw:
+        return ""
+    head = raw[:40]
+    cleaned = head.lower()
+    cleaned = _WIN_BAD.sub(" ", cleaned)
+    cleaned = re.sub(r"[^a-z0-9\s\-]+", " ", cleaned)
+    parts = [part for part in re.split(r"[\s\-]+", cleaned) if part]
+    slug = "-".join(parts)
+    slug = _MULTI_DASH.sub("-", slug).strip("-")
+    if len(slug) > max_len:
+        slug = slug[:max_len].rstrip("-")
+    if not slug:
+        return ""
+    if slug.lower() in _WIN_RESERVED:
+        slug = f"x-{slug}"[:max_len].rstrip("-")
+    return slug
+
+
+def music_output_stem(*, song_name: str, stamp: str, fallback: str) -> str:
+    """{slug}_{timestamp} when a song name is set; otherwise the existing stem."""
+    slug = song_slug(song_name)
+    stamp = (stamp or "").strip()
+    if not slug:
+        return fallback
+    if not stamp:
+        return slug
+    return f"{slug}_{stamp}"
+
+
 def model_slug(model_key: str, max_len: int = 36) -> str:
     key = (model_key or "model").strip().lower()
     # Prefer registry key so UI labels map to short aliases

@@ -240,12 +240,34 @@ def _add_markers(
     return added
 
 
+def resolve_clip_name(song_name: str | None) -> str:
+    """Media Pool clip name. Blank leaves the imported filename as-is."""
+    label = (song_name or "").replace("\\", " ").replace("/", " ").strip()
+    return label[:120]
+
+
+def _rename_media_pool_clip(clip: Any, label: str) -> bool:
+    if clip is None or not label:
+        return False
+    try:
+        clip.SetClipProperty("Clip Name", label)
+        return True
+    except Exception:
+        pass
+    try:
+        clip.SetName(label)
+        return True
+    except Exception:
+        return False
+
+
 def send_file_to_resolve(
     path: str | Path | None,
     *,
     job_name: str | None = None,
     model: str | None = None,
     cost: str | None = None,
+    clip_name: str | None = None,
     place_on_timeline: bool = True,
     add_marker: bool = True,
     video_track: int = 2,
@@ -316,6 +338,9 @@ def send_file_to_resolve(
 
         n = len(clips) if isinstance(clips, (list, tuple)) else 1
         clip = _first_clip(clips)
+        label = resolve_clip_name(clip_name)
+        if label and _rename_media_pool_clip(clip, label):
+            notes.append(f"clip name: {label}")
         placed = False
         marker_ok = False
         record_fr: int | None = None

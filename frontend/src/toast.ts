@@ -14,7 +14,7 @@ export function toast(message: string, error = false, action?: ToastAction) {
 
 export async function sendToResolve(
   path: string,
-  extra?: { type?: string; model?: string; cost?: string },
+  extra?: { type?: string; model?: string; cost?: string; clip_name?: string },
 ) {
   if (!path) {
     toast("No file to send.", true);
