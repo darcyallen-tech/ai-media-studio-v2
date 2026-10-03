@@ -1,5 +1,16 @@
 # AI Media Studio V2 — release notes
 
+## Unreleased — Fal catalog update (2026-10-03)
+
+Catalog entries after 2.0.0-rc5. Prices are the rates encoded in the Fal catalog.
+
+- **FLUX 3 text-to-image** (`blackforestlabs/flux-3/text-to-image`) and **FLUX 3 edit-image** (`blackforestlabs/flux-3/edit-image`, up to 10 refs). Promo $0.024 per 1K image until Oct 8, 2026, then $0.048.
+- **MiniMax H3 Max Recast** (V2V, `minimax/h3-max/recast`). $0.30/s @768p, $0.45/s @1080p.
+- **H3 Max Extend Video** (`minimax/h3-max/extend-video`): $0.05/s @480p, $0.08/s @768p, $0.16/s @1080p, $0.32/s @2K. **H3 Max Turbo Extend Video** (`minimax/h3-max-turbo/extend-video`): $0.025/s @480p, $0.04/s @768p, $0.08/s @1080p, $0.16/s @2K (half the H3 Max extend rates). Both billed on new seconds only.
+- **Grok Imagine Video 1.5 Lite** T2V (`xai/grok-imagine-video/v1.5/lite/text-to-video`) and I2V (`xai/grok-imagine-video/v1.5/lite/image-to-video`). $0.02/s @480p, $0.03/s @720p, $0.14/s @1080p. I2V adds $0.01 per input still.
+- **LTX 2.3 Quality Outpaint** (`fal-ai/ltx-2.3-quality/outpaint`). $0.0024075 per megapixel (width × height × frames).
+- **H3 Max Reference-to-Video** middle-frame payload (`middle_image_url` + `middle_frame_time`, with start and end images, 480P or 768P). Backend only; no UI picker yet.
+
 ## Local Comfy character pipeline
 
 Character Builder Front / extra angles / Confirm run on a local ComfyUI instance (Settings **COMFY_URL**, default `http://127.0.0.1:8188`). No fal or xAI keys for those three buttons.
