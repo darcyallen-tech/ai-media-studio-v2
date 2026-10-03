@@ -281,6 +281,105 @@ ENDPOINT_ASPECT_POLICIES: tuple[tuple[str, AspectPolicy], ...] = (
             note="FLUX 3 keyframes accepts aspect.",
         ),
     ),
+    # --- OMIT: Grok Imagine 1.5 Lite I2V (no aspect_ratio on the schema) ---
+    (
+        "grok-imagine-video/v1.5/lite/image-to-video",
+        AspectPolicy(
+            kind="omit",
+            ui_kind="still",
+            note="Grok Imagine 1.5 Lite I2V follows the still (no aspect_ratio).",
+        ),
+    ),
+    # --- SEND: Grok Imagine 1.5 Lite T2V (same enum as full 1.5 T2V) ---
+    (
+        "grok-imagine-video/v1.5/lite/text-to-video",
+        AspectPolicy(
+            kind="send",
+            allowed=("16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"),
+            default="16:9",
+            note="Grok Imagine 1.5 Lite T2V aspect enum.",
+        ),
+    ),
+    # --- SEND: H3 Max / Turbo extend (auto follows the source) ---
+    (
+        "minimax/h3-max-turbo/extend-video",
+        AspectPolicy(
+            kind="send",
+            allowed=("auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+            default="auto",
+            note="H3 Max Turbo extend aspect enum (auto follows the source).",
+        ),
+    ),
+    (
+        "minimax/h3-max/extend-video",
+        AspectPolicy(
+            kind="send",
+            allowed=("auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+            default="auto",
+            note="H3 Max extend aspect enum (auto follows the source).",
+        ),
+    ),
+    # --- SEND: LTX 2.3 Quality outpaint (no auto) ---
+    (
+        "ltx-2.3-quality/outpaint",
+        AspectPolicy(
+            kind="send",
+            allowed=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "9:21"),
+            default="16:9",
+            note="LTX 2.3 Quality outpaint aspect enum.",
+        ),
+    ),
+    # --- SEND: FLUX 3 stills (auto follows the first image on edit) ---
+    (
+        "blackforestlabs/flux-3/text-to-image",
+        AspectPolicy(
+            kind="send",
+            allowed=(
+                "auto",
+                "21:9",
+                "2:1",
+                "16:9",
+                "3:2",
+                "7:5",
+                "4:3",
+                "5:4",
+                "1:1",
+                "4:5",
+                "3:4",
+                "5:7",
+                "2:3",
+                "9:16",
+                "1:2",
+            ),
+            default="auto",
+            note="FLUX 3 text-to-image aspect enum.",
+        ),
+    ),
+    (
+        "blackforestlabs/flux-3/edit-image",
+        AspectPolicy(
+            kind="send",
+            allowed=(
+                "auto",
+                "21:9",
+                "2:1",
+                "16:9",
+                "3:2",
+                "7:5",
+                "4:3",
+                "5:4",
+                "1:1",
+                "4:5",
+                "3:4",
+                "5:7",
+                "2:3",
+                "9:16",
+                "1:2",
+            ),
+            default="auto",
+            note="FLUX 3 edit-image aspect enum (auto follows the first image).",
+        ),
+    ),
     # --- SEND: Grok R2V ---
     (
         "grok-imagine-video/v1.5/reference-to-video",

@@ -450,6 +450,48 @@ T2I_MODELS: dict[str, VisionModelSpec] = {
         max_num_images=4,
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
     ),
+    "flux 3 t2i": VisionModelSpec(
+        key="flux 3 t2i",
+        label="FLUX 3 · Text→Image",
+        mode="text_to_image",
+        endpoint="blackforestlabs/flux-3/text-to-image",
+        cost_estimate_usd=0.024,
+        notes=(
+            "Best for native 2K/4K stills from a prompt. "
+            "Promo $0.024 per 1K (1 MP) until Oct 8 2026, then $0.048; "
+            "price scales with resolution (512sq/768sq/1k/2k/4k)."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "auto",
+            "21:9",
+            "2:1",
+            "16:9",
+            "3:2",
+            "7:5",
+            "4:3",
+            "5:4",
+            "1:1",
+            "4:5",
+            "3:4",
+            "5:7",
+            "2:3",
+            "9:16",
+            "1:2",
+        ),
+        default_aspect="auto",
+        resolution_choices=("512sq", "768sq", "1k", "2k", "4k"),
+        default_resolution="1k",
+        supports_audio=False,
+        supports_negative=False,
+        max_num_images=1,
+        extra_defaults={
+            "safety_tolerance": 2,
+            "output_format": "jpeg",
+            "enable_prompt_expansion": False,
+        },
+    ),
     "flux 1.1 pro ultra t2i": VisionModelSpec(
         key="flux 1.1 pro ultra t2i",
         label="Flux 1.1 Pro Ultra (T2I)",
@@ -910,6 +952,52 @@ I2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         supports_strength=True,
         extra_defaults={"num_images": 1, "output_format": "jpeg"},
+    ),
+    "flux 3 edit i2i": VisionModelSpec(
+        key="flux 3 edit i2i",
+        label="FLUX 3 · Edit Image",
+        mode="image_to_image",
+        endpoint="blackforestlabs/flux-3/edit-image",
+        cost_estimate_usd=0.024,
+        notes=(
+            "Best for multi-ref edits (up to 10 images) with native 2K/4K. "
+            "Promo $0.024 per 1K (1 MP) until Oct 8 2026, then $0.048; "
+            "price scales with resolution (512sq/768sq/1k/2k/4k)."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "auto",
+            "21:9",
+            "2:1",
+            "16:9",
+            "3:2",
+            "7:5",
+            "4:3",
+            "5:4",
+            "1:1",
+            "4:5",
+            "3:4",
+            "5:7",
+            "2:3",
+            "9:16",
+            "1:2",
+        ),
+        default_aspect="auto",
+        resolution_choices=("512sq", "768sq", "1k", "2k", "4k"),
+        default_resolution="1k",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=9,
+        max_num_images=1,
+        image_field="image_urls",
+        edit_model_key="flux 3 edit",
+        supports_strength=False,
+        extra_defaults={
+            "safety_tolerance": 2,
+            "output_format": "jpeg",
+            "enable_prompt_expansion": False,
+        },
     ),
     "gpt image 2.5 flare i2i": VisionModelSpec(
         key="gpt image 2.5 flare i2i",
@@ -1448,6 +1536,29 @@ T2V_MODELS: dict[str, VisionModelSpec] = {
         duration_as_int=True,
         native_stereo_audio=True,
     ),
+    "grok imagine 1.5 lite t2v": VisionModelSpec(
+        key="grok imagine 1.5 lite t2v",
+        label="Grok Imagine 1.5 Lite · Text→Video",
+        mode="text_to_video",
+        endpoint="xai/grok-imagine-video/v1.5/lite/text-to-video",
+        cost_estimate_usd=0.18,  # 6s × $0.03 @720p
+        cost_per_second=0.03,
+        cost_per_second_by_resolution={"480p": 0.02, "720p": 0.03, "1080p": 0.14},
+        notes=(
+            "Best for cheap T2V drafts with native audio. "
+            "$0.02/s @480p, $0.03/s @720p, $0.14/s @1080p."
+        ),
+        duration_choices=tuple(str(i) for i in range(1, 16)),
+        default_duration="6",
+        aspect_choices=("16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16"),
+        default_aspect="16:9",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+        native_stereo_audio=True,
+    ),
     "flux 3 t2v": VisionModelSpec(
         key="flux 3 t2v",
         label="FLUX 3 · Text→Video",
@@ -1958,6 +2069,32 @@ I2V_MODELS: dict[str, VisionModelSpec] = {
         native_stereo_audio=True,
         image_field="image_url",
     ),
+    "grok imagine 1.5 lite i2v": VisionModelSpec(
+        key="grok imagine 1.5 lite i2v",
+        label="Grok Imagine 1.5 Lite · Image→Video",
+        mode="image_to_video",
+        endpoint="xai/grok-imagine-video/v1.5/lite/image-to-video",
+        cost_estimate_usd=0.19,  # 6s × $0.03 + $0.01
+        cost_per_second=0.03,
+        cost_per_second_by_resolution={"480p": 0.02, "720p": 0.03, "1080p": 0.14},
+        notes=(
+            "Best for cheap I2V drafts with native audio. "
+            "$0.02/s @480p, $0.03/s @720p, $0.14/s @1080p, plus $0.01 per input still."
+        ),
+        duration_choices=tuple(str(i) for i in range(1, 16)),
+        default_duration="6",
+        aspect_choices=(),
+        default_aspect="",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="720p",
+        supports_audio=False,
+        supports_negative=False,
+        supports_end_frame=False,
+        duration_as_int=True,
+        native_stereo_audio=True,
+        omit_aspect_ratio=True,
+        image_field="image_url",
+    ),
     "ltx 2.5 pro i2v": VisionModelSpec(
         key="ltx 2.5 pro i2v",
         label="LTX 2.5 Pro · Image→Video",
@@ -2159,6 +2296,52 @@ R2I_MODELS: dict[str, VisionModelSpec] = {
         edit_model_key="flux 2 max",
         extra_defaults={"num_images": 1, "output_format": "jpeg", "safety_tolerance": "4"},
     ),
+    "flux 3 edit r2i": VisionModelSpec(
+        key="flux 3 edit r2i",
+        label="FLUX 3 · Edit Image",
+        mode="reference_to_image",
+        endpoint="blackforestlabs/flux-3/edit-image",
+        cost_estimate_usd=0.024,
+        notes=(
+            "Best for building a still from up to 10 reference images, native 2K/4K. "
+            "Promo $0.024 per 1K (1 MP) until Oct 8 2026, then $0.048; "
+            "price scales with resolution (512sq/768sq/1k/2k/4k)."
+        ),
+        duration_choices=(),
+        default_duration="",
+        aspect_choices=(
+            "auto",
+            "21:9",
+            "2:1",
+            "16:9",
+            "3:2",
+            "7:5",
+            "4:3",
+            "5:4",
+            "1:1",
+            "4:5",
+            "3:4",
+            "5:7",
+            "2:3",
+            "9:16",
+            "1:2",
+        ),
+        default_aspect="auto",
+        resolution_choices=("512sq", "768sq", "1k", "2k", "4k"),
+        default_resolution="1k",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=10,
+        max_num_images=1,
+        image_field="image_urls",
+        edit_model_key="flux 3 edit",
+        supports_strength=False,
+        extra_defaults={
+            "safety_tolerance": 2,
+            "output_format": "jpeg",
+            "enable_prompt_expansion": False,
+        },
+    ),
     "gpt image 2.5 flare r2i": VisionModelSpec(
         key="gpt image 2.5 flare r2i",
         label="GPT Image 2.5 Flare (quality / speed)",
@@ -2354,7 +2537,9 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
             "H3 Max R2V — cheaper Max stack, multi-ref characters/scenes. "
             "Cite Image 1 / Video 1 / Audio 1. Up to 9 images + 3 videos + 3 audio (≤12). "
             "5–15s · 480P/768P. Est. $0.08/s output; first 4096 ref tokens included, "
-            "then $0.02 / 1k tokens. Also Studio Video → R2V."
+            "then $0.02 / 1k tokens. Also Studio Video → R2V. "
+            "Optional middle frame: middle_image_url + middle_frame_time (seconds, strictly "
+            "between start and end); requires start and end images and native 480P or 768P."
         ),
         duration_choices=tuple(str(i) for i in range(5, 16)),
         default_duration="5",
@@ -2372,6 +2557,7 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
         max_total_refs=12,
         omni_reference=True,
         duration_as_int=True,
+        supports_end_frame=True,
         prompt_citation_style="plain",
         extra_defaults={
             "prompt_expansion_mode": "balanced",
@@ -2624,6 +2810,60 @@ R2V_MODELS: dict[str, VisionModelSpec] = {
 # ---------------------------------------------------------------------------
 
 V2V_MODELS: dict[str, VisionModelSpec] = {
+    "h3 max recast": VisionModelSpec(
+        key="h3 max recast",
+        label="H3 Max Recast",
+        mode="video_to_video",
+        endpoint="minimax/h3-max/recast",
+        cost_estimate_usd=2.25,  # 5s × $0.45 @1080p
+        cost_per_second=0.45,
+        cost_per_second_by_resolution={"768p": 0.30, "1080p": 0.45},
+        notes=(
+            "Best for swapping up to 4 people from reference photos while keeping "
+            "motion, cuts, and audio. Source 5–30s (no single shot over 15s). "
+            "$0.30/s @768p, $0.45/s @1080p, billed on output seconds."
+        ),
+        duration_param="",
+        duration_choices=tuple(str(i) for i in range(5, 31)),
+        default_duration="5",
+        aspect_choices=(),
+        default_aspect="",
+        resolution_choices=("768P", "1080P"),
+        default_resolution="1080P",
+        supports_audio=False,
+        supports_negative=False,
+        max_refs=4,
+        video_field="video_url",
+        image_field="reference_image_urls",
+    ),
+    "ltx 2.3 quality outpaint": VisionModelSpec(
+        key="ltx 2.3 quality outpaint",
+        label="LTX 2.3 Quality Outpaint",
+        mode="video_to_video",
+        endpoint="fal-ai/ltx-2.3-quality/outpaint",
+        cost_estimate_usd=0.27,
+        cost_per_second=None,
+        notes=(
+            "Best for prompted side-fill: describe what fills the new margins. "
+            "$0.0024075 per megapixel (width × height × frames); "
+            "~$0.27 for 121 frames at 1280×720."
+        ),
+        duration_param="",
+        duration_choices=tuple(str(i) for i in range(1, 21)),
+        default_duration="5",
+        aspect_choices=("21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "9:21"),
+        default_aspect="16:9",
+        resolution_choices=("480p", "720p", "1080p"),
+        default_resolution="720p",
+        supports_audio=True,
+        supports_negative=False,
+        video_field="video_url",
+        extra_defaults={
+            "source_scale": 1,
+            "video_strength": 1,
+            "generate_audio": True,
+        },
+    ),
     "flux 3 extend v2v": VisionModelSpec(
         key="flux 3 extend v2v",
         label="FLUX 3 · Extend (V2V)",
@@ -3014,6 +3254,76 @@ EXTEND_MODELS: dict[str, VisionModelSpec] = {
         video_field="video_url",
         extra_defaults={"generate_audio": True, "safety_tolerance": 2},
     ),
+    "h3 max extend": VisionModelSpec(
+        key="h3 max extend",
+        label="H3 Max · Extend Video",
+        mode="extend",
+        endpoint="minimax/h3-max/extend-video",
+        cost_estimate_usd=0.40,
+        cost_per_second=0.08,
+        cost_per_second_by_resolution={
+            "480p": 0.05,
+            "768p": 0.08,
+            "1080p": 0.16,
+            "2k": 0.32,
+        },
+        notes=(
+            "Best for continuing an H3 Max clip. Adds 1–15s to a source up to 60s. "
+            "$0.05/s @480p, $0.08/s @768p, $0.16/s @1080p, $0.32/s @2K, "
+            "billed on new seconds only."
+        ),
+        duration_choices=tuple(str(i) for i in range(1, 16)),
+        default_duration="5",
+        aspect_choices=("auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        default_aspect="auto",
+        resolution_choices=("480P", "768P", "1080P", "2K"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+        max_ref_audios=3,
+        video_field="video_url",
+        extra_defaults={
+            "enable_prompt_expansion": True,
+            "output": "extended",
+            "enable_safety_checker": True,
+        },
+    ),
+    "h3 max turbo extend": VisionModelSpec(
+        key="h3 max turbo extend",
+        label="H3 Max Turbo · Extend Video",
+        mode="extend",
+        endpoint="minimax/h3-max-turbo/extend-video",
+        cost_estimate_usd=0.20,
+        cost_per_second=0.04,
+        cost_per_second_by_resolution={
+            "480p": 0.025,
+            "768p": 0.04,
+            "1080p": 0.08,
+            "2k": 0.16,
+        },
+        notes=(
+            "Best for a cheaper H3 Max continuation. Adds 1–15s to a source up to 60s. "
+            "$0.025/s @480p, $0.04/s @768p, $0.08/s @1080p, $0.16/s @2K, "
+            "billed on new seconds only."
+        ),
+        duration_choices=tuple(str(i) for i in range(1, 16)),
+        default_duration="5",
+        aspect_choices=("auto", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"),
+        default_aspect="auto",
+        resolution_choices=("480P", "768P", "1080P", "2K"),
+        default_resolution="768P",
+        supports_audio=False,
+        supports_negative=False,
+        duration_as_int=True,
+        max_ref_audios=3,
+        video_field="video_url",
+        extra_defaults={
+            "enable_prompt_expansion": True,
+            "output": "extended",
+            "enable_safety_checker": True,
+        },
+    ),
 }
 
 
@@ -3252,6 +3562,12 @@ def estimate_vision_cost(
         if "qwen-image-3" in ep_still:
             unit = 0.075 if res in ("2k", "2048") else 0.04
             return round(max(0.01, unit * n), 3)
+        if "blackforestlabs/flux-3/" in ep_still and (
+            "text-to-image" in ep_still or "edit-image" in ep_still
+        ):
+            from app.fal.models import flux3_image_unit_usd
+
+            return round(max(0.01, flux3_image_unit_usd(resolution) * n), 4)
         # Flat per-image estimates; bump for large aspect / higher resolution
         base = float(spec.cost_estimate_usd)
         asp = (aspect_ratio or spec.default_aspect or "").lower()
@@ -3292,6 +3608,19 @@ def estimate_vision_cost(
     # --- Video: total = per-second rate × duration_eff (clamped to enum / max) ---
     secs, _dur_tok = vision_duration_eff(spec, duration_token)
     default_secs = duration_seconds(spec.default_duration) or 8.0
+    ep_early = (spec.endpoint or "").lower()
+    if "ltx-2.3-quality/outpaint" in ep_early:
+        from app.fal.models import ltx23_outpaint_cost_usd
+
+        return round(
+            max(
+                0.01,
+                ltx23_outpaint_cost_usd(
+                    secs, resolution or spec.default_resolution
+                ),
+            ),
+            4,
+        )
 
     if draft and getattr(spec, "draft_endpoint", None):
         from app.flux3_draft import estimate_draft_cost_usd
@@ -3353,6 +3682,8 @@ def estimate_vision_cost(
 
     # No invented audio multiplier unless fal quotes a separate audio rate.
     _ = generate_audio
+    if "grok-imagine-video/v1.5/lite/image-to-video" in ep:
+        base += 0.01
 
     return round(max(0.05, base), 3)
 
@@ -3417,6 +3748,8 @@ def build_vision_arguments(
     ref_video_urls: list[str] | None = None,
     ref_audio_urls: list[str] | None = None,
     source_video_url: str | None = None,
+    middle_image_url: str | None = None,
+    middle_frame_time: Any = None,
     duration: str | None = None,
     aspect_ratio: str | None = None,
     resolution: str | None = None,
@@ -3536,6 +3869,16 @@ def build_vision_arguments(
             q_allowed = {str(a).lower(): str(a) for a in (spec.resolution_choices or GPT_IMAGE_QUALITY)}
             q_raw = (res or spec.default_resolution or "high").strip().lower()
             args["quality"] = q_allowed.get(q_raw) or spec.default_resolution or "high"
+        elif "blackforestlabs/flux-3/text-to-image" in ep:
+            allowed_ar = {str(a).lower(): str(a) for a in (spec.aspect_choices or ())}
+            raw_ar = (aspect_ratio or spec.default_aspect or "auto").strip()
+            args["aspect_ratio"] = allowed_ar.get(raw_ar.lower(), spec.default_aspect or "auto")
+            allowed_res = {str(a).lower(): str(a) for a in (spec.resolution_choices or ())}
+            args["resolution"] = allowed_res.get(
+                res.lower(), spec.default_resolution or "1k"
+            )
+            args.pop("num_images", None)
+            args.pop("image_size", None)
         elif "flux-2" in ep:
             args["image_size"] = flux_t2i_image_size(aspect_ratio or size, res)
         else:
@@ -3768,6 +4111,8 @@ def build_vision_arguments(
                 args["reference_video_urls"] = vids
             if auds:
                 args["reference_audio_urls"] = auds
+            if last_frame_url and "minimax/h3-max/reference-to-video" in ep:
+                args["end_image_url"] = last_frame_url
         elif "image_urls" in (spec.image_field or "") or "seedance" in ep:
             # Seedance 2.0/2.5 R2V: image_urls + optional video_urls / audio_urls
             cap_i = max(1, int(spec.max_refs or 9))
@@ -3855,6 +4200,39 @@ def build_vision_arguments(
             )
         vfield = (getattr(spec, "video_field", None) or "video_url").strip() or "video_url"
         args[vfield] = vid
+        if "minimax/h3-max/recast" in ep:
+            refs = [u for u in (ref_urls or []) if u]
+            if image_url and image_url not in refs:
+                refs = [image_url] + refs
+            refs = refs[:4]
+            if not refs:
+                raise ValueError(
+                    "H3 Max Recast needs 1–4 reference photos (people, left to right)."
+                )
+            args["reference_image_urls"] = refs
+            args.pop("duration", None)
+            args.pop("aspect_ratio", None)
+        elif "ltx-2.3-quality/outpaint" in ep:
+            from app.fal.models import _ltx_outpaint_frames
+
+            args.pop("duration", None)
+            args.pop("resolution", None)
+            res_raw = (resolution or spec.default_resolution or "720p").strip()
+            picked_res = None
+            for choice in spec.resolution_choices or ():
+                if str(choice).lower() == res_raw.lower():
+                    picked_res = str(choice)
+                    break
+            args["output_resolution"] = picked_res or spec.default_resolution or "720p"
+            args["num_frames"] = _ltx_outpaint_frames(duration or spec.default_duration)
+            args.setdefault("source_scale", spec.extra_defaults.get("source_scale", 1))
+            args.setdefault("video_strength", spec.extra_defaults.get("video_strength", 1))
+            if "generate_audio" not in args:
+                args["generate_audio"] = True
+        elif "extend-video" in ep and "minimax/h3" in ep:
+            auds = [u for u in (ref_audio_urls or []) if u][:3]
+            if auds:
+                args["reference_audio_urls"] = auds
         if "sync-lipsync" in ep:
             auds = [u for u in (ref_audio_urls or []) if u]
             if not auds:
@@ -3963,7 +4341,15 @@ def build_vision_arguments(
     from app.aspect_omit import sanitize_seedance_r2v_arguments
 
     args = sanitize_seedance_r2v_arguments(args, endpoint=spec.endpoint)
-    from app.fal.models import apply_wan30_payload
+    from app.fal.models import apply_h3_max_middle_frame, apply_wan30_payload
 
     args = apply_wan30_payload(args, endpoint=spec.endpoint)
+    apply_h3_max_middle_frame(
+        args,
+        endpoint=spec.endpoint,
+        start_image_url=image_url,
+        end_image_url=last_frame_url or args.get("end_image_url"),
+        middle_image_url=middle_image_url,
+        middle_frame_time=middle_frame_time,
+    )
     return args

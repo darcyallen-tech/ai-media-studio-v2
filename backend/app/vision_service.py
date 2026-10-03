@@ -181,6 +181,8 @@ def run_vision(
     ref_urls: list[str] = []
     ref_video_urls: list[str] = []
     ref_audio_urls: list[str] = []
+    middle_url: str | None = None
+    middle_time: Any = None
     source_still_path: Path | None = None
     build_notes: list[str] = []
     is_omni = bool(getattr(spec, "omni_reference", False))
@@ -312,6 +314,21 @@ def run_vision(
                 progress(f"Bound Image 1 ← {source_still_path.name}")
                 progress(f"Uploading identity/ref: {source_still_path.name}")
                 image_url = upload_file(source_still_path, on_progress=progress)
+            if "minimax/h3-max/reference-to-video" in (spec.endpoint or ""):
+                extra_map = extra or {}
+                middle_time = extra_map.get("middle_frame_time")
+                middle_local = extra_map.get("middle_image_path") or extra_map.get(
+                    "middle_image_file"
+                )
+                if middle_local and Path(str(middle_local)).is_file():
+                    mid_path = _prepare_vision_still(
+                        Path(str(middle_local)),
+                        output_dir=output_dir,
+                        label="middle frame",
+                        on_progress=progress,
+                    )
+                    progress(f"Uploading middle frame: {mid_path.name}")
+                    middle_url = upload_file(mid_path, on_progress=progress)
             # remaining pack refs uploaded below (skip duplicate of Image 1)
         elif mode == "bridge":
             fp = Path(first_frame_path) if first_frame_path else None
@@ -516,6 +533,8 @@ def run_vision(
                 ref_video_urls=ref_video_urls or None,
                 ref_audio_urls=ref_audio_urls or None,
                 source_video_url=source_video_url,
+                middle_image_url=middle_url,
+                middle_frame_time=middle_time,
                 duration=duration,
                 aspect_ratio=aspect_ratio,
                 resolution=resolution,
