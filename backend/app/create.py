@@ -498,13 +498,17 @@ def _dispatch_vision(
         source_video = src_vid
     elif modality in ("i2i", "r2i", "i2v", "r2v", "region"):
         image_path = start
-        if modality == "i2v":
+        if modality in ("i2v", "r2v"):
             last_frame = end
     elif modality == "t2i":
         pass
     elif modality == "t2v":
         pass
 
+    try:
+        max_ref_imgs = int((entry.size_limits or {}).get("max_ref_images") or 0)
+    except (TypeError, ValueError):
+        max_ref_imgs = 0
     want_refs = modality in (
         "i2i",
         "r2i",
@@ -512,7 +516,7 @@ def _dispatch_vision(
         "r2v",
         "t2v",
         "t2i",
-    ) or entry.omni
+    ) or entry.omni or (modality == "v2v" and max_ref_imgs > 0)
 
     extra = dict(p.extra or {})
     if entry.supports_mask and slots.mask and _file_ok(slots.mask):
@@ -528,7 +532,9 @@ def _dispatch_vision(
         last_frame_path=last_frame,
         ref_paths=(refs or None) if want_refs else None,
         ref_video_paths=(ref_vids or None) if (entry.omni and not still) else None,
-        ref_audio_paths=(ref_auds or None) if (entry.omni and not still) else None,
+        ref_audio_paths=(ref_auds or None)
+        if ((entry.omni and not still) or modality == "extend")
+        else None,
         source_video_path=source_video,
         duration=None if still else p.duration,
         aspect_ratio=p.aspect,
