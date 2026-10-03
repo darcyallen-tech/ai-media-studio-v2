@@ -757,17 +757,25 @@ export function inputPlan(
   }
   if (modality === "r2i" || modality === "r2v") {
     const mask = modality === "r2i" && modelSupportsMask(model);
+    const last =
+      modality === "r2v" &&
+      Boolean(model?.supports_end_frame || model?.first_last);
     return {
       source: "image",
       sourceOptional: true,
       characters: true,
       scenes: true,
+      last,
+      lastOptional: last,
       mask,
       maskOptional: mask,
     };
   }
   if (modality === "v2v" || modality === "extend") {
-    return { source: "video" };
+    const recast = (model?.endpoint || "")
+      .toLowerCase()
+      .includes("minimax/h3-max/recast");
+    return { source: "video", characters: recast };
   }
   return {};
 }

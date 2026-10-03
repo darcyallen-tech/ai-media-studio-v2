@@ -338,12 +338,18 @@ class ImageEditModelSpec:
         only accept 1 output per API call still sequential-batch in the app, so
         4 images must estimate as 4 × rate, not 1 × rate.
         """
-        if self.cost_per_image is None:
+        if self.cost_per_image is None and "flux-3/" not in (self.endpoint or ""):
             return None
         try:
             n = max(1, int(num_images or 1))
         except (TypeError, ValueError):
             n = 1
+        if "blackforestlabs/flux-3/" in (self.endpoint or "") and (
+            "edit-image" in self.endpoint or "text-to-image" in self.endpoint
+        ):
+            return flux3_image_unit_usd(resolution) * n
+        if self.cost_per_image is None:
+            return None
         mult = 1.0
         res = (resolution or self.default_resolution or "1K").upper()
         if self.resolution_cost_mult:
@@ -490,6 +496,15 @@ class VideoModelSpec:
         resolution: str | None = None,
         draft: bool = False,
     ) -> float | None:
+        if "ltx-2.3-quality/outpaint" in (self.endpoint or ""):
+            tok = self.nearest_duration(duration_seconds)
+            try:
+                secs = float(str(tok).replace("s", "").strip())
+            except (TypeError, ValueError):
+                secs = float(duration_seconds or 5)
+            return ltx23_outpaint_cost_usd(
+                secs, resolution or self.default_resolution
+            )
         if draft and self.cost_per_second_draft is not None:
             tok = self.nearest_duration(duration_seconds)
             if tok == "auto":
@@ -567,6 +582,147 @@ H3MAX_CATALOG_COST_PER_S: dict[str, float] = {"480p": 0.05, "768p": 0.08}
 # H3 Max Turbo — promo until 2026-09-07; catalog after is $0.025 / $0.04
 H3MAX_TURBO_COST_PER_S: dict[str, float] = {"480p": 0.00625, "768p": 0.01}
 H3MAX_TURBO_CATALOG_COST_PER_S: dict[str, float] = {"480p": 0.025, "768p": 0.04}
+
+# FLUX 3 Image (T2I + edit). Fal promo is 50% off through Oct 8 2026.
+# 1K (1 MP) is $0.024 promo / $0.048 list. Other tiers follow BFL's per-image
+# table (fal's floor "starting at $0.0205" is the 768sq / 512sq promo rate).
+FLUX3_IMAGE_PROMO_UNTIL = "2026-10-08"
+FLUX3_IMAGE_ASPECTS: tuple[str, ...] = (
+    "auto",
+    "21:9",
+    "2:1",
+    "16:9",
+    "3:2",
+    "7:5",
+    "4:3",
+    "5:4",
+    "1:1",
+    "4:5",
+    "3:4",
+    "5:7",
+    "2:3",
+    "9:16",
+    "1:2",
+)
+FLUX3_IMAGE_RESOLUTIONS: tuple[str, ...] = ("512sq", "768sq", "1k", "2k", "4k")
+FLUX3_IMAGE_PROMO_USD: dict[str, float] = {
+    "512sq": 0.0205,
+    "768sq": 0.0205,
+    "1k": 0.024,
+    "2k": 0.050,
+    "4k": 0.3035,
+}
+FLUX3_IMAGE_LIST_USD: dict[str, float] = {
+    "512sq": 0.041,
+    "768sq": 0.041,
+    "1k": 0.048,
+    "2k": 0.100,
+    "4k": 0.607,
+}
+
+# LTX 2.3 Quality outpaint: $0.0024075 per megapixel of width × height × frames.
+LTX23_OUTPAINT_USD_PER_MP = 0.0024075
+LTX23_OUTPAINT_CANVAS: dict[str, tuple[int, int]] = {
+    "480p": (854, 480),
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
+}
+LTX23_OUTPAINT_ASPECTS: tuple[str, ...] = (
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16",
+    "9:21",
+)
+H3_EXTEND_ASPECTS: tuple[str, ...] = (
+    "auto",
+    "21:9",
+    "16:9",
+    "4:3",
+    "1:1",
+    "3:4",
+    "9:16",
+)
+H3_EXTEND_RESOLUTIONS: tuple[str, ...] = ("480P", "768P", "1080P", "2K")
+H3_EXTEND_COST_PER_S: dict[str, float] = {
+    "480p": 0.05,
+    "768p": 0.08,
+    "1080p": 0.16,
+    "2k": 0.32,
+}
+H3_EXTEND_TURBO_COST_PER_S: dict[str, float] = {
+    "480p": 0.025,
+    "768p": 0.04,
+    "1080p": 0.08,
+    "2k": 0.16,
+}
+H3_RECAST_COST_PER_S: dict[str, float] = {"768p": 0.30, "1080p": 0.45}
+GROK_LITE_COST_PER_S: dict[str, float] = {
+    "480p": 0.02,
+    "720p": 0.03,
+    "1080p": 0.14,
+}
+
+
+def flux3_image_on_promo(today: Any | None = None) -> bool:
+    """True through Oct 8 2026 (inclusive). Promo 1K rate is $0.024, then $0.048."""
+    from datetime import date, datetime
+
+    if today is None:
+        day = date.today()
+    elif isinstance(today, datetime):
+        day = today.date()
+    elif isinstance(today, date):
+        day = today
+    else:
+        day = date.fromisoformat(str(today)[:10])
+    return day <= date.fromisoformat(FLUX3_IMAGE_PROMO_UNTIL)
+
+
+def flux3_image_unit_usd(resolution: str | None = None, *, today: Any | None = None) -> float:
+    """Per-image FLUX 3 price for a resolution tier (promo until Oct 8 2026)."""
+    table = FLUX3_IMAGE_PROMO_USD if flux3_image_on_promo(today) else FLUX3_IMAGE_LIST_USD
+    raw = (resolution or "1k").strip().lower().replace(" ", "")
+    aliases = {
+        "512": "512sq",
+        "512sq": "512sq",
+        "0.5k": "512sq",
+        "768": "768sq",
+        "768sq": "768sq",
+        "1k": "1k",
+        "1mp": "1k",
+        "2k": "2k",
+        "4k": "4k",
+    }
+    key = aliases.get(raw, raw)
+    return float(table.get(key, table["1k"]))
+
+
+def ltx23_outpaint_cost_usd(
+    duration_seconds: float | None = None,
+    resolution: str | None = None,
+    *,
+    fps: float = 24.0,
+) -> float:
+    """
+    LTX 2.3 Quality outpaint: $/MP of generated video (width × height × frames).
+
+    Frames = duration × fps, clamped to the API range 9–481. Canvas is the
+    16:9 tier for the selected output_resolution (480p / 720p / 1080p).
+    """
+    res = (resolution or "720p").strip().lower()
+    w, h = LTX23_OUTPAINT_CANVAS.get(res, LTX23_OUTPAINT_CANVAS["720p"])
+    try:
+        secs = float(duration_seconds if duration_seconds is not None else 5.0)
+    except (TypeError, ValueError):
+        secs = 5.0
+    secs = max(0.0, secs)
+    frames = int(round(secs * float(fps or 24.0)))
+    frames = max(9, min(481, frames))
+    megapixels = (w * h * frames) / 1_000_000.0
+    return megapixels * LTX23_OUTPAINT_USD_PER_MP
 
 # Google Gemini Omni Flash v1.1
 GEMINI_OMNI_ASPECTS: tuple[str, ...] = ("16:9", "9:16")
@@ -676,6 +832,35 @@ IMAGE_EDIT_MODELS: dict[str, ImageEditModelSpec] = {
             "FLUX.2 Max edit — highest quality Flux edit. "
             "Est. $0.07 first processed MP, +$0.03 each additional MP (input counted). "
             "Up to 8 refs (fal product page). image_size auto only — 2K is not a Flux-edit field."
+        ),
+    ),
+    "flux 3 edit": ImageEditModelSpec(
+        key="flux 3 edit",
+        label="Image · FLUX 3 Edit",
+        endpoint="blackforestlabs/flux-3/edit-image",
+        image_field="image_urls",
+        multi_image=True,
+        max_ref_images=10,
+        max_num_images=1,
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=FLUX3_IMAGE_ASPECTS,
+        default_aspect_ratio="auto",
+        resolution_param="resolution",
+        image_size_param=None,
+        allowed_resolutions=FLUX3_IMAGE_RESOLUTIONS,
+        default_resolution="1k",
+        max_resolution="4k",
+        default_output_format="jpeg",
+        cost_per_image=0.024,
+        extra_defaults={
+            "safety_tolerance": 2,
+            "output_format": "jpeg",
+            "enable_prompt_expansion": False,
+        },
+        notes=(
+            "Best for multi-ref edits (up to 10 images) with native 2K/4K. "
+            "Promo $0.024 per 1K (1 MP) until Oct 8 2026, then $0.048; "
+            "price scales with resolution (512sq/768sq/1k/2k/4k)."
         ),
     ),
     "gpt image 2.5 flare": ImageEditModelSpec(
@@ -1409,6 +1594,68 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "Best for local reshoots, not multi-image ref swaps."
         ),
     ),
+    "ltx 2.3 quality outpaint": VideoModelSpec(
+        key="ltx 2.3 quality outpaint",
+        label="Video · LTX 2.3 Quality Outpaint",
+        endpoint="fal-ai/ltx-2.3-quality/outpaint",
+        task="video_edit",
+        video_field="video_url",
+        image_field=None,
+        multi_image=False,
+        max_ref_images=0,
+        keep_audio_param=None,
+        generate_audio_param="generate_audio",
+        default_generate_audio=True,
+        duration_param=None,
+        default_duration="5",
+        min_duration_seconds=1.0,
+        max_duration_seconds=20.0,
+        allowed_durations=tuple(str(i) for i in range(1, 21)),
+        resolution_param="output_resolution",
+        allowed_resolutions=("480p", "720p", "1080p"),
+        default_resolution="720p",
+        aspect_ratio_param="aspect_ratio",
+        allowed_aspect_ratios=LTX23_OUTPAINT_ASPECTS,
+        default_aspect_ratio="16:9",
+        auto_image_refs_in_prompt=False,
+        extra_defaults={
+            "source_scale": 1,
+            "video_strength": 1,
+            "generate_audio": True,
+        },
+        notes=(
+            "Best for prompted side-fill: describe what fills the new margins. "
+            "$0.0024075 per megapixel (width × height × frames); "
+            "~$0.27 for 121 frames at 1280×720."
+        ),
+    ),
+    "h3 max recast": VideoModelSpec(
+        key="h3 max recast",
+        label="Video · H3 Max Recast",
+        endpoint="minimax/h3-max/recast",
+        task="video_edit",
+        video_field="video_url",
+        image_field="reference_image_urls",
+        multi_image=True,
+        max_ref_images=4,
+        keep_audio_param=None,
+        duration_param=None,
+        default_duration="5",
+        min_duration_seconds=5.0,
+        max_duration_seconds=30.0,
+        allowed_durations=tuple(str(i) for i in range(5, 31)),
+        resolution_param="resolution",
+        allowed_resolutions=("768P", "1080P"),
+        default_resolution="1080P",
+        auto_image_refs_in_prompt=False,
+        cost_per_second=0.45,
+        cost_per_second_by_resolution=dict(H3_RECAST_COST_PER_S),
+        notes=(
+            "Best for swapping up to 4 people from reference photos while keeping "
+            "motion, cuts, and audio. Source 5–30s (no single shot over 15s). "
+            "$0.30/s @768p, $0.45/s @1080p, billed on output seconds."
+        ),
+    ),
     # Grok Imagine video (xAI on fal) — comparison testing
     "grok imagine edit video": VideoModelSpec(
         key="grok imagine edit video",
@@ -1470,6 +1717,36 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "xAI Grok Imagine Video 1.5 I2V — strong motion + native audio from a start still. "
             "1–15s · 480p/720p/1080p. Est. $0.08/s @480p, $0.14/s @720p, $0.25/s @1080p "
             "+ $0.01 input image. Default 6s / 720p."
+        ),
+    ),
+    "grok imagine 1.5 lite i2v": VideoModelSpec(
+        key="grok imagine 1.5 lite i2v",
+        label="Video · Grok Imagine 1.5 Lite – Image-to-Video",
+        endpoint="xai/grok-imagine-video/v1.5/lite/image-to-video",
+        task="image_to_video",
+        image_field=None,
+        i2v_image_field="image_url",
+        multi_image=False,
+        max_ref_images=1,
+        keep_audio_param=None,
+        generate_audio_param=None,
+        native_stereo_audio=True,
+        duration_param="duration",
+        duration_as_int=True,
+        default_duration="6",
+        min_duration_seconds=1.0,
+        max_duration_seconds=15.0,
+        allowed_durations=tuple(str(i) for i in range(1, 16)),
+        resolution_param="resolution",
+        allowed_resolutions=("480p", "720p", "1080p"),
+        default_resolution="720p",
+        aspect_ratio_param=None,
+        cost_per_second=0.03,
+        cost_per_second_by_resolution=dict(GROK_LITE_COST_PER_S),
+        cost_fixed=0.01,
+        notes=(
+            "Best for cheap I2V drafts with native audio. "
+            "$0.02/s @480p, $0.03/s @720p, $0.14/s @1080p, plus $0.01 per input still."
         ),
     ),
     "grok imagine 1.5 reference": VideoModelSpec(
@@ -2308,6 +2585,7 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
         prompt_citation_style="plain",
         keep_audio_param=None,
         generate_audio_param=None,
+        supports_end_frame=True,
         duration_param="duration",
         duration_as_int=True,
         default_duration="5",
@@ -2333,7 +2611,9 @@ VIDEO_MODELS: dict[str, VideoModelSpec] = {
             "MiniMax H3 Max R2V — cheaper Max stack, multi-ref characters/scenes. "
             "Cite Image 1 / Video 1 / Audio 1. Up to 9 images + 3 videos + 3 audio (≤12 files). "
             "5–15s · 480P/768P · aspect adaptive|ratios. "
-            "Est. $0.08/s output; first 4096 ref tokens included, then $0.02 / 1k tokens."
+            "Est. $0.08/s output; first 4096 ref tokens included, then $0.02 / 1k tokens. "
+            "Optional middle frame: middle_image_url + middle_frame_time (seconds, strictly "
+            "between start and end); requires start and end images and native 480P or 768P."
         ),
     ),
     # --- Alibaba Wan 3.0 (fal) — 2–30s, 1080p, native audio ---
@@ -2446,6 +2726,10 @@ _ALIASES: dict[str, str] = {
     "flux 2 max (edit)": "flux 2 max",
     "image · flux 2 max (edit)": "flux 2 max",
     "fal-ai/flux-2-max/edit": "flux 2 max",
+    "flux 3 edit": "flux 3 edit",
+    "flux 3 edit image": "flux 3 edit",
+    "image · flux 3 edit": "flux 3 edit",
+    "blackforestlabs/flux-3/edit-image": "flux 3 edit",
     "gpt image 2.5 flare": "gpt image 2.5 flare",
     "gpt image 2.5 flare (edit)": "gpt image 2.5 flare",
     "image · gpt image 2.5 flare (quality / speed)": "gpt image 2.5 flare",
@@ -2723,6 +3007,18 @@ _ALIASES: dict[str, str] = {
     "flux 3 v2v": "flux 3 extend",
     "video · flux 3 – extend video": "flux 3 extend",
     "blackforestlabs/flux-3/extend-video": "flux 3 extend",
+    "ltx 2.3 quality outpaint": "ltx 2.3 quality outpaint",
+    "ltx 2.3 outpaint": "ltx 2.3 quality outpaint",
+    "video · ltx 2.3 quality outpaint": "ltx 2.3 quality outpaint",
+    "fal-ai/ltx-2.3-quality/outpaint": "ltx 2.3 quality outpaint",
+    "h3 max recast": "h3 max recast",
+    "minimax h3 max recast": "h3 max recast",
+    "video · h3 max recast": "h3 max recast",
+    "minimax/h3-max/recast": "h3 max recast",
+    "grok imagine 1.5 lite i2v": "grok imagine 1.5 lite i2v",
+    "grok imagine 1.5 lite": "grok imagine 1.5 lite i2v",
+    "video · grok imagine 1.5 lite – image-to-video": "grok imagine 1.5 lite i2v",
+    "xai/grok-imagine-video/v1.5/lite/image-to-video": "grok imagine 1.5 lite i2v",
 }
 
 
@@ -2733,6 +3029,7 @@ def model_dropdown_choices() -> list[str]:
     for key in (
         "flux 2 pro",
         "flux 2 max",
+        "flux 3 edit",
         "gpt image 2.5 flare",
         "gpt image 2.5 sunburst",
         "gpt image 2",
@@ -2762,6 +3059,8 @@ def model_dropdown_choices() -> list[str]:
         "kling o3 4k reference",
         "flux 3 extend",
         "ltx retake",
+        "ltx 2.3 quality outpaint",
+        "h3 max recast",
         "grok imagine edit video",
         "gemini omni 1.1 edit",
     ):
@@ -2775,6 +3074,7 @@ def model_dropdown_choices() -> list[str]:
         "kling v3 standard i2v",
         "kling v3 pro i2v",
         "grok imagine 1.5 i2v",
+        "grok imagine 1.5 lite i2v",
         "grok imagine 1.5 reference",
         "seedance 2.5 i2v",
         "seedance 2.5 reference",
@@ -3261,6 +3561,30 @@ def build_edit_arguments(
             args["mask_url"] = str(mask_url)
             notes.append("Fibo Edit: optional mask attached.")
             print(f"[generate] mask_url={args['mask_url']}", flush=True)
+    elif "blackforestlabs/flux-3/edit-image" in ep:
+        # Schema: prompt, image_urls, aspect_ratio (auto ok), resolution, safety, format.
+        args.pop("strength", None)
+        args.pop("num_images", None)
+        args.pop("negative_prompt", None)
+        args.pop("image_size", None)
+        ar_raw = params.get("aspect_ratio")
+        if ar_raw is None:
+            ar_raw = other.get("aspect_ratio", spec.default_aspect_ratio or "auto")
+        ar_s = str(ar_raw or "auto").strip()
+        allowed_ar = {a.lower(): a for a in (spec.allowed_aspect_ratios or FLUX3_IMAGE_ASPECTS)}
+        if not ar_s or ar_s.lower() in ("auto", "default", "match source", "match"):
+            args["aspect_ratio"] = "auto"
+        elif ar_s.lower() in allowed_ar:
+            args["aspect_ratio"] = allowed_ar[ar_s.lower()]
+        else:
+            args["aspect_ratio"] = allowed_ar.get(
+                str(spec.default_aspect_ratio or "auto").lower(), "auto"
+            )
+            notes.append(f"aspect_ratio {ar_s!r} → {args['aspect_ratio']}.")
+        res_in = params.get("resolution") or other.get("resolution")
+        res = spec.clamp_resolution(str(res_in) if res_in else None)
+        if res:
+            args["resolution"] = res
 
     return args, notes
 
@@ -3371,6 +3695,84 @@ def _build_short_pin_edit_arguments(
     return args, notes
 
 
+def apply_h3_max_middle_frame(
+    args: dict[str, Any],
+    *,
+    endpoint: str | None,
+    start_image_url: str | None = None,
+    end_image_url: str | None = None,
+    middle_image_url: str | None = None,
+    middle_frame_time: Any = None,
+) -> list[str]:
+    """
+    Map H3 Max R2V middle-frame fields.
+
+    Fal requires image_url + end_image_url, native 480P or 768P, and
+    middle_frame_time strictly between the start and the end of the clip.
+    No-op unless a middle image is actually provided (does not change the
+    existing reference-image payload).
+    """
+    ep = (endpoint or "").lower()
+    if "minimax/h3-max/reference-to-video" not in ep:
+        return []
+    middle = str(middle_image_url or "").strip()
+    if not middle:
+        return []
+    notes: list[str] = []
+    start = str(start_image_url or args.get("image_url") or "").strip()
+    end = str(end_image_url or args.get("end_image_url") or "").strip()
+    if not start or not end:
+        raise ValueError(
+            "H3 Max middle frame needs a start image and an end image "
+            "(image_url + end_image_url), plus middle_image_url."
+        )
+    if middle_frame_time is None or str(middle_frame_time).strip() == "":
+        raise ValueError(
+            "H3 Max middle frame needs middle_frame_time in seconds, "
+            "strictly between the start and the end."
+        )
+    try:
+        t = float(middle_frame_time)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "middle_frame_time must be seconds, strictly between start and end."
+        ) from exc
+    try:
+        dur = float(args.get("duration") if args.get("duration") is not None else 5)
+    except (TypeError, ValueError):
+        dur = 5.0
+    if not (t > 0.0 and t < dur):
+        raise ValueError(
+            f"middle_frame_time {t:g}s must be strictly between the start (0s) "
+            f"and the end ({dur:g}s)."
+        )
+    res = str(args.get("resolution") or "768P").strip()
+    res_u = res.upper()
+    if res_u not in ("480P", "768P"):
+        raise ValueError(
+            "H3 Max middle frame requires native 480P or 768P "
+            f"(got {res or 'unset'})."
+        )
+    args["image_url"] = start
+    args["end_image_url"] = end
+    args["middle_image_url"] = middle
+    args["middle_frame_time"] = t
+    args["resolution"] = "480P" if res_u == "480P" else "768P"
+    notes.append(
+        f"Middle frame at {t:g}s ({args['resolution']}; start + end required)."
+    )
+    return notes
+
+
+def _ltx_outpaint_frames(duration_seconds: Any) -> int:
+    try:
+        secs = float(str(duration_seconds).lower().replace("s", "").strip())
+    except (TypeError, ValueError):
+        secs = 5.0
+    frames = int(round(max(0.0, secs) * 24.0))
+    return max(9, min(481, frames))
+
+
 def build_video_edit_arguments(
     spec: VideoModelSpec,
     *,
@@ -3398,6 +3800,93 @@ def build_video_edit_arguments(
     image_urls = list(image_urls or [])
 
     prompt_out = (prompt or "").strip()
+    if "minimax/h3-max/recast" in ep:
+        if not video_url:
+            raise ValueError("video_url is required for H3 Max Recast.")
+        refs = [str(u).strip() for u in image_urls if str(u).strip()][:4]
+        if not refs:
+            raise ValueError(
+                "H3 Max Recast needs 1–4 reference photos (people, left to right)."
+            )
+        if len(image_urls) > 4:
+            notes.append("Reference photos truncated to 4.")
+        res_in = params.get("resolution") or other.get("resolution")
+        res = spec.clamp_resolution(str(res_in) if res_in else None) or "1080P"
+        args = {
+            "video_url": video_url,
+            "reference_image_urls": refs,
+            "resolution": res,
+        }
+        if prompt_out:
+            args["prompt"] = prompt_out
+        seed = params.get("seed", other.get("seed"))
+        if seed is not None and str(seed).strip() != "":
+            try:
+                args["seed"] = int(seed)
+            except (TypeError, ValueError):
+                notes.append(f"Ignoring non-integer seed={seed!r}.")
+        notes.append(
+            "Recast keeps source motion, cuts, and audio. "
+            "Source 5–30s; no single shot over 15s. Billed on output seconds."
+        )
+        return args, notes
+
+    if "ltx-2.3-quality/outpaint" in ep:
+        if not prompt_out:
+            raise ValueError(
+                "prompt is required — describe what fills the new margins."
+            )
+        if not video_url:
+            raise ValueError("video_url is required for LTX outpaint.")
+        ar_req = params.get("aspect_ratio")
+        if ar_req is None:
+            ar_req = other.get("aspect_ratio", spec.default_aspect_ratio or "16:9")
+        allowed_ar = {a.lower(): a for a in LTX23_OUTPAINT_ASPECTS}
+        ar = allowed_ar.get(str(ar_req or "").strip().lower(), "16:9")
+        res_in = params.get("resolution") or other.get("output_resolution")
+        if res_in is None:
+            res_in = other.get("resolution", other.get("output_resolution"))
+        res = spec.clamp_resolution(str(res_in) if res_in else None) or "720p"
+
+        def _unit(name: str, default: float) -> float:
+            raw = params.get(name)
+            if raw is None:
+                raw = other.get(name, spec.extra_defaults.get(name, default))
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return float(default)
+
+        dur_in = params.get("duration_seconds") or params.get("duration")
+        if dur_in is None:
+            dur_in = other.get(
+                "duration_seconds", other.get("duration", spec.default_duration)
+            )
+        gen = params.get("generate_audio")
+        if gen is None:
+            gen = other.get("generate_audio", spec.default_generate_audio)
+        args = {
+            "prompt": prompt_out,
+            "video_url": video_url,
+            "aspect_ratio": ar,
+            "output_resolution": res,
+            "source_scale": _unit("source_scale", 1.0),
+            "video_strength": _unit("video_strength", 1.0),
+            "num_frames": _ltx_outpaint_frames(dur_in),
+            "generate_audio": bool(gen if gen is not None else True),
+        }
+        seed = params.get("seed", other.get("seed"))
+        if seed is not None and str(seed).strip() != "":
+            try:
+                args["seed"] = int(seed)
+            except (TypeError, ValueError):
+                notes.append(f"Ignoring non-integer seed={seed!r}.")
+        notes.append(
+            "Outpaint side-fill: prompt describes the new margins. "
+            f"{args['num_frames']} frames @ {res} {ar}."
+        )
+        return args, notes
+
     if not prompt_out:
         raise ValueError("prompt is required for video editing.")
     if not video_url:
@@ -3806,6 +4295,26 @@ def build_i2v_arguments(
             f"{spec.label} needs both a start still and an end still "
             "(first→last frame)."
         )
+
+    middle_url = params.get("middle_image_url") or other.get("middle_image_url")
+    middle_t = params.get("middle_frame_time")
+    if middle_t is None:
+        middle_t = other.get("middle_frame_time")
+    start_for_middle = image_url
+    if not start_for_middle:
+        packed = args.get(spec.ref_image_field or "reference_image_urls")
+        if isinstance(packed, list) and packed:
+            start_for_middle = str(packed[0])
+    notes.extend(
+        apply_h3_max_middle_frame(
+            args,
+            endpoint=spec.endpoint,
+            start_image_url=start_for_middle,
+            end_image_url=str(end) if end else args.get("end_image_url"),
+            middle_image_url=str(middle_url) if middle_url else None,
+            middle_frame_time=middle_t,
+        )
+    )
 
     # Reference videos (Seedance video_urls or H3 reference_video_urls)
     vrefs = (

@@ -780,6 +780,9 @@ def generate(
         if has_image:
             ref_paths.append(image_file)  # type: ignore[arg-type]
             progress(f"Using still as reference image: {Path(image_file).name}")  # type: ignore[arg-type]
+        for rp in extra_refs:
+            if rp not in ref_paths:
+                ref_paths.append(rp)
 
         result = run_video_edit(
             prompt=prompt,

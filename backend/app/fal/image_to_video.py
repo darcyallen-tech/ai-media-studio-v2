@@ -224,6 +224,24 @@ def run_image_to_video(
             progress(f"Uploading end frame: {end_path.name}")
             params["end_image_url"] = upload_file(end_path, on_progress=progress)
 
+        # H3 Max R2V optional middle frame (local path in parameters / extra)
+        if "minimax/h3-max/reference-to-video" in (spec.endpoint or ""):
+            middle_local = params.pop("middle_image_path", None) or params.pop(
+                "middle_image_file", None
+            )
+            if middle_local and Path(str(middle_local)).is_file():
+                mid_path = _proxy_ref_still(
+                    Path(str(middle_local)),
+                    spec=spec,
+                    output_dir=output_dir,
+                    label="middle frame",
+                    progress=progress,
+                )
+                progress(f"Uploading middle frame: {mid_path.name}")
+                params["middle_image_url"] = upload_file(
+                    mid_path, on_progress=progress
+                )
+
         # Reference videos (omni / Seedance)
         v_urls: list[str] = list(
             params.get("video_urls") or params.get("reference_video_urls") or []

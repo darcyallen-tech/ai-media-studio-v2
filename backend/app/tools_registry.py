@@ -1226,6 +1226,26 @@ REASPECT_VIDEO_MODELS: dict[str, ToolSpec] = {
         ),
         extra_defaults={"resolution": "1080p"},
     ),
+    "ltx 2.3 quality outpaint": ToolSpec(
+        key="ltx 2.3 quality outpaint",
+        label="LTX 2.3 Quality Outpaint",
+        category="reaspect",
+        endpoint="fal-ai/ltx-2.3-quality/outpaint",
+        cost_estimate_usd=0.27,
+        notes=(
+            "Prompted side-fill next to LTX 2.3 Reframe: describe what fills the new margins. "
+            "$0.0024075 per megapixel (width × height × frames); "
+            "~$0.27 for 121 frames at 1280×720. "
+            "Also on Create → V2V."
+        ),
+        extra_defaults={
+            "aspect_ratio": "16:9",
+            "output_resolution": "720p",
+            "source_scale": 1,
+            "video_strength": 1,
+            "generate_audio": True,
+        },
+    ),
     "luma ray reframe": ToolSpec(
         key="luma ray reframe",
         label="Luma Ray 2 Reframe",
