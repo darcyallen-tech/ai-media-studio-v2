@@ -11,6 +11,12 @@ Catalog entries after 2.0.0-rc5. Prices are the rates encoded in the Fal catalog
 - **LTX 2.3 Quality Outpaint** (`fal-ai/ltx-2.3-quality/outpaint`). $0.0024075 per megapixel (width × height × frames).
 - **H3 Max Reference-to-Video** middle-frame payload (`middle_image_url` + `middle_frame_time`, with start and end images, 480P or 768P). Backend only; no UI picker yet.
 
+**Music song name (local, after 2.0.0-rc5)**
+
+- Optional song name on music generates (Fal music, ACE-Step and YuE2 in Comfy). When set, the saved file is named `{song-slug}_{timestamp}`; when blank, the old file name is kept.
+- The song name shows as the Library label and can be edited later. Editing it does not rename the file on disk (`POST /library/song-name`).
+- Send to Resolve can use the song name as the Media Pool clip name.
+
 ## Local Comfy character pipeline
 
 Character Builder Front / extra angles / Confirm run on a local ComfyUI instance (Settings **COMFY_URL**, default `http://127.0.0.1:8188`). No fal or xAI keys for those three buttons.
